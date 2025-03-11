@@ -37,19 +37,40 @@
   }}</span>
 </button>
 
-<!-- Logout Modal -->
-<div class="logout-modal" [class.active]="showLogoutModal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <span class="material-icons">logout</span>
-      <h2>Confirm Logout</h2>
-    </div>
-    <p>Are you sure you want to log out?</p>
-    <div class="modal-actions">
-      <button class="button-secondary" (click)="closeLogoutModal()">
-        Cancel
+<!-- Add this modern logout modal to your navbar component HTML -->
+<div
+  class="logout-modal-backdrop"
+  *ngIf="showLogoutModal"
+  (click)="closeLogoutModal()"
+></div>
+
+<div class="logout-modal" *ngIf="showLogoutModal">
+  <div class="logout-modal-content">
+    <div class="logout-modal-header">
+      <h3>Confirm Logout</h3>
+      <button class="close-button" (click)="closeLogoutModal()">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            d="M13 1L1 13M1 1L13 13"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
       </button>
-      <button class="button-danger" (click)="confirmLogout()">Logout</button>
+    </div>
+    <div class="logout-modal-body">
+      <p>Are you sure you want to log out of your account?</p>
+    </div>
+    <div class="logout-modal-footer">
+      <button class="cancel-button" (click)="closeLogoutModal()">Cancel</button>
+      <button class="confirm-button" (click)="confirmLogout()">Log out</button>
     </div>
   </div>
 </div>

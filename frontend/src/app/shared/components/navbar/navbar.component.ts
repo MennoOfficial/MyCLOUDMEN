@@ -1,6 +1,7 @@
 import { Component, Input, OnInit, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Router } from '@angular/router';
+import { RouterModule } from '@angular/router';
+import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-navbar',
@@ -36,9 +37,25 @@ export class NavbarComponent implements OnInit {
   
   navItems: any[] = [];
   
-  constructor(private router: Router) {}
+  constructor(private authService: AuthService) {}
   
   ngOnInit(): void {
+    // Set navigation items based on user role
+    this.setNavItems();
+    
+    // Subscribe to user changes
+    this.authService.user$.subscribe(user => {
+      if (user && user.role) {
+        this.userRole = user.role;
+        this.setNavItems();
+      } else {
+        this.userRole = 'COMPANY_USER';
+        this.setNavItems();
+      }
+    });
+  }
+  
+  setNavItems(): void {
     // Set navigation items based on user role
     switch(this.userRole) {
       case 'SYSTEM_ADMIN':
@@ -67,12 +84,8 @@ export class NavbarComponent implements OnInit {
   }
   
   confirmLogout(): void {
-    // Clear any stored authentication data
-    localStorage.clear();
-    sessionStorage.clear();
-    
-    // Navigate to login page
-    this.router.navigate(['/auth/login']);
+    // Use Auth0 logout
+    this.authService.logout();
     this.showLogoutModal = false;
   }
 }

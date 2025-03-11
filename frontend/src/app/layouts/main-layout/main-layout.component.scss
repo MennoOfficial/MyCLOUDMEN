@@ -2,7 +2,6 @@
   padding: var(--space-lg);
   margin-left: 80px; /* Width of the collapsed sidebar */
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 100vh;
 }
 
 /* When sidebar is hovered or expanded */

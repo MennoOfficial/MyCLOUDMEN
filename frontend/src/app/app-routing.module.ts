@@ -2,13 +2,13 @@ import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 import { MainLayoutComponent } from './layouts/main-layout/main-layout.component';
 import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
-import { AuthGuard } from './core/auth/auth.guard';
+import { authGuard } from './core/auth/auth.guard';
 
 export const routes: Routes = [
   {
     path: '',
     component: MainLayoutComponent,
-    canActivate: [AuthGuard],
+    canActivate: [authGuard],
     children: [
       {
         path: '',
@@ -60,7 +60,7 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'system-admin/companies'
+    redirectTo: ''
   }
 ];
 

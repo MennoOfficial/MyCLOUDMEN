@@ -1,64 +1,136 @@
 import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { BehaviorSubject, Observable, of } from 'rxjs';
+import { catchError, map, switchMap } from 'rxjs/operators';
+import { AuthService as Auth0Service } from '@auth0/auth0-angular';
 import { Router } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
+import { environment } from '../../../environments/environment';
+
+export interface User {
+  id?: string;
+  auth0Id?: string;
+  email?: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  picture?: string;
+  role?: 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER';
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
-  private userSubject = new BehaviorSubject<any>(null);
+  private userSubject = new BehaviorSubject<User | null>(null);
   public user$ = this.userSubject.asObservable();
-  
-  // Set the default role to SYSTEM_ADMIN for development
-  private userRole: 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER' = 'SYSTEM_ADMIN';
 
-  constructor(private router: Router) {
-    // Check if user is already authenticated on app initialization
-    this.checkAuth();
+  constructor(
+    private auth0: Auth0Service,
+    private router: Router,
+    private http: HttpClient
+  ) {
+    // Initialize auth state from Auth0
+    this.auth0.user$.subscribe(auth0User => {
+      if (auth0User) {
+        this.fetchOrCreateUserProfile(auth0User);
+      }
+    });
   }
-  
-  // Check if the user is authenticated
-  isAuthenticated(): boolean {
-    // For development, always return true
-    return true;
+
+  // Fetch user from backend or create if not exists
+  private fetchOrCreateUserProfile(auth0User: any): void {
+    const auth0Id = auth0User.sub;
+    
+    // Try to get existing user first
+    this.http.get<User>(`${environment.apiUrl}/users/by-auth0-id/${auth0Id}`)
+      .pipe(
+        catchError(error => {
+          if (error.status === 404) {
+            // User doesn't exist, create a new one
+            return this.createNewUser(auth0User);
+          }
+          console.error('Error fetching user profile:', error);
+          return of(null);
+        })
+      )
+      .subscribe(user => {
+        if (user) {
+          this.userSubject.next(user);
+        }
+      });
   }
-  
-  // Get the current user role
-  getUserRole(): 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER' {
-    return this.userRole;
-  }
-  
-  // Mock method to check authentication status
-  private checkAuth(): void {
-    // For development, create a mock user
-    const mockUser = {
-      id: '123',
-      email: 'admin@example.com',
-      name: 'System Admin',
-      role: this.userRole
+
+  // Create a new user in our backend - fix return type to match
+  private createNewUser(auth0User: any): Observable<User | null> {
+    const isGoogleAuth = auth0User.sub?.startsWith('google-oauth2');
+    const nameParts = auth0User.name?.split(' ') || ['', ''];
+    
+    const newUser = {
+      auth0Id: auth0User.sub,
+      email: auth0User.email,
+      name: auth0User.name,
+      firstName: nameParts[0],
+      lastName: nameParts.slice(1).join(' '),
+      picture: auth0User.picture,
+      provider: isGoogleAuth ? 'Google' : 'Email',
+      customerGoogleId: isGoogleAuth ? auth0User.sub.split('|')[1] : null
     };
     
-    this.userSubject.next(mockUser);
+    return this.http.post<User>(`${environment.apiUrl}/users/register`, newUser)
+      .pipe(
+        catchError(error => {
+          console.error('Error creating user:', error);
+          return of(null);
+        })
+      );
   }
-  
-  // Mock login method
-  login(redirectUrl: string): void {
-    console.log('Redirecting to login page, will return to:', redirectUrl);
-    // In a real app, this would redirect to Auth0
+
+  // Login with Auth0
+  login(): void {
+    this.auth0.loginWithRedirect({
+      appState: { target: window.location.pathname }
+    });
   }
-  
-  // Add the missing handleAuthCallback method
-  handleAuthCallback(): void {
-    // For development, just redirect to the home page
-    console.log('Processing authentication callback');
-    setTimeout(() => {
-      this.router.navigate(['/']);
-    }, 1000);
+
+  // Logout
+  logout(): void {
+    // Clear local user data
+    this.userSubject.next(null);
     
-    // In a real app with Auth0, this would:
-    // 1. Parse the URL hash for tokens
-    // 2. Validate the tokens
-    // 3. Store the tokens
-    // 4. Redirect to the intended destination
+    // Use Auth0 logout
+    this.auth0.logout({
+      logoutParams: {
+        returnTo: window.location.origin
+      }
+    });
+  }
+
+  // Get access token for API calls
+  getAccessToken(): Observable<string> {
+    return this.auth0.getAccessTokenSilently();
+  }
+
+  // Handle auth callback
+  handleAuthCallback(): void {
+    this.auth0.handleRedirectCallback().subscribe({
+      next: () => {
+        // Redirect to the saved target URL or home
+        this.router.navigate(['/dashboard']);
+      },
+      error: (err) => {
+        console.error('Error handling auth callback:', err);
+        this.router.navigate(['/']);
+      }
+    });
+  }
+
+  // Check if user is authenticated
+  isAuthenticated(): Observable<boolean> {
+    return this.auth0.isAuthenticated$;
+  }
+
+  // Get user role - fix type to match expected type in components
+  getUserRole(): 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER' {
+    return this.userSubject.value?.role || 'COMPANY_USER';
   }
 }

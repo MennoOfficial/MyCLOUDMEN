@@ -7,16 +7,25 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Document(collection = "users")
 public class User {
     @Id
-    private String id; // MongoDB will automatically generate this if null
+    private String id; // MongoDB will automatically generate this
 
     @Indexed(unique = true)
     private String email;
 
-    private RoleType role;
+    @Indexed(unique = true)
+    private String auth0Id; // Store the Auth0 user identifier
+
+    private String name;
+    private String firstName;
+    private String lastName;
+    private String picture;
+
+    private List<RoleType> roles;
     private StatusType status;
 
     @Indexed
@@ -26,7 +35,7 @@ public class User {
     private LocalDateTime dateTimeChanged;
 
     @Indexed
-    private String customerGoogleId;
+    private String customerGoogleId; // Store the Google user identifier
 
     // Constructors
     public User() {
@@ -34,9 +43,9 @@ public class User {
     }
 
     // Constructor with required fields
-    public User(String email, RoleType role, StatusType status, String primaryDomain) {
+    public User(String email, List<RoleType> roles, StatusType status, String primaryDomain) {
         this.email = email;
-        this.role = role;
+        this.roles = roles;
         this.status = status;
         this.primaryDomain = primaryDomain;
         this.dateTimeAdded = LocalDateTime.now();
@@ -55,55 +64,103 @@ public class User {
         return id;
     }
 
+    public void setId(String id) {
+        this.id = id;
+    }
+
     public String getEmail() {
         return email;
-    }
-
-    public RoleType getRole() {
-        return role;
-    }
-
-    public StatusType getStatus() {
-        return status;
-    }
-
-    public String getPrimaryDomain() {
-        return primaryDomain;
-    }
-
-    public LocalDateTime getDateTimeAdded() {
-        return dateTimeAdded;
-    }
-
-    public LocalDateTime getDateTimeChanged() {
-        return dateTimeChanged;
-    }
-
-    public String getCustomerGoogleId() {
-        return customerGoogleId;
     }
 
     public void setEmail(String email) {
         this.email = email;
     }
 
-    public void setRole(RoleType role) {
-        this.role = role;
+    public String getAuth0Id() {
+        return auth0Id;
+    }
+
+    public void setAuth0Id(String auth0Id) {
+        this.auth0Id = auth0Id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getFirstName() {
+        return firstName;
+    }
+
+    public void setFirstName(String firstName) {
+        this.firstName = firstName;
+    }
+
+    public String getLastName() {
+        return lastName;
+    }
+
+    public void setLastName(String lastName) {
+        this.lastName = lastName;
+    }
+
+    public String getPicture() {
+        return picture;
+    }
+
+    public void setPicture(String picture) {
+        this.picture = picture;
+    }
+
+    public List<RoleType> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(List<RoleType> roles) {
+        this.roles = roles;
+    }
+
+    public StatusType getStatus() {
+        return status;
     }
 
     public void setStatus(StatusType status) {
         this.status = status;
     }
 
+    public String getPrimaryDomain() {
+        return primaryDomain;
+    }
+
     public void setPrimaryDomain(String primaryDomain) {
         this.primaryDomain = primaryDomain;
+    }
+
+    public LocalDateTime getDateTimeAdded() {
+        return dateTimeAdded;
     }
 
     public void setDateTimeAdded(LocalDateTime dateTimeAdded) {
         this.dateTimeAdded = dateTimeAdded;
     }
 
+    public LocalDateTime getDateTimeChanged() {
+        return dateTimeChanged;
+    }
+
     public void setDateTimeChanged(LocalDateTime dateTimeChanged) {
         this.dateTimeChanged = dateTimeChanged;
+    }
+
+    public String getCustomerGoogleId() {
+        return customerGoogleId;
+    }
+
+    public void setCustomerGoogleId(String customerGoogleId) {
+        this.customerGoogleId = customerGoogleId;
     }
 }
