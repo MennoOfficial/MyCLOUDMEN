@@ -1,0 +1,225 @@
+/* Cloudmen Design System */
+
+:root {
+    /* Primary Colors */
+    --deep-ocean: #2c3e50;
+    --deep-ocean-soft: rgba(44, 62, 80, 0.08);
+    --deep-ocean-semi-transparent: rgba(44, 62, 80, 0.9);
+    --deep-ocean-hover: #2c3e50db;
+  
+    --arctic-dawn: #f8f9fa;
+    --silver-lining: #e9ecef;
+    --google-snow: #fafafa;
+  
+    /* Action Colors */
+    --fire-red: #e75253;
+    --fire-red-soft: rgba(231, 82, 83, 0.08);
+    --fire-red-hover: #d34142;
+    --aqua-spring: #54bfae;
+    --aqua-spring-soft: rgba(42, 169, 147, 0.08);
+    --aqua-spring-hover: #4ab3a2;
+    --ocean-blue: #3498db;
+    --ocean-blue-soft: rgba(52, 152, 219, 0.08);
+    --ocean-blue-hover: #2e86c1;
+    --sunset-orange: #e67e22;
+    --sunset-orange-hover: #d35400;
+    --sunset-orange-soft: rgba(230, 126, 34, 0.08);
+    --forest-green: #27ae60;
+    --forest-green-soft: rgba(39, 174, 96, 0.08);
+    --forest-green-hover: #229954;
+    --google-blue: #4285f4;
+    --google-blue-soft: rgba(66, 133, 244, 0.08);
+    --google-blue-hover: #3367d6;
+    --purple-rain: #9b59b6;
+    --purple-rain-soft: rgba(155, 89, 182, 0.08);
+    --purple-rain-hover: #8e44ad;
+    --teamleader-blue: #00adb1;
+    --teamleader-blue-soft: rgba(0, 173, 177, 0.08);
+    --teamleader-blue-hover: #009094;
+  
+    /* Neutral Colors */
+    --charcoal: #2c3e50;
+    --slate: #7f8c8d;
+    --mist: #bdc3c7;
+    --cloud: #ecf0f1;
+  
+    /* Spacing */
+    --space-xs: 0.25rem;
+    --space-sm: 0.6rem;
+    --space-md: 1rem;
+    --space-lg: 1.5rem;
+    --space-xl: 2rem;
+  
+    /* Shadows */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  
+    /* Transitions */
+    --transition-fast: 150ms ease;
+    --transition-normal: 250ms ease;
+    --transition-slow: 350ms ease;
+  
+    /* Border Radius */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-circle: 50%;
+    --radius-pill: 16px;
+  }
+  
+  /* Base Styles */
+  body {
+    font-family: "Roboto", sans-serif;
+    color: var(--charcoal);
+    background: var(--arctic-dawn);
+    margin: 0;
+    padding: 0;
+    line-height: 1.5;
+  }
+  
+  /* Button Base Styles */
+  .btn {
+    padding: var(--space-sm) var(--space-md);
+    border-radius: var(--radius-md);
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    transition: all var(--transition-normal);
+  }
+  
+  /* Primary Button */
+  .btn-primary {
+    background: var(--deep-ocean);
+    color: white;
+  }
+  
+  .btn-primary:hover {
+    background: var(--deep-ocean-hover);
+  }
+  
+  /* Secondary Button */
+  .btn-secondary {
+    background: var(--aqua-spring);
+    color: white;
+  }
+  
+  .btn-secondary:hover {
+    background: var(--aqua-spring-hover);
+  }
+  
+  /* Danger Button */
+  .btn-danger {
+    background: var(--fire-red);
+    color: white;
+  }
+  
+  .btn-danger:hover {
+    background: var(--fire-red-hover);
+  }
+  
+  /* Icon Button Styles */
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all var(--transition-normal);
+    cursor: pointer;
+  }
+  
+  /* Card Styles */
+  .card {
+    background: white;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: var(--space-lg);
+    transition: box-shadow var(--transition-normal);
+  }
+  
+  .card:hover {
+    box-shadow: var(--shadow-md);
+  }
+  
+  /* Form Controls */
+  .form-control {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: var(--space-md);
+  }
+  
+  .form-control label {
+    margin-bottom: var(--space-xs);
+    font-weight: 500;
+    color: var(--deep-ocean);
+  }
+  
+  .form-control input,
+  .form-control select,
+  .form-control textarea {
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--mist);
+    border-radius: var(--radius-md);
+    font-family: inherit;
+    transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+  }
+  
+  .form-control input:focus,
+  .form-control select:focus,
+  .form-control textarea:focus {
+    outline: none;
+    border-color: var(--ocean-blue);
+    box-shadow: 0 0 0 2px var(--ocean-blue-soft);
+  }
+  
+  /* Status Badges */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-xs) var(--space-md);
+    border-radius: var(--radius-pill);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  
+  .badge-success {
+    background: var(--forest-green-soft);
+    color: var(--forest-green);
+  }
+  
+  .badge-warning {
+    background: var(--sunset-orange-soft);
+    color: var(--sunset-orange);
+  }
+  
+  .badge-danger {
+    background: var(--fire-red-soft);
+    color: var(--fire-red);
+  }
+  
+  .badge-info {
+    background: var(--ocean-blue-soft);
+    color: var(--ocean-blue);
+  }
+  
+  /* Material Icons */
+  .material-icons {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+  }

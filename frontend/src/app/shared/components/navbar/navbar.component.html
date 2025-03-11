@@ -1,0 +1,55 @@
+<nav class="sidebar-nav" [class.expanded]="isMenuOpen">
+  <div class="nav-header">
+    <a routerLink="/" class="logo-container">
+      <img
+        src="https://images.squarespace-cdn.com/content/v1/5ccbf1d3af468332420ae5e1/29cace80-077c-4a83-b165-c29a38b583d8/embleem_transp_white_1700.png"
+        alt="CloudMen Logo"
+        class="nav-logo"
+      />
+    </a>
+  </div>
+
+  <div class="nav-items">
+    <ng-container *ngFor="let item of navItems">
+      <a [routerLink]="item.route" routerLinkActive="active" class="nav-item">
+        <div class="icon-wrapper">
+          <span class="material-icons">{{ item.icon }}</span>
+        </div>
+        <span class="nav-text">{{ item.label }}</span>
+      </a>
+    </ng-container>
+  </div>
+
+  <div class="nav-footer">
+    <button class="nav-item logout-btn" (click)="handleLogout()">
+      <div class="icon-wrapper">
+        <span class="material-icons">logout</span>
+      </div>
+      <span class="nav-text">Logout</span>
+    </button>
+  </div>
+</nav>
+
+<!-- Mobile Toggle Button -->
+<button class="mobile-toggle" (click)="toggleMenu()">
+  <span class="mobile-toggle-icon material-icons">{{
+    isMenuOpen ? "close" : "menu"
+  }}</span>
+</button>
+
+<!-- Logout Modal -->
+<div class="logout-modal" [class.active]="showLogoutModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="material-icons">logout</span>
+      <h2>Confirm Logout</h2>
+    </div>
+    <p>Are you sure you want to log out?</p>
+    <div class="modal-actions">
+      <button class="button-secondary" (click)="closeLogoutModal()">
+        Cancel
+      </button>
+      <button class="button-danger" (click)="confirmLogout()">Logout</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,23 @@
+.main-content {
+  padding: var(--space-lg);
+  margin-left: 80px; /* Width of the collapsed sidebar */
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 100vh;
+}
+
+/* When sidebar is hovered or expanded */
+.sidebar-expanded .main-content {
+  margin-left: 280px; /* Width of the expanded sidebar */
+}
+
+@media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    padding: var(--space-md);
+    padding-top: calc(var(--space-md) + 48px); /* Add space for mobile toggle button */
+  }
+  
+  .sidebar-expanded .main-content {
+    margin-left: 0;
+  }
+}
