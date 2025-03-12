@@ -2,44 +2,57 @@ import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 import { MainLayoutComponent } from './layouts/main-layout/main-layout.component';
 import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
-import { AuthGuard } from './core/auth/auth.guard';
+import { authGuard } from './core/auth/auth.guard';
+import { roleGuard } from './core/auth/role.guard';
 
 export const routes: Routes = [
   {
     path: '',
     component: MainLayoutComponent,
-    canActivate: [AuthGuard],
+    canActivate: [authGuard],
     children: [
       {
         path: '',
-        redirectTo: 'system-admin/companies',
+        redirectTo: 'dashboard',
         pathMatch: 'full'
       },
       // System Admin routes
       {
         path: 'system-admin/companies',
+        canActivate: [roleGuard],
+        data: { requiredRoles: ['SYSTEM_ADMIN'] },
         loadComponent: () => import('./features/system-admin/companies/companies.component').then(c => c.CompaniesComponent)
       },
       {
         path: 'system-admin/auth-logs',
+        canActivate: [roleGuard],
+        data: { requiredRoles: ['SYSTEM_ADMIN'] },
         loadComponent: () => import('./features/system-admin/auth-logs/auth-logs.component').then(c => c.AuthLogsComponent)
       },
       // Company Admin routes
       {
         path: 'company-admin/users',
+        canActivate: [roleGuard],
+        data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN'] },
         loadComponent: () => import('./features/company-admin/users/users.component').then(c => c.UsersComponent)
       },
       {
         path: 'company-admin/invoices',
+        canActivate: [roleGuard],
+        data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN'] },
         loadComponent: () => import('./features/company-admin/invoices/invoices.component').then(c => c.InvoicesComponent)
       },
       {
         path: 'company-admin/requests',
+        canActivate: [roleGuard],
+        data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN'] },
         loadComponent: () => import('./features/company-admin/requests/requests.component').then(c => c.RequestsComponent)
       },
       // Company User routes
       {
         path: 'company-user/requests',
+        canActivate: [roleGuard],
+        data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN', 'COMPANY_USER'] },
         loadComponent: () => import('./features/company-user/requests/requests.component').then(c => c.RequestsComponent)
       }
     ]
@@ -60,7 +73,7 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'system-admin/companies'
+    redirectTo: ''
   }
 ];
 

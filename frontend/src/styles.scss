@@ -223,3 +223,36 @@
     -webkit-font-feature-settings: 'liga';
     -webkit-font-smoothing: antialiased;
   }
+
+  /* Role Pills */
+  .role-pill {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    
+    &.role-system-admin {
+      background-color: var(--aqua-spring-soft);
+      color: var(--aqua-spring);
+  border: 1px solid var(--aqua-spring-hover);
+    }
+    
+    &.role-company-admin {
+      background-color: var(--ocean-blue-soft);
+  color: var(--ocean-blue);
+  border: 1px solid var(--ocean-blue-hover);
+    }
+    
+    &.role-company-user {
+      background-color: var(--forest-green-soft);
+  color: var(--forest-green);
+  border: 1px solid var(--forest-green-hover);
+    }
+  }

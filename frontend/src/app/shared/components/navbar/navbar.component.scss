@@ -74,7 +74,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 0 12px;
+  padding: var(--space-md) 12px 0 12px;
 }
 
 .nav-item {
@@ -182,110 +182,161 @@
   }
 }
 
-// Logout Modal
-.logout-modal {
+// Modern logout modal styles
+.logout-modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.3s ease;
-  
-  &.active {
-    opacity: 1;
-    visibility: visible;
-  }
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
 }
 
-.modal-content {
-  background: white;
+.logout-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  max-width: 90%;
+  background-color: #fff;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  z-index: 1001;
   border-radius: var(--radius-lg);
-  padding: var(--space-xl);
-  box-shadow: var(--shadow-lg);
-  width: 90%;
-  max-width: 400px;
-  transform: scale(0.95) translateY(20px);
-  transition: all 0.3s ease;
+  overflow: hidden;
+  animation: modalIn 0.3s ease;
+}
+
+.logout-modal-content {
+  position: relative;
+  padding: var(--space-lg) var(--space-lg) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
 }
 
-.logout-modal.active .modal-content {
-  transform: scale(1) translateY(0);
-}
-
-.modal-header {
+.close-button {
+  position: absolute;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  background: none;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-circle);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-lg);
+  cursor: pointer;
+  color: var(--slate);
+  transition: all var(--transition-normal);
+  
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+    color: var(--charcoal);
+  }
   
   .material-icons {
-    font-size: 28px;
+    font-size: 20px;
+  }
+}
+
+.logout-modal-icon {
+  width: 64px;
+  height: 64px;
+  background-color: var(--fire-red-soft);
+  border-radius: var(--radius-circle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-md);
+  
+  .material-icons {
+    font-size: 32px;
     color: var(--fire-red);
   }
+}
+
+.logout-modal-body {
+  margin-bottom: var(--space-lg);
   
-  h2 {
+  h3 {
+    margin: 0 0 var(--space-sm);
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--charcoal);
+  }
+  
+  p {
     margin: 0;
-    font-size: 24px;
-    color: var(--deep-ocean);
-    font-weight: 500;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--slate);
   }
 }
 
-p {
-  color: var(--deep-ocean);
-  opacity: 0.8;
-  margin-bottom: var(--space-xl);
-}
-
-.modal-actions {
+.logout-modal-footer {
   display: flex;
   justify-content: center;
   gap: var(--space-md);
-  margin-top: var(--space-xl);
-}
-
-.button-secondary {
-  background: var(--arctic-dawn);
-  color: var(--deep-ocean);
-  border: none;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  min-width: 120px;
+  width: 100%;
   
-  &:hover {
-    background: var(--deep-ocean-soft);
-    transform: translateY(-2px);
+  button {
+    flex: 1;
+    padding: var(--space-sm) var(--space-md);
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-xs);
+  }
+  
+  .cancel-button {
+    background-color: var(--silver-lining);
+    color: var(--charcoal);
+    
+    &:hover {
+      background-color: darken(#e9ecef, 5%);
+    }
+  }
+  
+  .confirm-button {
+    background-color: var(--fire-red);
+    color: white;
+    
+    &:hover {
+      background-color: var(--fire-red-hover);
+    }
+    
+    .material-icons {
+      font-size: 18px;
+      color: white;
+    }
   }
 }
 
-.button-danger {
-  background: var(--fire-red-soft);
-  color: var(--fire-red);
-  border: none;
-  padding: var(--space-sm) var(--space-lg);
-  border-radius: var(--radius-lg);
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  min-width: 120px;
-  
-  &:hover {
-    background: var(--fire-red);
-    color: white;
-    transform: translateY(-2px);
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalIn {
+  from { 
+    opacity: 0;
+    transform: translate(-50%, -48%) scale(0.96);
+  }
+  to { 
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
 }
 
@@ -320,5 +371,141 @@ p {
   
   .mobile-toggle {
     display: flex;
+  }
+}
+
+.role-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.role-pill {
+  opacity: 0;
+  transform: translateX(10px);
+  transition: all 0.3s ease;
+}
+
+// User Profile Styling
+.user-profile-container {
+  padding: 0 12px;
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--silver-lining);
+}
+
+.profile-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  overflow: hidden;
+  
+  .icon-wrapper {
+    width: 56px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  
+  .profile-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px; // Rounded square like the logo
+    object-fit: cover;
+  }
+  
+  .profile-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 4px;
+    min-width: 0;
+    
+    .profile-name {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--deep-ocean);
+      opacity: 0;
+      transform: translateX(10px);
+      transition: all 0.3s ease;
+    }
+  }
+}
+
+// Show profile info when sidebar is expanded or hovered
+.sidebar-nav.expanded .profile-info .profile-name,
+.sidebar-nav.expanded .profile-info .role-pill,
+.sidebar-nav:hover .profile-info .profile-name,
+.sidebar-nav:hover .profile-info .role-pill {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+// Role selector styling
+.role-selector {
+  margin: var(--space-sm) 0;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  height: 0;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.sidebar-nav.expanded .role-selector,
+.sidebar-nav:hover .role-selector {
+  height: auto;
+  opacity: 1;
+  margin-bottom: var(--space-md);
+}
+
+.role-selector-header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 12px;
+  color: var(--slate);
+  
+  .material-icons {
+    font-size: 14px;
+    margin-right: var(--space-xs);
+  }
+}
+
+.role-options {
+  padding: 0 var(--space-xs) var(--space-xs);
+}
+
+.role-option {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+  color: var(--deep-ocean);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background: rgba(0, 0, 0, 0.05);
+  }
+  
+  &.active {
+    background: var(--deep-ocean-soft);
+    color: var(--deep-ocean);
+  }
+  
+  .role-icon {
+    font-size: 14px;
+    margin-right: var(--space-xs);
   }
 }

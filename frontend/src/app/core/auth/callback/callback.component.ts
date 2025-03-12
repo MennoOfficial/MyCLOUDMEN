@@ -6,8 +6,8 @@ import { AuthService } from '../auth.service';
   selector: 'app-callback',
   standalone: true,
   imports: [CommonModule],
-  templateUrl: './callback.component.html',
-  styleUrls: ['./callback.component.scss']
+  template: '<div class="loading-spinner">Completing authentication...</div>',
+  styles: ['.loading-spinner { display: flex; justify-content: center; align-items: center; height: 100vh; }']
 })
 export class CallbackComponent implements OnInit {
   constructor(private authService: AuthService) {}
