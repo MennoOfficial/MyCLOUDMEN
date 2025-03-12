@@ -228,8 +228,9 @@
   .role-pill {
     font-size: 10px;
     font-weight: 600;
-    padding: 2px 8px;
-    border-radius: 12px;
+    padding: 4px 10px;
+    border: none;
+    border-radius: 5px;
     display: inline-block;
     max-width: 100%;
     white-space: nowrap;
@@ -241,18 +242,15 @@
     &.role-system-admin {
       background-color: var(--aqua-spring-soft);
       color: var(--aqua-spring);
-  border: 1px solid var(--aqua-spring-hover);
     }
     
     &.role-company-admin {
       background-color: var(--ocean-blue-soft);
   color: var(--ocean-blue);
-  border: 1px solid var(--ocean-blue-hover);
     }
     
     &.role-company-user {
       background-color: var(--forest-green-soft);
   color: var(--forest-green);
-  border: 1px solid var(--forest-green-hover);
     }
   }

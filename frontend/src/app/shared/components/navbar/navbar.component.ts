@@ -75,7 +75,7 @@ export class NavbarComponent implements OnInit {
       this.navItems.push(...this.companyAdminNavItems);
     }
     
-    // Add Company User items if user has COMPANY_USER role
+    // Add Company User items if user has COMPANY_USER role or no roles
     if (userRoles.includes('COMPANY_USER') || userRoles.length === 0) {
       this.navItems.push(...this.companyUserNavItems);
     }
@@ -117,6 +117,10 @@ export class NavbarComponent implements OnInit {
       default:
         return role.replace('_', ' ');
     }
+  }
+  
+  formatRoleClass(role: string): string {
+    return role.toLowerCase().replace('_', '-');
   }
   
   getPrimaryRole(): string {
