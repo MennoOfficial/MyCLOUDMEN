@@ -9,6 +9,44 @@
     </a>
   </div>
 
+  <!-- Enhanced User Profile Section -->
+  <div class="user-profile-container" *ngIf="user">
+    <div class="profile-header">
+      <div class="icon-wrapper">
+        <img
+          [src]="user.picture || 'assets/images/default-avatar.png'"
+          alt="Profile"
+          class="profile-avatar"
+        />
+      </div>
+      <div class="profile-info">
+        <span class="profile-name">{{ user.name }}</span>
+        <div class="role-pill" [ngClass]="'role-' + getPrimaryRoleClass()">
+          {{ formatRole(getPrimaryRole()) }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Role selector if user has multiple roles -->
+    <div class="role-selector" *ngIf="user.roles && user.roles.length > 1">
+      <div class="role-selector-header">
+        <span class="material-icons">swap_horiz</span>
+        <span>Switch Role</span>
+      </div>
+      <div class="role-options">
+        <button
+          *ngFor="let role of user.roles"
+          class="role-option"
+          [ngClass]="{ active: userRole === role }"
+          (click)="switchRole(role)"
+        >
+          <span class="role-icon material-icons">{{ getRoleIcon(role) }}</span>
+          <span>{{ formatRole(role) }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <div class="nav-items">
     <ng-container *ngFor="let item of navItems">
       <a [routerLink]="item.route" routerLinkActive="active" class="nav-item">
@@ -46,31 +84,27 @@
 
 <div class="logout-modal" *ngIf="showLogoutModal">
   <div class="logout-modal-content">
-    <div class="logout-modal-header">
-      <h3>Confirm Logout</h3>
-      <button class="close-button" (click)="closeLogoutModal()">
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 14 14"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path
-            d="M13 1L1 13M1 1L13 13"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-        </svg>
-      </button>
+    <button class="close-button" (click)="closeLogoutModal()">
+      <span class="material-icons">close</span>
+    </button>
+
+    <div class="logout-modal-icon">
+      <span class="material-icons">logout</span>
     </div>
+
     <div class="logout-modal-body">
-      <p>Are you sure you want to log out of your account?</p>
+      <h3>Ready to leave?</h3>
+      <p>You'll need to sign in again next time you visit.</p>
     </div>
+
     <div class="logout-modal-footer">
-      <button class="cancel-button" (click)="closeLogoutModal()">Cancel</button>
-      <button class="confirm-button" (click)="confirmLogout()">Log out</button>
+      <button class="cancel-button" (click)="closeLogoutModal()">
+        <span>Cancel</span>
+      </button>
+      <button class="confirm-button" (click)="confirmLogout()">
+        <span class="material-icons">logout</span>
+        <span>Log out</span>
+      </button>
     </div>
   </div>
 </div>

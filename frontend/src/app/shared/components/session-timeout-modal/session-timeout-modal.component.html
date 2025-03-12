@@ -1,0 +1,33 @@
+<div class="session-timeout-backdrop" *ngIf="showModal"></div>
+
+<div class="session-timeout-modal" *ngIf="showModal">
+  <div class="session-timeout-content">
+    <div class="session-timeout-header">
+      <div class="header-icon">
+        <span class="material-icons">timer</span>
+      </div>
+      <h3>Session Timeout</h3>
+    </div>
+    <div class="session-timeout-body">
+      <div class="timer-display">
+        <div class="timer-circle">
+          <span class="timer-value">{{ formatTime(remainingTime) }}</span>
+        </div>
+      </div>
+      <p class="timeout-message">
+        Your session is about to expire due to inactivity.
+      </p>
+      <p class="timeout-question">Would you like to continue working?</p>
+    </div>
+    <div class="session-timeout-footer">
+      <button class="logout-button" (click)="logout()">
+        <span class="material-icons">logout</span>
+        Logout
+      </button>
+      <button class="continue-button" (click)="extendSession()">
+        <span class="material-icons">refresh</span>
+        Continue Session
+      </button>
+    </div>
+  </div>
+</div>

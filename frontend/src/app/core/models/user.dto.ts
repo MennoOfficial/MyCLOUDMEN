@@ -7,7 +7,7 @@ export interface UserDTO {
   picture?: string;
   provider: string;
   customerGoogleId?: string;
-  role?: 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER';
+  roles?: ('SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER')[];
 }
 
 export interface UserResponseDTO {
