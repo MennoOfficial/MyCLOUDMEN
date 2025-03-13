@@ -1,1 +1,427 @@
-<p>auth-logs works!</p>
+<div class="auth-logs-container">
+  <div class="auth-logs-header">
+    <h1>Authentication Logs</h1>
+    <p class="subtitle">
+      Monitor user authentication activity across your organization
+    </p>
+  </div>
+
+  <!-- Filters Card -->
+  <div class="filter-card" [ngClass]="{ 'filters-open': filtersOpen }">
+    <div class="filter-header" (click)="toggleFilters()">
+      <div class="filter-title">
+        <span class="material-icons">filter_list</span>
+        <h2>Filters</h2>
+      </div>
+      <div class="toggle-indicator"></div>
+      <button class="btn-clear" (click)="clearFilters($event)">
+        <span class="material-icons">clear_all</span>
+        Clear All
+      </button>
+    </div>
+
+    <div class="filter-body" [ngClass]="{ open: filtersOpen }">
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="emailFilter">Email</label>
+          <div class="input-with-icon">
+            <span class="material-icons">email</span>
+            <input
+              type="text"
+              id="emailFilter"
+              placeholder="Filter by email"
+              [(ngModel)]="emailFilter"
+            />
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label for="domainFilter">Domain</label>
+          <div class="input-with-icon">
+            <span class="material-icons">domain</span>
+            <input
+              type="text"
+              id="domainFilter"
+              placeholder="Filter by domain"
+              [(ngModel)]="domainFilter"
+            />
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label for="successFilter">Status</label>
+          <div class="select-wrapper">
+            <select id="successFilter" [(ngModel)]="successFilter">
+              <option [ngValue]="null">All</option>
+              <option [ngValue]="true">Success</option>
+              <option [ngValue]="false">Failed</option>
+            </select>
+            <span class="material-icons">arrow_drop_down</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-group">
+          <label for="startDate">Start Date</label>
+          <div class="input-with-icon">
+            <span class="material-icons">event</span>
+            <input
+              type="datetime-local"
+              id="startDate"
+              [(ngModel)]="startDate"
+            />
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label for="endDate">End Date</label>
+          <div class="input-with-icon">
+            <span class="material-icons">event</span>
+            <input type="datetime-local" id="endDate" [(ngModel)]="endDate" />
+          </div>
+        </div>
+
+        <div class="filter-group filter-actions">
+          <button class="btn-apply" (click)="applyFilters()">
+            <span class="material-icons">search</span>
+            Apply Filters
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading State -->
+  <div *ngIf="loading" class="loading-container">
+    <div class="loading-spinner"></div>
+    <p>Loading authentication logs...</p>
+  </div>
+
+  <!-- Error State -->
+  <div *ngIf="error" class="error-container">
+    <span class="material-icons">error_outline</span>
+    <p>{{ error }}</p>
+    <button class="btn-retry" (click)="loadLogs()">Retry</button>
+  </div>
+
+  <!-- Empty State -->
+  <div *ngIf="!loading && !error && logs.length === 0" class="empty-container">
+    <span class="material-icons">security</span>
+    <h3>No authentication logs found</h3>
+    <p>Try adjusting your filters or check back later</p>
+  </div>
+
+  <!-- Data Table -->
+  <div
+    *ngIf="!loading && !error && logs.length > 0"
+    class="data-table-container"
+  >
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Email</th>
+            <th>Domain</th>
+            <th>IP Address</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let log of logs">
+            <td data-label="Time">{{ formatDate(log.timestamp) }}</td>
+            <td data-label="Email">
+              <span class="email-cell">{{ log.email }}</span>
+            </td>
+            <td data-label="Domain">{{ log.primaryDomain || "-" }}</td>
+            <td data-label="IP Address">{{ log.ipAddress }}</td>
+            <td data-label="Status">
+              <span
+                class="status-badge"
+                [ngClass]="getStatusClass(log.successful)"
+              >
+                <span class="material-icons">{{
+                  log.successful ? "check_circle" : "cancel"
+                }}</span>
+                {{ getStatusText(log.successful) }}
+              </span>
+            </td>
+            <td data-label="Actions">
+              <button class="btn-view" (click)="showDetails(log)">
+                <span class="material-icons">visibility</span>
+                Details
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-container">
+      <div class="pagination-info">
+        Showing {{ logs.length }} of {{ totalItems }} entries
+        <div class="page-size-selector">
+          <span>Show</span>
+          <div class="select-wrapper">
+            <select
+              [(ngModel)]="pageSize"
+              (change)="onPageSizeChange(pageSize)"
+            >
+              <option *ngFor="let size of pageSizeOptions" [value]="size">
+                {{ size }}
+              </option>
+            </select>
+            <span class="material-icons">arrow_drop_down</span>
+          </div>
+          <span>entries</span>
+        </div>
+      </div>
+      <div class="pagination-controls">
+        <button
+          class="pagination-button"
+          [disabled]="currentPage === 0"
+          (click)="onPageChange(0)"
+        >
+          <span class="material-icons">first_page</span>
+        </button>
+        <button
+          class="pagination-button"
+          [disabled]="currentPage === 0"
+          (click)="onPageChange(currentPage - 1)"
+        >
+          <span class="material-icons">chevron_left</span>
+        </button>
+
+        <div class="pagination-pages">
+          <button
+            *ngFor="let page of getPaginationArray()"
+            class="pagination-page"
+            [class.active]="page === currentPage"
+            (click)="onPageChange(page)"
+          >
+            {{ page + 1 }}
+          </button>
+        </div>
+
+        <button
+          class="pagination-button"
+          [disabled]="currentPage === totalPages - 1"
+          (click)="onPageChange(currentPage + 1)"
+        >
+          <span class="material-icons">chevron_right</span>
+        </button>
+        <button
+          class="pagination-button"
+          [disabled]="currentPage === totalPages - 1"
+          (click)="onPageChange(totalPages - 1)"
+        >
+          <span class="material-icons">last_page</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast-notification" *ngIf="showToast">
+    <span class="material-icons">content_copy</span>
+    <div class="toast-message">{{ toastMessage }}</div>
+  </div>
+</div>
+
+<!-- Details Modal -->
+<div
+  class="modal-backdrop"
+  *ngIf="showDetailModal"
+  (click)="closeDetails()"
+></div>
+<div class="detail-modal" *ngIf="showDetailModal && selectedLog">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>Authentication Log Details</h2>
+      <button class="btn-close" (click)="closeDetails()">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="detail-section">
+        <h3>User Information</h3>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Email</span>
+            <span class="detail-value">
+              {{ selectedLog.email }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(selectedLog.email)"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">User ID</span>
+            <span class="detail-value">
+              {{ selectedLog.userId || "N/A" }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(selectedLog.userId || 'N/A')"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Domain</span>
+            <span class="detail-value">
+              {{ selectedLog.primaryDomain || "N/A" }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(selectedLog.primaryDomain || 'N/A')"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Google ID</span>
+            <span class="detail-value">
+              {{ selectedLog.googleUniqueId || "N/A" }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(selectedLog.googleUniqueId || 'N/A')"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Authentication Details</h3>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Time</span>
+            <span class="detail-value">
+              {{ formatDate(selectedLog.timestamp) }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(formatDate(selectedLog.timestamp))"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">IP Address</span>
+            <span class="detail-value">
+              {{ selectedLog.ipAddress }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(selectedLog.ipAddress)"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Status</span>
+            <span class="detail-value">
+              <span
+                class="status-badge"
+                [ngClass]="getStatusClass(selectedLog.successful)"
+              >
+                <span class="material-icons">{{
+                  selectedLog.successful ? "check_circle" : "cancel"
+                }}</span>
+                {{ getStatusText(selectedLog.successful) }}
+              </span>
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(getStatusText(selectedLog.successful))"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+          <div class="detail-item" *ngIf="!selectedLog.successful">
+            <span class="detail-label">Failure Reason</span>
+            <span class="detail-value">
+              {{ selectedLog.failureReason }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(selectedLog.failureReason)"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>Device Information</h3>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="detail-label">Browser</span>
+            <span class="detail-value">
+              {{ getBrowserInfo(selectedLog.userAgent) }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(getBrowserInfo(selectedLog.userAgent))"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Operating System</span>
+            <span class="detail-value">
+              {{ getOSInfo(selectedLog.userAgent) }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(getOSInfo(selectedLog.userAgent))"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">Device Type</span>
+            <span class="detail-value">
+              {{ getDeviceInfo(selectedLog.userAgent) }}
+              <button
+                class="copy-btn"
+                (click)="copyToClipboard(getDeviceInfo(selectedLog.userAgent))"
+              >
+                <span class="material-icons">content_copy</span>
+              </button>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <h3>User Agent</h3>
+        <div class="user-agent-container">
+          <button
+            class="copy-btn"
+            (click)="copyToClipboard(selectedLog.userAgent)"
+          >
+            <span class="material-icons">content_copy</span>
+            Copy
+          </button>
+          <pre>{{ selectedLog.userAgent }}</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-close-modal" (click)="closeDetails()">Close</button>
+    </div>
+  </div>
+</div>
