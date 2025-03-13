@@ -7,21 +7,24 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Data Transfer Object for user data.
+ * Used for sending and receiving user data between client and server.
+ */
 public class UserDTO {
-    private String auth0Id;
-    private String email;
-    private String name;
+    private String auth0Id; // Unique identifier from Auth0
+    private String email; // User's email address
+    private String name; // Full name
     private String firstName;
     private String lastName;
-    private String picture;
-    private String provider;
-    private List<RoleType> roles = new ArrayList<>();
-    private StatusType status;
-    private String primaryDomain;
+    private String picture; // URL to profile picture
+    private String provider; // Authentication provider (e.g., Google, Auth0)
+    private List<RoleType> roles = new ArrayList<>(); // List of roles
+    private StatusType status; // Current user status
+    private String primaryDomain; // Primary domain for company association
     private String customerGoogleId;
     private String phoneNumber;
     private LocalDateTime dateTimeAdded;
-    private RoleType role;
 
     public UserDTO() {
     }
@@ -129,13 +132,5 @@ public class UserDTO {
 
     public void setDateTimeAdded(LocalDateTime dateTimeAdded) {
         this.dateTimeAdded = dateTimeAdded;
-    }
-
-    public RoleType getRole() {
-        return role;
-    }
-
-    public void setRole(RoleType role) {
-        this.role = role;
     }
 }

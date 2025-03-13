@@ -1,8 +1,10 @@
 package com.cloudmen.backend.domain.enums;
 
+/**
+ * Defines the different statuses a user can have.
+ */
 public enum StatusType {
-    ACTIVATED,
-    PENDING,
-    DEACTIVATED,
-    SUSPENDED
+    ACTIVATED, // Active user with full access
+    PENDING, // User waiting for activation
+    DEACTIVATED // User is deactivated
 }

@@ -4,6 +4,10 @@ import com.cloudmen.backend.domain.enums.RoleType;
 
 import java.util.List;
 
+/**
+ * Response DTO for user data.
+ * Contains essential user information returned to the client.
+ */
 public class UserResponseDTO {
     private String id;
     private String email;

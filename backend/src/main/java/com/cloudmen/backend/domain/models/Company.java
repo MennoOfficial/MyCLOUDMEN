@@ -8,6 +8,11 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Represents a company in the MyCLOUDMEN system.
+ * Companies are identified by their primary domain and can have multiple
+ * employees.
+ */
 @Document(collection = "companies")
 public class Company {
     @Id
@@ -21,7 +26,7 @@ public class Company {
     private String customerTeamLeaderId;
 
     @Indexed(unique = true)
-    private String primaryDomain;
+    private String primaryDomain; // Domain used for email addresses, unique identifier for companies
 
     private List<String> employers = new ArrayList<>(); // References to User IDs
 

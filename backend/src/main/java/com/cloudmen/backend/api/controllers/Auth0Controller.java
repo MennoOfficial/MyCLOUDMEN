@@ -12,15 +12,17 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 
 /**
- * Controller to handle Auth0 authentication callbacks
+ * Controller for handling Auth0 authentication callbacks.
+ * Responsible for logging successful and failed authentication attempts
+ * and synchronizing user data with Auth0.
  */
 @RestController
 @RequestMapping({ "/api/auth0", "/auth0" })
 public class Auth0Controller {
 
     private static final Logger logger = LoggerFactory.getLogger(Auth0Controller.class);
-    private final AuthenticationLogService authenticationLogService;
-    private final UserSyncService userSyncService;
+    private final AuthenticationLogService authenticationLogService; // Service for logging authentication
+    private final UserSyncService userSyncService; // Service for synchronizing user data
 
     public Auth0Controller(AuthenticationLogService authenticationLogService, UserSyncService userSyncService) {
         this.authenticationLogService = authenticationLogService;
@@ -28,8 +30,13 @@ public class Auth0Controller {
     }
 
     /**
-     * Endpoint to log successful Auth0 authentication
-     * This can be called from the frontend after successful authentication
+     * Endpoint for logging successful Auth0 authentication.
+     * Called from the frontend after successful authentication.
+     * 
+     * @param authData Contains authentication data such as email and Auth0 profile
+     * @param request  HTTP request for obtaining IP address and user agent
+     * @return 200 OK on success, 400 Bad Request if email is missing, 500 Internal
+     *         Server Error on errors
      */
     @PostMapping("/log-authentication")
     public ResponseEntity<Void> logAuthentication(
@@ -66,8 +73,12 @@ public class Auth0Controller {
     }
 
     /**
-     * Endpoint to log failed Auth0 authentication
-     * This can be called from the frontend after failed authentication
+     * Endpoint for logging failed Auth0 authentication.
+     * Called from the frontend after failed authentication.
+     * 
+     * @param authData Contains email and reason for failure
+     * @param request  HTTP request for obtaining IP address and user agent
+     * @return 200 OK on success, 500 Internal Server Error on errors
      */
     @PostMapping("/log-authentication-failure")
     public ResponseEntity<Void> logAuthenticationFailure(
