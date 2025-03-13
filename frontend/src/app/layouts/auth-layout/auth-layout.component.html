@@ -5,7 +5,30 @@
       alt="CLOUDMEN Logo"
     />
   </div>
-  <div class="auth-content">
+
+  <!-- Loading Animation -->
+  <div class="loading-overlay" *ngIf="loading">
+    <div class="loading-background"></div>
+    <div class="loading-container">
+      <div class="loading-animation">
+        <div class="cloud-loader">
+          <div class="cloud-base"></div>
+          <div class="cloud-circle circle-1"></div>
+          <div class="cloud-circle circle-2"></div>
+          <div class="cloud-circle circle-3"></div>
+        </div>
+      </div>
+      <div class="loading-text">
+        <span>Connecting to MyCLOUDMEN</span>
+        <span class="ellipsis"></span>
+      </div>
+      <div class="loading-progress">
+        <div class="progress-bar"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="auth-content" [class.hidden]="loading">
     <router-outlet></router-outlet>
   </div>
 </div>
