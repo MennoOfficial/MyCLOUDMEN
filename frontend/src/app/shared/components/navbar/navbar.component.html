@@ -21,28 +21,15 @@
       </div>
       <div class="profile-info">
         <span class="profile-name">{{ user.name }}</span>
-        <div class="role-pill" [ngClass]="'role-' + getPrimaryRoleClass()">
-          {{ formatRole(getPrimaryRole()) }}
+        <div class="role-pills">
+          <div
+            *ngFor="let role of user.roles"
+            class="role-pill"
+            [ngClass]="'role-' + formatRoleClass(role)"
+          >
+            {{ formatRole(role) }}
+          </div>
         </div>
-      </div>
-    </div>
-
-    <!-- Role selector if user has multiple roles -->
-    <div class="role-selector" *ngIf="user.roles && user.roles.length > 1">
-      <div class="role-selector-header">
-        <span class="material-icons">swap_horiz</span>
-        <span>Switch Role</span>
-      </div>
-      <div class="role-options">
-        <button
-          *ngFor="let role of user.roles"
-          class="role-option"
-          [ngClass]="{ active: userRole === role }"
-          (click)="switchRole(role)"
-        >
-          <span class="role-icon material-icons">{{ getRoleIcon(role) }}</span>
-          <span>{{ formatRole(role) }}</span>
-        </button>
       </div>
     </div>
   </div>
