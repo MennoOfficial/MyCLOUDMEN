@@ -14,10 +14,19 @@
     <div class="profile-header">
       <div class="icon-wrapper">
         <img
-          [src]="user.picture || 'assets/images/default-avatar.png'"
+          [src]="
+            user?.picture ||
+            'https://isobarscience.com/wp-content/uploads/2020/09/default-profile-picture1.jpg'
+          "
           alt="Profile"
           class="profile-avatar"
+          [ngClass]="{ loading: profileImageLoading }"
+          (load)="profileImageLoading = false"
+          (error)="handleImageError($event)"
         />
+        <div class="avatar-loader" *ngIf="profileImageLoading">
+          <span class="material-icons">hourglass_empty</span>
+        </div>
       </div>
       <div class="profile-info">
         <span class="profile-name">{{ user.name }}</span>

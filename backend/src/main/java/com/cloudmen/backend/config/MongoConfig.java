@@ -36,6 +36,10 @@ public class MongoConfig {
         // Important! This ensures the converters are registered
         converter.afterPropertiesSet();
 
+        // Get database name from the factory
+        String databaseName = mongoDbFactory.getMongoDatabase().getName();
+        System.out.println("Using database: " + databaseName);
+
         return new MongoTemplate(mongoDbFactory, converter);
     }
 
