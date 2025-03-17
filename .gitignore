@@ -398,3 +398,14 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Local application properties
+application-local.properties
+backend/src/main/resources/application-local.properties

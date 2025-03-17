@@ -17,6 +17,7 @@ export class NavbarComponent implements OnInit {
   isMenuOpen = false;
   showLogoutModal = false;
   user: User | null = null;
+  profileImageLoading = true;
   
   // Navigation items based on user role
   systemAdminNavItems = [
@@ -47,7 +48,17 @@ export class NavbarComponent implements OnInit {
     // Get the current user
     this.authService.user$.subscribe(user => {
       console.log('Navbar received user:', user);
+      
+      // Set loading state BEFORE assigning the user
+      this.profileImageLoading = true;
       this.user = user;
+      
+      if (user && user.picture) {
+        this.preloadProfileImage(user.picture);
+      } else {
+        // If there's no picture, we should still set loading to false
+        this.profileImageLoading = false;
+      }
       
       if (user && user.roles && user.roles.length > 0) {
         console.log('Setting user role to:', user.roles[0]);
@@ -157,5 +168,30 @@ export class NavbarComponent implements OnInit {
     this.setNavItems();
     // If you need to update the role in the auth service:
     this.authService.updateUserRole(role as any);
+  }
+  
+  handleImageError(event: any): void {
+    console.log('Image error event triggered, falling back to default image');
+    this.profileImageLoading = false;
+    // Fallback to default image
+    event.target.src = 'https://isobarscience.com/wp-content/uploads/2020/09/default-profile-picture1.jpg';
+  }
+  
+  preloadProfileImage(imageUrl: string): void {
+    if (!imageUrl) {
+      this.profileImageLoading = false;
+      return;
+    }
+    
+    const img = new Image();
+    img.onload = () => {
+      console.log('Profile image loaded successfully:', imageUrl);
+      this.profileImageLoading = false;
+    };
+    img.onerror = () => {
+      console.log('Error loading profile image:', imageUrl);
+      this.profileImageLoading = false;
+    };
+    img.src = imageUrl; // Set src after setting up event handlers
   }
 }
