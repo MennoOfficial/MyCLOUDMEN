@@ -176,7 +176,7 @@ public class UserSyncService {
         newUser.setRoles(roles);
 
         // Set status to ACTIVATED
-        newUser.setStatus(StatusType.ACTIVATED);
+        newUser.setStatus(StatusType.PENDING);
 
         // Set creation date
         newUser.setDateTimeAdded(LocalDateTime.now());
