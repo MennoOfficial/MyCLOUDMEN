@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -34,14 +35,15 @@ import java.util.List;
  */
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class SecurityConfig {
 
     private static final Logger logger = LoggerFactory.getLogger(SecurityConfig.class);
 
-    @Value("${auth0.audience}")
+    @Value("${auth0.audience:https://mycloudmen-api}")
     private String audience; // The API identifier in Auth0
 
-    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}")
+    @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri:https://dev-example.us.auth0.com/}")
     private String issuer; // The Auth0 domain URL
 
     private final AuthenticationLogFilter authenticationLogFilter;
@@ -69,8 +71,8 @@ public class SecurityConfig {
         logger.info("Configuring security filter chain");
 
         http
-                .cors().and() // Enable CORS support
                 .csrf(csrf -> csrf.disable()) // Disable CSRF as we're using JWT tokens
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authz -> {
                     // Log the configuration
                     logger.info("Configuring authorization rules");
@@ -80,21 +82,34 @@ public class SecurityConfig {
                             .requestMatchers("/api/public/**", "/api/auth0/**").permitAll()
                             // Authentication logs endpoint - temporarily allow all access for debugging
                             .requestMatchers("/api/auth-logs/**").permitAll()
+                            // Teamleader OAuth2 endpoints
+                            .requestMatchers("/api/teamleader/oauth/**").permitAll()
+                            .requestMatchers("/api/teamleader/webhook/**").permitAll()
                             // Allow OPTIONS requests for CORS preflight
                             .requestMatchers("/**").permitAll();
 
                     logger.info("Authorization rules configured");
                 })
-                .oauth2ResourceServer(oauth2 -> {
-                    // Configure as OAuth2 resource server with JWT support
-                    logger.info("Configuring OAuth2 resource server");
-                    oauth2.jwt(jwt -> {
-                        logger.info("Configuring JWT handling");
-                    });
-                })
                 // Add our custom authentication logging filter before the standard
                 // authentication filter
                 .addFilterBefore(authenticationLogFilter, UsernamePasswordAuthenticationFilter.class);
+
+        // Only configure OAuth2 resource server if issuer is properly configured
+        try {
+            if (issuer != null && !issuer.contains("example")) {
+                http.oauth2ResourceServer(oauth2 -> {
+                    // Configure as OAuth2 resource server with JWT support
+                    logger.info("Configuring OAuth2 resource server with issuer: {}", issuer);
+                    oauth2.jwt(jwt -> {
+                        logger.info("Configuring JWT handling");
+                    });
+                });
+            } else {
+                logger.warn("OAuth2 resource server not configured: issuer is not properly set");
+            }
+        } catch (Exception e) {
+            logger.error("Error configuring OAuth2 resource server", e);
+        }
 
         logger.info("Security filter chain configured");
         return http.build();
@@ -142,34 +157,50 @@ public class SecurityConfig {
      */
     @Bean
     JwtDecoder jwtDecoder() {
-        logger.info("Creating JWT decoder with issuer: {}", issuer);
+        // Only create the decoder if the issuer is properly configured
+        if (issuer == null || issuer.contains("example")) {
+            logger.warn("JWT decoder not created: issuer is not properly set");
+            return token -> {
+                throw new RuntimeException("JWT decoder not configured");
+            };
+        }
 
-        // Create a decoder that verifies the token signature using Auth0's public keys
-        NimbusJwtDecoder jwtDecoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuer);
+        try {
+            logger.info("Creating JWT decoder with issuer: {}", issuer);
 
-        // Create a custom validator that checks if the token contains our API audience
-        OAuth2TokenValidator<Jwt> audienceValidator = token -> {
-            List<String> audiences = token.getAudience();
-            logger.debug("Token audiences: {}", audiences);
+            // Create a decoder that verifies the token signature using Auth0's public keys
+            NimbusJwtDecoder jwtDecoder = (NimbusJwtDecoder) JwtDecoders.fromIssuerLocation(issuer);
 
-            if (audiences.contains(audience)) {
-                logger.debug("Token contains required audience: {}", audience);
-                return OAuth2TokenValidatorResult.success();
-            }
+            // Create a custom validator that checks if the token contains our API audience
+            OAuth2TokenValidator<Jwt> audienceValidator = token -> {
+                List<String> audiences = token.getAudience();
+                logger.debug("Token audiences: {}", audiences);
 
-            logger.warn("Token missing required audience: {}", audience);
-            return OAuth2TokenValidatorResult
-                    .failure(new OAuth2Error("invalid_token", "The required audience is missing", null));
-        };
+                if (audiences.contains(audience)) {
+                    logger.debug("Token contains required audience: {}", audience);
+                    return OAuth2TokenValidatorResult.success();
+                }
 
-        // Combine the default issuer validator with our custom audience validator
-        OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuer);
-        OAuth2TokenValidator<Jwt> withAudience = new DelegatingOAuth2TokenValidator<>(withIssuer, audienceValidator);
+                logger.warn("Token missing required audience: {}", audience);
+                return OAuth2TokenValidatorResult
+                        .failure(new OAuth2Error("invalid_token", "The required audience is missing", null));
+            };
 
-        // Set the combined validator on the decoder
-        jwtDecoder.setJwtValidator(withAudience);
+            // Combine the default issuer validator with our custom audience validator
+            OAuth2TokenValidator<Jwt> withIssuer = JwtValidators.createDefaultWithIssuer(issuer);
+            OAuth2TokenValidator<Jwt> withAudience = new DelegatingOAuth2TokenValidator<>(withIssuer,
+                    audienceValidator);
 
-        logger.info("JWT decoder created successfully");
-        return jwtDecoder;
+            // Set the combined validator on the decoder
+            jwtDecoder.setJwtValidator(withAudience);
+
+            logger.info("JWT decoder created successfully");
+            return jwtDecoder;
+        } catch (Exception e) {
+            logger.error("Error creating JWT decoder", e);
+            return token -> {
+                throw new RuntimeException("Error creating JWT decoder", e);
+            };
+        }
     }
 }
