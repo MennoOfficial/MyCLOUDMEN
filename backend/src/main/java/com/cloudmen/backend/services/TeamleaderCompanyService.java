@@ -343,6 +343,16 @@ public class TeamleaderCompanyService {
             }
 
             company.setPrimaryAddress(address);
+            logger.debug("Set primary address for company {}: city={}, country={}",
+                    teamleaderId, address.getCity(), address.getCountry());
+        } else {
+            // Ensure we have at least an empty address object to avoid null pointer
+            // exceptions
+            if (company.getPrimaryAddress() == null) {
+                TeamleaderCompany.Address emptyAddress = new TeamleaderCompany.Address();
+                company.setPrimaryAddress(emptyAddress);
+                logger.debug("Created empty address for company: {}", teamleaderId);
+            }
         }
 
         // Contact info (emails, phones, etc.)
@@ -355,6 +365,8 @@ public class TeamleaderCompanyService {
                     String type = emailNode.get("type").asText();
                     String email = emailNode.get("email").asText();
                     contactInfoList.add(new TeamleaderCompany.ContactInfo("email-" + type, email));
+                    logger.debug("Added email contact for company {}: type={}, email={}",
+                            teamleaderId, type, email);
                 }
             }
         }
@@ -366,6 +378,8 @@ public class TeamleaderCompanyService {
                     String type = phoneNode.get("type").asText();
                     String number = phoneNode.get("number").asText();
                     contactInfoList.add(new TeamleaderCompany.ContactInfo("phone-" + type, number));
+                    logger.debug("Added phone contact for company {}: type={}, number={}",
+                            teamleaderId, type, number);
                 }
             }
         }
@@ -401,7 +415,8 @@ public class TeamleaderCompanyService {
         company.setSyncedAt(LocalDateTime.now());
 
         // Save to database
-        companyRepository.save(company);
+        TeamleaderCompany savedCompany = companyRepository.save(company);
+        logger.debug("Saved company to database: {} with ID: {}", savedCompany.getName(), savedCompany.getId());
 
         return isNew;
     }
