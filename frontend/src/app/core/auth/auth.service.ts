@@ -220,8 +220,21 @@ export class AuthService {
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
+        // Verify the role is valid
+        if (user.roles && Array.isArray(user.roles)) {
+          // Only load valid roles
+          user.roles = user.roles.filter((role: string) => 
+            ['SYSTEM_ADMIN', 'COMPANY_ADMIN', 'COMPANY_USER'].includes(role)
+          );
+          if (user.roles.length === 0) {
+            user.roles = ['COMPANY_USER'];
+          }
+        } else {
+          user.roles = ['COMPANY_USER'];
+        }
         this.userSubject.next(user);
       } catch (e) {
+        console.error('Error loading user from storage:', e);
         sessionStorage.removeItem('user_profile');
       }
     }
@@ -286,16 +299,15 @@ export class AuthService {
       email: auth0User.email,
       name: auth0User.name,
       picture: auth0User.picture,
-      roles: ['COMPANY_ADMIN'] as UserRole[],
+      roles: ['COMPANY_USER'] as UserRole[], // Default to COMPANY_USER instead of COMPANY_ADMIN
       provider: auth0User.sub.split('|')[0]
     };
     
     return this.http.post<User>(`${environment.apiUrl}/users/register`, newUser)
       .pipe(
         catchError(error => {
-          // Log failed user creation
           this.logFailedAuthentication(auth0User.email, `Failed to create user: ${error.message || error.status}`);
-          return of(this.createDefaultUser(auth0User, ['COMPANY_ADMIN']));
+          return of(this.createDefaultUser(auth0User));
         })
       );
   }
@@ -382,7 +394,12 @@ export class AuthService {
   }
 
   refreshUserProfile(): void {
+    // Clear storage first
     sessionStorage.removeItem('user_profile');
+    // Clear current user
+    this.userSubject.next(null);
+    
+    // Fetch fresh data from Auth0
     this.auth0.user$.subscribe(auth0User => {
       if (auth0User) {
         this.fetchOrCreateUserProfile(auth0User);
