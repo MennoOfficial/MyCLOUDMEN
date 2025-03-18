@@ -66,9 +66,9 @@ export class CompaniesComponent implements OnInit {
   showDetailView = false;
   isMobile = false;
 
-  // Copy to clipboard
-  showCopyToast = false;
-  copyToastMessage = '';
+  // Toast notification
+  showToast = false;
+  toastMessage = '';
 
   // Make Math available in the template
   Math = Math;
@@ -239,6 +239,7 @@ export class CompaniesComponent implements OnInit {
   viewCompanyDetails(company: Company): void {
     this.selectedCompany = company;
     this.showDetailView = true;
+    this.showToastMessage(`Viewing details for ${company.name}`);
   }
 
   closeDetailView(): void {
@@ -415,7 +416,7 @@ export class CompaniesComponent implements OnInit {
       // Execute copy command
       const successful = document.execCommand('copy');
       if (successful) {
-        this.showCopyToastMessage(`${type} copied to clipboard!`);
+        this.showToastMessage(`${type} copied to clipboard!`);
       }
     } catch (err) {
       console.error('Failed to copy text: ', err);
@@ -425,11 +426,11 @@ export class CompaniesComponent implements OnInit {
     document.body.removeChild(textarea);
   }
 
-  showCopyToastMessage(message: string): void {
-    this.copyToastMessage = message;
-    this.showCopyToast = true;
+  showToastMessage(message: string): void {
+    this.toastMessage = message;
+    this.showToast = true;
     setTimeout(() => {
-      this.showCopyToast = false;
+      this.showToast = false;
     }, 3000);
   }
 }

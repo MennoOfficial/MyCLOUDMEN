@@ -5,7 +5,7 @@
     <h1 class="page-title">Companies</h1>
   </div>
 
-  <!-- Filters and Search -->
+  <!-- Simplified Search -->
   <div class="filters-container">
     <div class="search-box">
       <span class="material-icons search-icon">search</span>
@@ -23,22 +23,6 @@
       >
         <span class="material-icons">close</span>
       </button>
-    </div>
-
-    <div class="filter-controls">
-      <div class="status-filter">
-        <label for="statusFilter">Status:</label>
-        <select
-          id="statusFilter"
-          [(ngModel)]="statusFilter"
-          (change)="onStatusFilterChange()"
-          class="status-select"
-        >
-          <option value="All">All</option>
-          <option value="Active">Active</option>
-          <option value="Inactive">Inactive</option>
-        </select>
-      </div>
     </div>
   </div>
 
@@ -74,15 +58,17 @@
         <tr>
           <th class="company-col">Company</th>
           <th class="email-col">Email</th>
+          <th class="phone-col">Phone</th>
           <th class="vat-col hide-mobile">VAT Number</th>
           <th class="status-col">Status</th>
+          <th class="actions-col">Actions</th>
         </tr>
       </thead>
       <tbody>
         <tr
           *ngFor="let company of filteredCompanies; let i = index"
           class="company-row animate-row"
-          [style.animation-delay]="i * 0.05 + 's'"
+          [style.--row-index]="i"
         >
           <td class="company-col" data-label="Company">
             <span class="company-name">{{ company.name }}</span>
@@ -90,15 +76,15 @@
           <td class="email-col" data-label="Email">
             <div class="email-container" *ngIf="getEmailAddress(company)">
               <span class="email-value">{{ getEmailAddress(company) }}</span>
-              <button
-                class="copy-btn"
-                title="Copy email address"
-                (click)="copyToClipboard(getEmailAddress(company), 'Email')"
-              >
-                <span class="material-icons">content_copy</span>
-              </button>
             </div>
             <span *ngIf="!getEmailAddress(company)">-</span>
+          </td>
+          <td class="phone-col" data-label="Phone">
+            <div class="phone-number" *ngIf="getPhoneNumber(company)">
+              <span class="material-icons">phone</span>
+              <span>{{ getPhoneNumber(company) }}</span>
+            </div>
+            <span *ngIf="!getPhoneNumber(company)">-</span>
           </td>
           <td class="vat-col hide-mobile" data-label="VAT Number">
             <span class="vat-number">{{ company.vatNumber || "-" }}</span>
@@ -113,6 +99,15 @@
             >
               {{ company.status || "Active" }}
             </span>
+          </td>
+          <td class="actions-col" data-label="Actions">
+            <button
+              class="view-details-btn"
+              (click)="viewCompanyDetails(company)"
+            >
+              <span class="material-icons">visibility</span>
+              View Details
+            </button>
           </td>
         </tr>
       </tbody>
@@ -220,8 +215,8 @@
   </div>
 
   <!-- Toast Notification -->
-  <div class="toast-notification" *ngIf="showCopyToast">
+  <div class="toast-notification" *ngIf="showToast">
     <span class="material-icons">check_circle</span>
-    <span class="toast-message">{{ copyToastMessage }}</span>
+    <span class="toast-message">{{ toastMessage }}</span>
   </div>
 </div>
