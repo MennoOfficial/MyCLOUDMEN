@@ -32,7 +32,6 @@ public class TeamleaderSyncTask {
 
     private Map<String, Object> lastSyncStatus = new HashMap<>();
 
-    @Autowired
     public TeamleaderSyncTask(
             TeamleaderOAuthService oAuthService,
             TeamleaderCompanyService companyService) {
