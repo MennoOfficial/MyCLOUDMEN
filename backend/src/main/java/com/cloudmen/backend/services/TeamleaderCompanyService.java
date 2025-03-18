@@ -1,6 +1,7 @@
 package com.cloudmen.backend.services;
 
 import com.cloudmen.backend.config.TeamleaderApiConfig;
+import com.cloudmen.backend.config.TeamleaderConfig;
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
 import com.cloudmen.backend.repositories.TeamleaderCompanyRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -30,18 +31,21 @@ public class TeamleaderCompanyService {
     private final TeamleaderApiConfig apiConfig;
     private final ObjectMapper objectMapper;
     private final TeamleaderCompanyRepository companyRepository;
+    private final TeamleaderConfig teamleaderConfig;
 
     public TeamleaderCompanyService(
             RestTemplate restTemplate,
             TeamleaderOAuthService oAuthService,
             TeamleaderApiConfig apiConfig,
             ObjectMapper objectMapper,
-            TeamleaderCompanyRepository companyRepository) {
+            TeamleaderCompanyRepository companyRepository,
+            TeamleaderConfig teamleaderConfig) {
         this.restTemplate = restTemplate;
         this.oAuthService = oAuthService;
         this.apiConfig = apiConfig;
         this.objectMapper = objectMapper;
         this.companyRepository = companyRepository;
+        this.teamleaderConfig = teamleaderConfig;
     }
 
     /**
@@ -212,15 +216,17 @@ public class TeamleaderCompanyService {
                         if (companyDetails != null && !companyDetails.has("error")) {
                             JsonNode companyData = companyDetails.get("data");
                             if (companyData != null) {
-                                boolean isNew = saveCompanyFromJson(companyData);
-                                if (isNew) {
-                                    created++;
-                                    logger.debug("Created new company: {}", companyId);
-                                } else {
-                                    updated++;
-                                    logger.debug("Updated existing company: {}", companyId);
+                                Boolean isNew = saveCompanyFromJson(companyData);
+                                if (isNew != null) {
+                                    if (isNew) {
+                                        created++;
+                                        logger.debug("Created new company: {}", companyId);
+                                    } else {
+                                        updated++;
+                                        logger.debug("Updated existing company: {}", companyId);
+                                    }
+                                    totalCompanies++;
                                 }
-                                totalCompanies++;
                             } else {
                                 logger.warn("No data found in company details for ID: {}", companyId);
                                 errors++;
@@ -273,10 +279,39 @@ public class TeamleaderCompanyService {
      * Save a company from JSON data
      * 
      * @param companyData The company data from Teamleader API
-     * @return true if the company was created, false if it was updated
+     * @return true if the company was created, false if it was updated, null if
+     *         company was skipped
      */
-    private boolean saveCompanyFromJson(JsonNode companyData) {
+    private Boolean saveCompanyFromJson(JsonNode companyData) {
         String teamleaderId = companyData.get("id").asText();
+
+        // Check for MyCLOUDMEN access first
+        JsonNode customFields = companyData.get("custom_fields");
+        if (customFields == null || customFields.isEmpty()) {
+            logger.debug("Skipping company {} - no custom fields", teamleaderId);
+            return null;
+        }
+
+        boolean hasAccess = false;
+        String accessFieldId = teamleaderConfig.getMyCloudmenAccessFieldId();
+
+        for (JsonNode field : customFields) {
+            JsonNode definition = field.get("definition");
+            if (definition != null && accessFieldId.equals(definition.get("id").asText())) {
+                JsonNode value = field.get("value");
+                if (value != null && value.isBoolean() && value.asBoolean()) {
+                    hasAccess = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasAccess) {
+            logger.debug("Skipping company {} - no MyCLOUDMEN access", teamleaderId);
+            return null;
+        }
+
+        // Continue with existing company processing
         boolean isNew = false;
 
         // Check if the company already exists
@@ -315,36 +350,53 @@ public class TeamleaderCompanyService {
         // Primary address
         if (companyData.has("addresses") && companyData.get("addresses").isArray()
                 && companyData.get("addresses").size() > 0) {
-            JsonNode addressNode = companyData.get("addresses").get(0);
-            TeamleaderCompany.Address address = new TeamleaderCompany.Address();
 
-            if (addressNode.has("type") && !addressNode.get("type").isNull()) {
-                address.setType(addressNode.get("type").asText());
+            // Find the primary address
+            JsonNode addressesArray = companyData.get("addresses");
+            JsonNode primaryAddressNode = null;
+
+            for (JsonNode addressEntry : addressesArray) {
+                if (addressEntry.has("type") &&
+                        "primary".equals(addressEntry.get("type").asText()) &&
+                        addressEntry.has("address")) {
+                    primaryAddressNode = addressEntry.get("address");
+                    break;
+                }
             }
 
-            if (addressNode.has("line_1") && !addressNode.get("line_1").isNull()) {
-                address.setLine1(addressNode.get("line_1").asText());
-            }
+            if (primaryAddressNode != null) {
+                TeamleaderCompany.Address address = new TeamleaderCompany.Address();
+                address.setType("primary");
 
-            if (addressNode.has("line_2") && !addressNode.get("line_2").isNull()) {
-                address.setLine2(addressNode.get("line_2").asText());
-            }
+                if (primaryAddressNode.has("line_1") && !primaryAddressNode.get("line_1").isNull()) {
+                    address.setLine1(primaryAddressNode.get("line_1").asText());
+                    logger.debug("Set address line1: {}", primaryAddressNode.get("line_1").asText());
+                }
 
-            if (addressNode.has("postal_code") && !addressNode.get("postal_code").isNull()) {
-                address.setPostalCode(addressNode.get("postal_code").asText());
-            }
+                if (primaryAddressNode.has("line_2") && !primaryAddressNode.get("line_2").isNull()) {
+                    address.setLine2(primaryAddressNode.get("line_2").asText());
+                    logger.debug("Set address line2: {}", primaryAddressNode.get("line_2").asText());
+                }
 
-            if (addressNode.has("city") && !addressNode.get("city").isNull()) {
-                address.setCity(addressNode.get("city").asText());
-            }
+                if (primaryAddressNode.has("postal_code") && !primaryAddressNode.get("postal_code").isNull()) {
+                    address.setPostalCode(primaryAddressNode.get("postal_code").asText());
+                    logger.debug("Set postal code: {}", primaryAddressNode.get("postal_code").asText());
+                }
 
-            if (addressNode.has("country") && !addressNode.get("country").isNull()) {
-                address.setCountry(addressNode.get("country").asText());
-            }
+                if (primaryAddressNode.has("city") && !primaryAddressNode.get("city").isNull()) {
+                    address.setCity(primaryAddressNode.get("city").asText());
+                    logger.debug("Set city: {}", primaryAddressNode.get("city").asText());
+                }
 
-            company.setPrimaryAddress(address);
-            logger.debug("Set primary address for company {}: city={}, country={}",
-                    teamleaderId, address.getCity(), address.getCountry());
+                if (primaryAddressNode.has("country") && !primaryAddressNode.get("country").isNull()) {
+                    address.setCountry(primaryAddressNode.get("country").asText());
+                    logger.debug("Set country: {}", primaryAddressNode.get("country").asText());
+                }
+
+                company.setPrimaryAddress(address);
+                logger.info("Set primary address for company {}: line1={}, city={}, country={}",
+                        teamleaderId, address.getLine1(), address.getCity(), address.getCountry());
+            }
         } else {
             // Ensure we have at least an empty address object to avoid null pointer
             // exceptions
@@ -388,26 +440,51 @@ public class TeamleaderCompanyService {
 
         // Custom fields (if any)
         if (companyData.has("custom_fields") && companyData.get("custom_fields").isArray()) {
-            Map<String, Object> customFields = new HashMap<>();
+            Map<String, Object> customFieldsMap = new HashMap<>();
+            logger.debug("Processing custom fields for company: {}", teamleaderId);
 
             for (JsonNode fieldNode : companyData.get("custom_fields")) {
-                if (fieldNode.has("id") && fieldNode.has("value")) {
-                    String id = fieldNode.get("id").asText();
-                    JsonNode valueNode = fieldNode.get("value");
+                if (fieldNode.has("definition") && fieldNode.has("value")) {
+                    JsonNode definitionNode = fieldNode.get("definition");
+                    if (definitionNode.has("id")) {
+                        String id = definitionNode.get("id").asText();
+                        JsonNode valueNode = fieldNode.get("value");
 
-                    if (valueNode.isTextual()) {
-                        customFields.put(id, valueNode.asText());
-                    } else if (valueNode.isNumber()) {
-                        customFields.put(id, valueNode.asDouble());
-                    } else if (valueNode.isBoolean()) {
-                        customFields.put(id, valueNode.asBoolean());
-                    } else {
-                        customFields.put(id, valueNode.toString());
+                        // Store value based on its type
+                        Object fieldValue;
+                        if (valueNode.isTextual()) {
+                            fieldValue = valueNode.asText();
+                        } else if (valueNode.isNumber()) {
+                            fieldValue = valueNode.asDouble();
+                        } else if (valueNode.isBoolean()) {
+                            fieldValue = valueNode.asBoolean();
+                        } else if (valueNode.isNull()) {
+                            fieldValue = null;
+                        } else {
+                            fieldValue = valueNode.toString();
+                        }
+
+                        // Store the entire definition object and value
+                        Map<String, Object> fieldInfo = new HashMap<>();
+                        Map<String, Object> definition = new HashMap<>();
+
+                        // Convert definition node to map
+                        definitionNode.fields().forEachRemaining(entry -> {
+                            definition.put(entry.getKey(), entry.getValue().asText());
+                        });
+
+                        fieldInfo.put("definition", definition);
+                        fieldInfo.put("value", fieldValue);
+                        customFieldsMap.put(id, fieldInfo);
+
+                        logger.debug("Processed custom field: id={}, definition={}, value={}", id, definition,
+                                fieldValue);
                     }
                 }
             }
 
-            company.setCustomFields(customFields);
+            company.setCustomFields(customFieldsMap);
+            logger.debug("Saved {} custom fields for company {}", customFieldsMap.size(), teamleaderId);
         }
 
         // Update timestamps
@@ -537,6 +614,88 @@ public class TeamleaderCompanyService {
         } catch (Exception e) {
             logger.error("Unexpected error testing API connection", e);
             return createErrorResponse("Unexpected error: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Refresh custom field definitions and update all companies
+     * This can be called to update companies if custom fields have changed
+     * 
+     * @return Summary of the refresh operation
+     */
+    @Async
+    public CompletableFuture<Map<String, Object>> refreshCustomFields() {
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("operation", "refreshCustomFields");
+        summary.put("startedAt", LocalDateTime.now().toString());
+
+        try {
+            logger.info("Starting custom fields refresh");
+
+            // Get all companies
+            List<TeamleaderCompany> companies = companyRepository.findAll();
+            logger.info("Found {} companies to update", companies.size());
+
+            int updatedCount = 0;
+            int errorCount = 0;
+
+            // Process each company
+            for (TeamleaderCompany company : companies) {
+                try {
+                    String teamleaderId = company.getTeamleaderId();
+                    logger.debug("Refreshing custom fields for company: {}", teamleaderId);
+
+                    // Get fresh company details from API
+                    JsonNode companyDetails = getCompanyDetails(teamleaderId);
+
+                    if (companyDetails != null && !companyDetails.has("error")) {
+                        JsonNode companyData = companyDetails.get("data");
+                        if (companyData != null) {
+                            // Update the company (will process custom fields with new definitions)
+                            Boolean isNew = saveCompanyFromJson(companyData);
+                            if (isNew != null) {
+                                if (isNew) {
+                                    updatedCount++;
+                                    logger.debug("Created new company: {}", teamleaderId);
+                                } else {
+                                    updatedCount++;
+                                    logger.debug("Updated existing company: {}", teamleaderId);
+                                }
+                            }
+                        } else {
+                            logger.warn("No data found in company details for ID: {}", teamleaderId);
+                            errorCount++;
+                        }
+                    } else {
+                        logger.error("Error fetching details for company ID {}: {}",
+                                teamleaderId, companyDetails != null ? companyDetails.get("error") : "null response");
+                        errorCount++;
+                    }
+
+                    // Add a small delay to avoid rate limiting
+                    Thread.sleep(100);
+                } catch (Exception e) {
+                    logger.error("Error refreshing company custom fields", e);
+                    errorCount++;
+                }
+            }
+
+            logger.info("Completed custom fields refresh. Updated: {}, Errors: {}", updatedCount, errorCount);
+
+            summary.put("success", errorCount == 0);
+            summary.put("totalCompanies", companies.size());
+            summary.put("updated", updatedCount);
+            summary.put("errors", errorCount);
+            summary.put("completedAt", LocalDateTime.now().toString());
+
+            return CompletableFuture.completedFuture(summary);
+        } catch (Exception e) {
+            logger.error("Error during custom fields refresh", e);
+            summary.put("success", false);
+            summary.put("message", "Error during custom fields refresh: " + e.getMessage());
+            summary.put("error", e.getClass().getName());
+            summary.put("stackTrace", e.getStackTrace()[0].toString());
+            return CompletableFuture.completedFuture(summary);
         }
     }
 }

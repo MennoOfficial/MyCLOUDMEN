@@ -47,10 +47,26 @@ export class AuthService {
   }
 
   private initAuth0User(): void {
+    // First check if we're already authenticated
+    this.auth0.isAuthenticated$.subscribe(isAuthenticated => {
+      if (isAuthenticated) {
+        // If authenticated, immediately get the user profile
+        this.auth0.user$.pipe(
+          tap(auth0User => {
+            if (auth0User) {
+              console.log('Auth0 user available:', auth0User);
+              this.fetchOrCreateUserProfile(auth0User);
+            }
+          })
+        ).subscribe();
+      }
+    });
+
+    // Then set up the ongoing subscription for future changes
     this.auth0.user$.subscribe(auth0User => {
       if (auth0User) {
+        console.log('Auth0 user updated:', auth0User);
         this.fetchOrCreateUserProfile(auth0User);
-        // We'll log authentication only once when the user profile is fetched
       }
     });
   }
@@ -204,8 +220,21 @@ export class AuthService {
     if (storedUser) {
       try {
         const user = JSON.parse(storedUser);
+        // Verify the role is valid
+        if (user.roles && Array.isArray(user.roles)) {
+          // Only load valid roles
+          user.roles = user.roles.filter((role: string) => 
+            ['SYSTEM_ADMIN', 'COMPANY_ADMIN', 'COMPANY_USER'].includes(role)
+          );
+          if (user.roles.length === 0) {
+            user.roles = ['COMPANY_USER'];
+          }
+        } else {
+          user.roles = ['COMPANY_USER'];
+        }
         this.userSubject.next(user);
       } catch (e) {
+        console.error('Error loading user from storage:', e);
         sessionStorage.removeItem('user_profile');
       }
     }
@@ -216,31 +245,47 @@ export class AuthService {
   }
 
   private fetchOrCreateUserProfile(auth0User: any): void {
+    if (!auth0User?.sub) {
+      console.warn('No Auth0 ID available in user profile');
+      return;
+    }
+
     const auth0Id = auth0User.sub;
     const encodedAuth0Id = encodeURIComponent(auth0Id);
+    
+    console.log('Fetching user profile for:', auth0Id);
     
     this.http.get<User>(`${environment.apiUrl}/users/${encodedAuth0Id}`)
       .pipe(
         catchError(error => {
+          console.log('Error fetching user profile:', error);
           if (error.status === 404) {
+            console.log('User not found, creating new user');
             return this.createNewUser(auth0User);
           }
-          // Log failed user profile fetch
           this.logFailedAuthentication(auth0User.email, `Failed to fetch user profile: ${error.message || error.status}`);
           return of(this.createDefaultUser(auth0User));
         })
       )
       .subscribe(user => {
         if (user) {
-          if (!user.roles) {
+          console.log('User profile received:', user);
+          
+          // Ensure roles is always an array
+          if (!Array.isArray(user.roles)) {
             user.roles = user.roles ? [user.roles as UserRole] : ['COMPANY_USER'];
           }
           
+          // Update the user subject
           this.userSubject.next(user);
           this.saveUserToStorage(user);
-          this.redirectBasedOnRoles(user.roles);
           
-          // Log successful authentication after user profile is fetched
+          // Only redirect if this is the initial login
+          if (!this.userSubject.value) {
+            this.redirectBasedOnRoles(user.roles);
+          }
+          
+          // Log successful authentication
           if (auth0User.email) {
             this.logSuccessfulAuthentication(auth0User.email);
           }
@@ -254,16 +299,15 @@ export class AuthService {
       email: auth0User.email,
       name: auth0User.name,
       picture: auth0User.picture,
-      roles: ['COMPANY_ADMIN'] as UserRole[],
+      roles: ['COMPANY_USER'] as UserRole[], // Default to COMPANY_USER instead of COMPANY_ADMIN
       provider: auth0User.sub.split('|')[0]
     };
     
     return this.http.post<User>(`${environment.apiUrl}/users/register`, newUser)
       .pipe(
         catchError(error => {
-          // Log failed user creation
           this.logFailedAuthentication(auth0User.email, `Failed to create user: ${error.message || error.status}`);
-          return of(this.createDefaultUser(auth0User, ['COMPANY_ADMIN']));
+          return of(this.createDefaultUser(auth0User));
         })
       );
   }
@@ -350,7 +394,12 @@ export class AuthService {
   }
 
   refreshUserProfile(): void {
+    // Clear storage first
     sessionStorage.removeItem('user_profile');
+    // Clear current user
+    this.userSubject.next(null);
+    
+    // Fetch fresh data from Auth0
     this.auth0.user$.subscribe(auth0User => {
       if (auth0User) {
         this.fetchOrCreateUserProfile(auth0User);

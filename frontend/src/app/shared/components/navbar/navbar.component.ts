@@ -1,7 +1,8 @@
-import { Component, Input, OnInit, Output, EventEmitter } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { AuthService, User } from '../../../core/auth/auth.service';
+import { BehaviorSubject, Subject, takeUntil, Observable, map } from 'rxjs';
 
 @Component({
   selector: 'app-navbar',
@@ -10,14 +11,26 @@ import { AuthService, User } from '../../../core/auth/auth.service';
   templateUrl: './navbar.component.html',
   styleUrls: ['./navbar.component.scss']
 })
-export class NavbarComponent implements OnInit {
-  @Input() userRole: 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER' = 'COMPANY_USER';
+export class NavbarComponent implements OnInit, OnDestroy {
+  @Input() set userRole(role: 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER') {
+    this._userRole$.next(role);
+  }
+  get userRole(): 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER' {
+    return this._userRole$.value;
+  }
+  
+  private _userRole$ = new BehaviorSubject<'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER'>('COMPANY_USER');
+  private destroy$ = new Subject<void>();
+  
   @Output() menuToggled = new EventEmitter<boolean>();
   
   isMenuOpen = false;
   showLogoutModal = false;
-  user: User | null = null;
   profileImageLoading = true;
+  isUserLoading = true;
+
+  // Create observable streams
+  user$: Observable<User | null>;
   
   // Navigation items based on user role
   systemAdminNavItems = [
@@ -37,57 +50,63 @@ export class NavbarComponent implements OnInit {
   
   navItems: any[] = [];
   
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) {
+    // Initialize user$ stream
+    this.user$ = this.authService.user$.pipe(
+      takeUntil(this.destroy$),
+      map(user => {
+        this.isUserLoading = false;
+        if (user) {
+          // Update role if available
+          const userRole = user.roles?.[0];
+          if (userRole) {
+            this._userRole$.next(userRole as 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER');
+          }
+          // Preload profile image if available
+          if (user.picture) {
+            this.preloadProfileImage(user.picture);
+          } else {
+            this.profileImageLoading = false;
+          }
+        } else {
+          this.profileImageLoading = false;
+        }
+        return user;
+      })
+    );
+
+    // Subscribe to role changes to update nav items
+    this._userRole$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => this.setNavItems());
+  }
   
   ngOnInit(): void {
-    // Set navigation items based on user role
+    // Set initial navigation items
     this.setNavItems();
     
-    console.log('Initial user role:', this.userRole);
-    
-    // Get the current user
-    this.authService.user$.subscribe(user => {
-      console.log('Navbar received user:', user);
-      
-      // Set loading state BEFORE assigning the user
-      this.profileImageLoading = true;
-      this.user = user;
-      
-      if (user && user.picture) {
-        this.preloadProfileImage(user.picture);
-      } else {
-        // If there's no picture, we should still set loading to false
-        this.profileImageLoading = false;
-      }
-      
-      if (user && user.roles && user.roles.length > 0) {
-        console.log('Setting user role to:', user.roles[0]);
-        this.userRole = user.roles[0];
-        this.setNavItems();
-      } else {
-        console.log('User or user.roles is undefined:', user);
-      }
-    });
+    // Subscribe to user$ to ensure the stream is active
+    this.user$.subscribe();
+  }
+  
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
   
   setNavItems(): void {
+    const currentRole = this._userRole$.value;
     this.navItems = [];
     
-    // Get all user roles
-    const userRoles = this.user?.roles || [];
-    
-    // Add System Admin items if user has SYSTEM_ADMIN role
-    if (userRoles.includes('SYSTEM_ADMIN')) {
+    if (currentRole === 'SYSTEM_ADMIN') {
       this.navItems.push(...this.systemAdminNavItems);
     }
     
-    // Add Company Admin items if user has COMPANY_ADMIN role
-    if (userRoles.includes('COMPANY_ADMIN')) {
+    if (currentRole === 'COMPANY_ADMIN') {
       this.navItems.push(...this.companyAdminNavItems);
     }
     
-    // Add Company User items if user has COMPANY_USER role or no roles
-    if (userRoles.includes('COMPANY_USER') || userRoles.length === 0) {
+    if (currentRole === 'COMPANY_USER' || !currentRole) {
       this.navItems.push(...this.companyUserNavItems);
     }
     
@@ -135,7 +154,7 @@ export class NavbarComponent implements OnInit {
   }
   
   getPrimaryRole(): string {
-    return this.userRole || (this.user?.roles && this.user.roles.length > 0 ? this.user.roles[0] : 'COMPANY_USER');
+    return this._userRole$.value || 'COMPANY_USER';
   }
   
   getPrimaryRoleClass(): string {
@@ -164,9 +183,7 @@ export class NavbarComponent implements OnInit {
   }
   
   switchRole(role: string): void {
-    this.userRole = role as 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER';
-    this.setNavItems();
-    // If you need to update the role in the auth service:
+    this._userRole$.next(role as 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER');
     this.authService.updateUserRole(role as any);
   }
   

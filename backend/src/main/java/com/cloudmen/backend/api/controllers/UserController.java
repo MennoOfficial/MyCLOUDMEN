@@ -6,6 +6,7 @@ import com.cloudmen.backend.domain.enums.RoleType;
 import com.cloudmen.backend.domain.enums.StatusType;
 import com.cloudmen.backend.domain.models.User;
 import com.cloudmen.backend.services.UserService;
+import com.cloudmen.backend.services.UserSyncService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,14 +27,17 @@ import java.util.Map;
 @CrossOrigin(origins = "*") // Allows requests from any origin
 public class UserController {
     private final UserService userService;
+    private final UserSyncService userSyncService;
 
     /**
-     * Constructor with dependency injection for UserService
+     * Constructor with dependency injection for UserService and UserSyncService
      * 
-     * @param userService The service for user operations
+     * @param userService     The service for user operations
+     * @param userSyncService The service for user synchronization
      */
-    public UserController(UserService userService) {
+    public UserController(UserService userService, UserSyncService userSyncService) {
         this.userService = userService;
+        this.userSyncService = userSyncService;
     }
 
     /**
@@ -113,7 +117,7 @@ public class UserController {
         String email = userDTO.getEmail();
         String domain = email.substring(email.indexOf('@') + 1);
 
-        // Create user with default COMPANY_USER role
+        // Create user without role
         User newUser = new User();
         newUser.setAuth0Id(userDTO.getAuth0Id()); // Store Auth0 ID
         newUser.setEmail(userDTO.getEmail());
@@ -121,7 +125,6 @@ public class UserController {
         newUser.setFirstName(userDTO.getFirstName());
         newUser.setLastName(userDTO.getLastName());
         newUser.setPicture(userDTO.getPicture());
-        newUser.setRoles(Arrays.asList(RoleType.COMPANY_USER));
         newUser.setStatus(StatusType.ACTIVATED);
         newUser.setPrimaryDomain(domain);
         newUser.setDateTimeAdded(LocalDateTime.now());
@@ -131,6 +134,9 @@ public class UserController {
                 && userDTO.getCustomerGoogleId() != null) {
             newUser.setCustomerGoogleId(userDTO.getCustomerGoogleId());
         }
+
+        // Let UserSyncService determine the appropriate role
+        userSyncService.assignUserRole(newUser);
 
         User savedUser = userService.createUser(newUser);
 

@@ -10,37 +10,50 @@
   </div>
 
   <!-- Enhanced User Profile Section -->
-  <div class="user-profile-container" *ngIf="user">
-    <div class="profile-header">
-      <div class="icon-wrapper">
-        <img
-          [src]="
-            user.picture ||
-            'https://isobarscience.com/wp-content/uploads/2020/09/default-profile-picture1.jpg'
-          "
-          alt="Profile"
-          class="profile-avatar"
-          [ngClass]="{ loading: profileImageLoading }"
-          (load)="profileImageLoading = false"
-          (error)="handleImageError($event)"
-        />
-        <div class="avatar-loader" *ngIf="profileImageLoading">
+  <div class="user-profile-container">
+    <!-- Loading State -->
+    <div class="profile-header" *ngIf="isUserLoading">
+      <div class="profile-loading">
+        <div class="avatar-loader">
           <span class="material-icons">hourglass_empty</span>
         </div>
+        <div class="loading-text">Loading profile...</div>
       </div>
-      <div class="profile-info">
-        <span class="profile-name">{{ user.name }}</span>
-        <div class="role-pills">
-          <div
-            *ngFor="let role of user.roles"
-            class="role-pill"
-            [ngClass]="'role-' + formatRoleClass(role)"
-          >
-            {{ formatRole(role) }}
+    </div>
+
+    <!-- User Profile -->
+    <ng-container *ngIf="user$ | async as user">
+      <div class="profile-header">
+        <div class="icon-wrapper">
+          <img
+            [src]="
+              user.picture ||
+              'https://isobarscience.com/wp-content/uploads/2020/09/default-profile-picture1.jpg'
+            "
+            alt="Profile"
+            class="profile-avatar"
+            [ngClass]="{ loading: profileImageLoading }"
+            (load)="profileImageLoading = false"
+            (error)="handleImageError($event)"
+          />
+          <div class="avatar-loader" *ngIf="profileImageLoading">
+            <span class="material-icons">hourglass_empty</span>
+          </div>
+        </div>
+        <div class="profile-info">
+          <span class="profile-name">{{ user.name }}</span>
+          <div class="role-pills">
+            <div
+              *ngFor="let role of user.roles"
+              class="role-pill"
+              [ngClass]="'role-' + formatRoleClass(role)"
+            >
+              {{ formatRole(role) }}
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </ng-container>
   </div>
 
   <div class="nav-items">
@@ -71,7 +84,7 @@
   }}</span>
 </button>
 
-<!-- Add this modern logout modal to your navbar component HTML -->
+<!-- Logout Modal -->
 <div
   class="logout-modal-backdrop"
   *ngIf="showLogoutModal"
