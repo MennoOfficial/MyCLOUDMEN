@@ -1,35 +1,14 @@
 import { Component, OnInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
-
-interface Company {
-  id: string;
-  name: string;
-  website: string;
-  vatNumber?: string;
-  status?: 'Active' | 'Inactive';
-  primaryAddress?: {
-    city?: string;
-    country?: string;
-  };
-  contactInfo?: Array<{
-    type: string;
-    value: string;
-  }>;
-}
+import { CompanyListItem, CompanyDetail, CompanyListResponse, CompanyAddress, ContactInfo } from '../../../core/models/company.model';
 
 interface PageEvent {
   pageIndex: number;
   pageSize: number;
   length: number;
-}
-
-interface CompaniesResponse {
-  companies: Company[];
-  currentPage: number;
-  totalItems: number;
-  totalPages: number;
 }
 
 @Component({
@@ -43,8 +22,8 @@ interface CompaniesResponse {
   styleUrl: './companies.component.scss'
 })
 export class CompaniesComponent implements OnInit {
-  companies: Company[] = [];
-  filteredCompanies: Company[] = [];
+  companies: CompanyListItem[] = [];
+  filteredCompanies: CompanyListItem[] = [];
   
   // Pagination
   pageSize = 5;
@@ -60,10 +39,8 @@ export class CompaniesComponent implements OnInit {
   error = false;
   authRequired = false;
   authUrl = '';
-
-  // Detail view
-  selectedCompany: Company | null = null;
-  showDetailView = false;
+  
+  // Responsive design
   isMobile = false;
 
   // Toast notification
@@ -73,7 +50,10 @@ export class CompaniesComponent implements OnInit {
   // Make Math available in the template
   Math = Math;
 
-  constructor(private apiService: ApiService) {
+  constructor(
+    private apiService: ApiService,
+    private router: Router
+  ) {
     this.checkScreenSize();
   }
 
@@ -83,6 +63,7 @@ export class CompaniesComponent implements OnInit {
   }
 
   checkScreenSize() {
+    // Keeping this for potential responsive adjustments
     this.isMobile = window.innerWidth < 768;
   }
 
@@ -96,22 +77,13 @@ export class CompaniesComponent implements OnInit {
     this.authRequired = false;
     
     // Use the API service to fetch companies from the backend
-    this.apiService.get<CompaniesResponse>(`teamleader/companies?page=${this.pageIndex}&size=${this.pageSize}&sortBy=name&direction=asc`)
+    this.apiService.get<CompanyListResponse>(`teamleader/companies?page=${this.pageIndex}&size=${this.pageSize}&sortBy=name&direction=asc`)
       .subscribe({
         next: (response) => {
-          // Set default status to 'Active' for companies without a status
-          this.companies = response.companies.map(company => ({
-            ...company,
-            status: company.status || 'Active' as 'Active'
-          }));
+          this.companies = response.companies;
           this.totalCompanies = response.totalItems;
           this.applyFilters();
           this.loading = false;
-          
-          // Remove auto-selection of first company
-          // if (!this.isMobile && !this.selectedCompany && this.filteredCompanies.length > 0) {
-          //   this.viewCompanyDetails(this.filteredCompanies[0]);
-          // }
         },
         error: (err) => {
           console.error('Error fetching companies:', err);
@@ -131,6 +103,12 @@ export class CompaniesComponent implements OnInit {
       });
   }
 
+  navigateToCompanyDetails(company: CompanyListItem): void {
+    // Navigate to the company details page with the company ID
+    this.router.navigate(['/system-admin/companies', company.teamleaderId]);
+    this.showToastMessage(`Navigating to ${company.name} details`);
+  }
+
   searchCompanies(): void {
     if (!this.searchQuery.trim()) {
       this.fetchCompanies();
@@ -140,25 +118,13 @@ export class CompaniesComponent implements OnInit {
     this.loading = true;
     this.error = false;
     
-    this.apiService.get<Company[]>(`teamleader/companies/search?query=${encodeURIComponent(this.searchQuery)}`)
+    this.apiService.get<CompanyListItem[]>(`teamleader/companies/search?query=${encodeURIComponent(this.searchQuery)}`)
       .subscribe({
         next: (response) => {
           this.companies = response;
           this.totalCompanies = response.length;
           this.filteredCompanies = this.getPaginatedData(response);
           this.loading = false;
-          
-          // Auto-select first company if none selected and we're not on mobile
-          if (!this.isMobile && !this.selectedCompany && this.filteredCompanies.length > 0) {
-            this.viewCompanyDetails(this.filteredCompanies[0]);
-          } else if (this.selectedCompany) {
-            // Check if selected company is still in filtered results
-            const stillExists = this.filteredCompanies.some(c => c.id === this.selectedCompany?.id);
-            if (!stillExists) {
-              this.selectedCompany = this.filteredCompanies.length > 0 ? this.filteredCompanies[0] : null;
-              this.showDetailView = this.selectedCompany !== null;
-            }
-          }
         },
         error: (err) => {
           console.error('Error searching companies:', err);
@@ -182,8 +148,9 @@ export class CompaniesComponent implements OnInit {
       const query = this.searchQuery.toLowerCase();
       filtered = filtered.filter(company => 
         company.name.toLowerCase().includes(query) || 
-        company.website.toLowerCase().includes(query) ||
-        (company.vatNumber && company.vatNumber.toLowerCase().includes(query))
+        (company.email && company.email.toLowerCase().includes(query)) ||
+        (company.vatNumber && company.vatNumber.toLowerCase().includes(query)) ||
+        (company.phoneNumber && company.phoneNumber.toLowerCase().includes(query))
       );
     }
     
@@ -194,18 +161,9 @@ export class CompaniesComponent implements OnInit {
     
     this.totalCompanies = filtered.length;
     this.filteredCompanies = this.getPaginatedData(filtered);
-    
-    // Update selected company if it no longer exists in filtered results
-    if (this.selectedCompany) {
-      const stillExists = this.filteredCompanies.some(c => c.id === this.selectedCompany?.id);
-      if (!stillExists) {
-        this.selectedCompany = this.filteredCompanies.length > 0 ? this.filteredCompanies[0] : null;
-        this.showDetailView = this.selectedCompany !== null;
-      }
-    }
   }
 
-  getPaginatedData(data: Company[]): Company[] {
+  getPaginatedData(data: CompanyListItem[]): CompanyListItem[] {
     const startIndex = this.pageIndex * this.pageSize;
     return data.slice(startIndex, startIndex + this.pageSize);
   }
@@ -226,157 +184,92 @@ export class CompaniesComponent implements OnInit {
     this.applyFilters();
   }
 
-  getEmailAddress(company: Company): string | null {
-    const emailContact = company.contactInfo?.find(contact => contact.type.includes('email'));
-    return emailContact ? emailContact.value : null;
-  }
-
-  getPhoneNumber(company: Company): string | null {
-    const phoneContact = company.contactInfo?.find(contact => contact.type.includes('phone'));
-    return phoneContact ? phoneContact.value : null;
-  }
-
-  viewCompanyDetails(company: Company): void {
-    this.selectedCompany = company;
-    this.showDetailView = true;
-    this.showToastMessage(`Viewing details for ${company.name}`);
-  }
-
-  closeDetailView(): void {
-    this.showDetailView = false;
-    this.selectedCompany = null;
-  }
-
   loadMockData(): void {
     // Mock data for development/demo
-    const mockCompanies = [
+    const mockCompanies: CompanyListItem[] = [
       {
         id: '1',
+        teamleaderId: '1',
         name: 'TechCorp Solutions',
-        website: 'techcorp.com',
+        email: 'info@techcorp.com',
+        phoneNumber: '+32 9 876 5432',
         vatNumber: 'BE0987654321',
-        status: 'Active' as 'Active',
-        primaryAddress: {
-          city: 'Brussels',
-          country: 'Belgium'
-        },
-        contactInfo: [
-          { type: 'email-primary', value: 'info@techcorp.com' },
-          { type: 'phone-primary', value: '+32 9 876 5432' }
-        ]
+        status: 'Active',
+        syncedAt: new Date().toISOString()
       },
       {
         id: '2',
+        teamleaderId: '2',
         name: 'DataFlow Analytics',
-        website: 'dataflow.io',
+        email: 'contact@dataflow.io',
+        phoneNumber: '+32 1 234 5678',
         vatNumber: 'BE0123456789',
-        status: 'Active' as 'Active',
-        primaryAddress: {
-          city: 'Antwerp',
-          country: 'Belgium'
-        },
-        contactInfo: [
-          { type: 'email-primary', value: 'contact@dataflow.io' },
-          { type: 'phone-primary', value: '+32 1 234 5678' }
-        ]
+        status: 'Active',
+        syncedAt: new Date().toISOString()
       },
       {
         id: '3',
+        teamleaderId: '3',
         name: 'HealthTech Innovations',
-        website: 'healthtech.com',
+        email: 'info@healthtech.com',
+        phoneNumber: '+32 5 678 9123',
         vatNumber: 'BE0567891234',
-        status: 'Inactive' as 'Inactive',
-        primaryAddress: {
-          city: 'Ghent',
-          country: 'Belgium'
-        },
-        contactInfo: [
-          { type: 'email-primary', value: 'info@healthtech.com' },
-          { type: 'phone-primary', value: '+32 5 678 9123' }
-        ]
+        status: 'Inactive',
+        syncedAt: new Date().toISOString()
       },
       {
         id: '4',
+        teamleaderId: '4',
         name: 'EduSmart Systems',
-        website: 'edusmart.edu',
+        email: 'contact@edusmart.edu',
+        phoneNumber: '+32 3 456 7891',
         vatNumber: 'BE0345678912',
-        status: 'Active' as 'Active',
-        primaryAddress: {
-          city: 'Leuven',
-          country: 'Belgium'
-        },
-        contactInfo: [
-          { type: 'email-primary', value: 'contact@edusmart.edu' },
-          { type: 'phone-primary', value: '+32 3 456 7891' }
-        ]
+        status: 'Active',
+        syncedAt: new Date().toISOString()
       },
       {
         id: '5',
+        teamleaderId: '5',
         name: 'GreenEnergy Solutions',
-        website: 'greenenergy.be',
+        email: 'info@greenenergy.be',
+        phoneNumber: '+32 2 345 6789',
         vatNumber: 'BE0234567891',
-        status: 'Active' as 'Active',
-        primaryAddress: {
-          city: 'Namur',
-          country: 'Belgium'
-        },
-        contactInfo: [
-          { type: 'email-primary', value: 'info@greenenergy.be' },
-          { type: 'phone-primary', value: '+32 2 345 6789' }
-        ]
+        status: 'Active',
+        syncedAt: new Date().toISOString()
       },
       {
         id: '6',
+        teamleaderId: '6',
         name: 'CloudNet Services',
-        website: 'cloudnet.io',
+        email: 'support@cloudnet.io',
+        phoneNumber: '+32 4 567 8912',
         vatNumber: 'BE0456789123',
-        status: 'Inactive' as 'Inactive',
-        primaryAddress: {
-          city: 'Charleroi',
-          country: 'Belgium'
-        },
-        contactInfo: [
-          { type: 'email-primary', value: 'support@cloudnet.io' },
-          { type: 'phone-primary', value: '+32 4 567 8912' }
-        ]
+        status: 'Inactive',
+        syncedAt: new Date().toISOString()
       },
       {
         id: '7',
+        teamleaderId: '7',
         name: 'BioMed Research',
-        website: 'biomed-research.org',
+        email: 'contact@biomed-research.org',
+        phoneNumber: '+32 6 789 1234',
         vatNumber: 'BE0678912345',
-        status: 'Active' as 'Active',
-        primaryAddress: {
-          city: 'Liège',
-          country: 'Belgium'
-        },
-        contactInfo: [
-          { type: 'email-primary', value: 'contact@biomed-research.org' },
-          { type: 'phone-primary', value: '+32 6 789 1234' }
-        ]
+        status: 'Active',
+        syncedAt: new Date().toISOString()
       },
       {
         id: '8',
+        teamleaderId: '8',
         name: 'Innovate Digital',
-        website: 'innovate-digital.com',
+        email: 'hello@innovate-digital.com',
+        phoneNumber: '+32 8 912 3456',
         vatNumber: 'BE0891234567',
-        primaryAddress: {
-          city: 'Bruges',
-          country: 'Belgium'
-        },
-        contactInfo: [
-          { type: 'email-primary', value: 'hello@innovate-digital.com' },
-          { type: 'phone-primary', value: '+32 8 912 3456' }
-        ]
+        status: 'Active',
+        syncedAt: new Date().toISOString()
       }
     ];
     
-    // Set default status to 'Active' for companies without a status
-    this.companies = mockCompanies.map(company => ({
-      ...company,
-      status: (company.status || 'Active') as 'Active' | 'Inactive'
-    }));
-    
+    this.companies = mockCompanies;
     this.totalCompanies = this.companies.length;
     this.applyFilters();
     this.loading = false;

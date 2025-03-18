@@ -74,17 +74,17 @@
             <span class="company-name">{{ company.name }}</span>
           </td>
           <td class="email-col" data-label="Email">
-            <div class="email-container" *ngIf="getEmailAddress(company)">
-              <span class="email-value">{{ getEmailAddress(company) }}</span>
+            <div class="email-container" *ngIf="company.email">
+              <span class="email-value">{{ company.email }}</span>
             </div>
-            <span *ngIf="!getEmailAddress(company)">-</span>
+            <span *ngIf="!company.email">-</span>
           </td>
           <td class="phone-col" data-label="Phone">
-            <div class="phone-number" *ngIf="getPhoneNumber(company)">
+            <div class="phone-number" *ngIf="company.phoneNumber">
               <span class="material-icons">phone</span>
-              <span>{{ getPhoneNumber(company) }}</span>
+              <span>{{ company.phoneNumber }}</span>
             </div>
-            <span *ngIf="!getPhoneNumber(company)">-</span>
+            <span *ngIf="!company.phoneNumber">-</span>
           </td>
           <td class="vat-col hide-mobile" data-label="VAT Number">
             <span class="vat-number">{{ company.vatNumber || "-" }}</span>
@@ -103,7 +103,7 @@
           <td class="actions-col" data-label="Actions">
             <button
               class="view-details-btn"
-              (click)="viewCompanyDetails(company)"
+              (click)="navigateToCompanyDetails(company)"
             >
               <span class="material-icons">visibility</span>
               View Details

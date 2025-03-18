@@ -497,10 +497,7 @@
   gap: var(--space-sm);
   margin-top: var(--space-md);
   animation: fadeIn 0.5s ease-out;
-  background: white;
   padding: var(--space-md);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
   
   @media (min-width: 768px) {
     flex-direction: row;
