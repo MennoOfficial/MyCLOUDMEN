@@ -2,6 +2,7 @@ package com.cloudmen.backend.api.controllers;
 
 import com.cloudmen.backend.services.TeamleaderCompanyService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
+import com.cloudmen.backend.services.UserSyncService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -15,6 +16,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import org.springframework.http.HttpStatus;
 
 /**
  * Controller for handling synchronization of data from Teamleader
@@ -26,6 +28,7 @@ public class TeamleaderSyncController {
     private static final Logger logger = LoggerFactory.getLogger(TeamleaderSyncController.class);
     private final TeamleaderOAuthService oAuthService;
     private final TeamleaderCompanyService companyService;
+    private final UserSyncService userSyncService;
     private final ObjectMapper objectMapper;
 
     // Track the status of the last sync
@@ -35,9 +38,11 @@ public class TeamleaderSyncController {
     public TeamleaderSyncController(
             TeamleaderOAuthService oAuthService,
             TeamleaderCompanyService companyService,
+            UserSyncService userSyncService,
             ObjectMapper objectMapper) {
         this.oAuthService = oAuthService;
         this.companyService = companyService;
+        this.userSyncService = userSyncService;
         this.objectMapper = objectMapper;
     }
 
@@ -211,6 +216,81 @@ public class TeamleaderSyncController {
             } else {
                 logger.error("Failed to process company event for ID: {}", companyId);
             }
+        }
+    }
+
+    /**
+     * Refresh custom fields and update user roles
+     * 
+     * @return Response with status of the refresh
+     */
+    @PostMapping("/refresh-custom-fields-and-roles")
+    public ResponseEntity<Map<String, Object>> refreshCustomFieldsAndRoles() {
+        logger.info("Received request to refresh custom fields and update user roles");
+
+        try {
+            // First refresh custom fields
+            CompletableFuture<Map<String, Object>> customFieldsFuture = companyService.refreshCustomFields();
+
+            // When that's done, update user roles
+            customFieldsFuture.thenAccept(result -> {
+                logger.info("Custom fields refresh completed, updating user roles");
+                try {
+                    userSyncService.updateExistingUserRoles();
+                    userSyncService.removeRolesFromIneligibleUsers();
+                    logger.info("User roles update completed");
+                } catch (Exception e) {
+                    logger.error("Error updating user roles after custom fields refresh", e);
+                }
+            });
+
+            // Return immediate acknowledgment
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "processing");
+            response.put("message", "Custom fields refresh and user roles update started");
+            response.put("timestamp", LocalDateTime.now().toString());
+
+            return ResponseEntity.accepted().body(response);
+        } catch (Exception e) {
+            logger.error("Error starting custom fields and roles refresh", e);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Failed to start refresh: " + e.getMessage());
+            response.put("timestamp", LocalDateTime.now().toString());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * Refresh custom fields for all companies
+     * 
+     * @return Response with status of the refresh
+     */
+    @PostMapping("/refresh-custom-fields")
+    public ResponseEntity<Map<String, Object>> refreshCustomFields() {
+        logger.info("Received request to refresh custom fields");
+
+        try {
+            CompletableFuture<Map<String, Object>> future = companyService.refreshCustomFields();
+
+            // Return immediate acknowledgment
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "processing");
+            response.put("message", "Custom fields refresh started");
+            response.put("timestamp", LocalDateTime.now().toString());
+
+            return ResponseEntity.accepted().body(response);
+        } catch (Exception e) {
+            logger.error("Error starting custom fields refresh", e);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", "Failed to start custom fields refresh: " + e.getMessage());
+            response.put("timestamp", LocalDateTime.now().toString());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 }
