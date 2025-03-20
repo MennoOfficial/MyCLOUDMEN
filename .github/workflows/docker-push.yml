@@ -1,0 +1,46 @@
+name: Build and Push to GHCR
+
+on:
+  push:
+    branches:
+      - main  # Runs when pushing to 'main'
+  pull_request:
+    branches:
+      - main  # Runs on pull requests
+
+jobs:
+  # 🔹 Build and Push Backend Image
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build Backend Docker Image
+        run: |
+          cd backend
+          docker build -t ghcr.io/${{ github.repository }}/backend:latest .
+          
+      - name: Push Backend Image to GHCR
+        run: docker push ghcr.io/${{ github.repository }}/backend:latest
+
+  # 🔹 Build and Push Frontend Image
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build Frontend Docker Image
+        run: |
+          cd frontend
+          docker build -t ghcr.io/${{ github.repository }}/frontend:latest .
+
+      - name: Push Frontend Image to GHCR
+        run: docker push ghcr.io/${{ github.repository }}/frontend:latest
