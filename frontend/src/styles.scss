@@ -90,7 +90,13 @@
     gap: var(--space-sm);
     transition: all var(--transition-normal);
   }
-  
+  // Add this global style for better iOS Safari button touch handling
+button {
+  -webkit-appearance: none !important;
+  -webkit-tap-highlight-color: rgba(0,0,0,0) !important;
+  touch-action: manipulation !important;
+  cursor: pointer !important;
+} 
   /* Primary Button */
   .btn-primary {
     background: var(--deep-ocean);

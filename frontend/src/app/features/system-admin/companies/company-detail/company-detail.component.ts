@@ -31,28 +31,6 @@ interface PendingUser {
   dateTimeChanged?: string;
 }
 
-interface AuthLog {
-  userId: string;
-  timestamp: string;
-  success: boolean;
-  ipAddress?: string;
-  userAgent?: string;
-}
-
-// Fix for linter error: Define interface for activity item
-interface ActivityItem {
-  timestamp?: string;
-  dateTime?: string;
-  created_at?: string;
-  success?: boolean;
-  status?: string;
-  ipAddress?: string;
-  ip?: string;
-  userAgent?: string;
-  browser?: string;
-  [key: string]: any; // Allow other properties
-}
-
 @Component({
   selector: 'app-company-detail',
   standalone: true,
@@ -97,11 +75,9 @@ export class CompanyDetailComponent implements OnInit {
   // User detail popup
   showUserDetailPopup = false;
   selectedUser: User | null = null;
-  availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN', 'SYSTEM_ADMIN'];
+  availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN'];  // Only allow setting to regular user
   availableStatuses = ['Active', 'Inactive'];
   updatingUser = false;
-  userAuthLogs: AuthLog[] = [];
-  loadingAuthLogs = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -660,163 +636,110 @@ Error: ${errorMessage}`);
   showUserDetail(user: User): void {
     this.selectedUser = { ...user }; // Create a copy to avoid direct modification
     this.showUserDetailPopup = true;
-    this.fetchUserAuthLogs(user.id);
+    
+    // More aggressive approach to prevent scrolling
+    const scrollY = window.scrollY;
+    document.body.classList.add('body-no-scroll');
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+    
+    // Set scrollbar width as CSS variable to prevent layout shift
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.documentElement.style.setProperty('--scrollbar-width', `${scrollbarWidth}px`);
+    document.documentElement.style.setProperty('--scroll-position', `${scrollY}px`);
+    
+    // Fetch the last login time for the user if it's not already set
+    if (!this.selectedUser.lastLogin) {
+      this.fetchLastLoginTime(user);
+    }
+  }
+
+  /**
+   * Fetch the last login time for a user, trying by ID first and then falling back to email if needed
+   * @param user The user to fetch last login for
+   */
+  private fetchLastLoginTime(user: User): void {
+    // The API returns a LocalDateTime which is serialized as a string
+    this.apiService.get<string>(`auth-logs/user/${user.id}/last-login`).subscribe({
+      next: (lastLoginTime) => {
+        if (lastLoginTime && this.selectedUser) {
+          this.selectedUser.lastLogin = lastLoginTime;
+          console.log(`Retrieved last login for user ${user.id}:`, lastLoginTime);
+        } else if (this.selectedUser) {
+          console.log(`No login history found for user ${user.id} by ID, trying email...`);
+          // If no login found by ID, try by email as fallback
+          this.fetchLastLoginByEmail(user.email);
+        }
+      },
+      error: (err) => {
+        console.error(`Error fetching last login time for user ${user.id}:`, err);
+        // On error, try by email as fallback
+        if (this.selectedUser) {
+          this.fetchLastLoginByEmail(user.email);
+        }
+      }
+    });
+  }
+  
+  /**
+   * Fetch the last login time for a user by email
+   * @param email The user's email
+   */
+  private fetchLastLoginByEmail(email: string): void {
+    // Encode the email for URL safety
+    const encodedEmail = encodeURIComponent(email);
+    
+    this.apiService.get<string>(`auth-logs/email/${encodedEmail}/last-login`).subscribe({
+      next: (lastLoginTime) => {
+        if (lastLoginTime && this.selectedUser) {
+          this.selectedUser.lastLogin = lastLoginTime;
+          console.log(`Retrieved last login for email ${email}:`, lastLoginTime);
+        } else {
+          console.log(`No login history found for email ${email}`);
+        }
+      },
+      error: (err) => {
+        console.error(`Error fetching last login time for email ${email}:`, err);
+      }
+    });
   }
 
   // Method to hide user detail popup
   hideUserDetail(): void {
     this.showUserDetailPopup = false;
     this.selectedUser = null;
-    this.userAuthLogs = [];
-  }
-
-  // Fetch auth logs for a user
-  fetchUserAuthLogs(userId: string): void {
-    this.loadingAuthLogs = true;
-    this.userAuthLogs = [];
     
-    // Try a more standard API endpoint that might exist in your system
-    // This assumes you might have user activity data in your users endpoint
-    this.apiService.get<any>(`users/${userId}/activity`)
-      .subscribe({
-        next: (response) => {
-          console.log('User activity data:', response);
-          
-          // If the API returns data in a different format, transform it
-          if (response && Array.isArray(response)) {
-            // Map the API response to our AuthLog format
-            this.userAuthLogs = response.map((item: ActivityItem) => ({
-              userId: userId,
-              timestamp: item.timestamp || item.dateTime || item.created_at || new Date().toISOString(), // Ensure we always have a timestamp
-              success: item.success || item.status === 'success',
-              ipAddress: item.ipAddress || item.ip || '192.168.1.1',
-              userAgent: item.userAgent || item.browser || 'Unknown'
-            }));
-          } else if (response && typeof response === 'object') {
-            // Handle case where response is an object with activity inside
-            const activityArray = response.activities || response.logs || response.authLogs || [];
-            this.userAuthLogs = activityArray.map((item: ActivityItem) => ({
-              userId: userId,
-              timestamp: item.timestamp || item.dateTime || item.created_at || new Date().toISOString(), // Ensure we always have a timestamp
-              success: item.success || item.status === 'success',
-              ipAddress: item.ipAddress || item.ip || '192.168.1.1',
-              userAgent: item.userAgent || item.browser || 'Unknown'
-            }));
-          }
-          
-          // If endpoint exists but returned empty data, still create sample logs
-          if (!this.userAuthLogs || this.userAuthLogs.length === 0) {
-            this.createSampleAuthLogs(userId);
-          } else {
-            // Update last login time from real data if available
-            this.updateLastLoginFromLogs();
-          }
-          
-          this.loadingAuthLogs = false;
-        },
-        error: (err) => {
-          console.error(`Error fetching user activity for user ${userId}:`, err);
-          console.log('Falling back to sample data because the API endpoint returned an error');
-          
-          // Create sample logs if API fails
-          this.createSampleAuthLogs(userId);
-          this.loadingAuthLogs = false;
-        }
-      });
-  }
-
-  // Create sample auth logs
-  private createSampleAuthLogs(userId: string): void {
-    console.log('Creating sample auth logs for demonstration');
-    const now = new Date();
+    // Restore scrolling position
+    const scrollY = document.documentElement.style.getPropertyValue('--scroll-position') || '0';
+    document.body.classList.remove('body-no-scroll');
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    document.body.style.overflow = '';
+    window.scrollTo(0, parseInt(scrollY || '0'));
     
-    this.userAuthLogs = [
-      {
-        userId: userId,
-        timestamp: new Date(now.getTime() - 1000 * 60 * 5).toISOString(), // 5 min ago
-        success: true,
-        ipAddress: '192.168.1.1'
-      },
-      {
-        userId: userId,
-        timestamp: new Date(now.getTime() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-        success: true,
-        ipAddress: '192.168.1.1'
-      },
-      {
-        userId: userId,
-        timestamp: new Date(now.getTime() - 1000 * 60 * 60 * 24).toISOString(), // 1 day ago
-        success: false,
-        ipAddress: '192.168.1.100'
-      },
-      {
-        userId: userId,
-        timestamp: new Date(now.getTime() - 1000 * 60 * 60 * 48).toISOString(), // 2 days ago
-        success: true,
-        ipAddress: '185.23.45.67'
-      }
-    ];
-    
-    // Also update the last login time on the user
-    if (this.selectedUser) {
-      this.selectedUser.lastLogin = this.userAuthLogs[0].timestamp;
-    }
-  }
-
-  // Update the lastLogin from logs
-  private updateLastLoginFromLogs(): void {
-    if (!this.selectedUser || !this.userAuthLogs || this.userAuthLogs.length === 0) return;
-    
-    // Sort logs by timestamp descending and find the most recent successful login
-    const successfulLogs = this.userAuthLogs
-      .filter(log => log.success)
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    
-    if (successfulLogs.length > 0) {
-      this.selectedUser.lastLogin = successfulLogs[0].timestamp;
-    }
+    // Remove the CSS custom properties
+    document.documentElement.style.removeProperty('--scrollbar-width');
+    document.documentElement.style.removeProperty('--scroll-position');
   }
 
   // Method to update user role
   updateUserRole(newRole: string): void {
     if (!this.selectedUser) return;
     
+    // Only prevent changing role for system admins, allow company admins to be changed
+    if (this.isSystemAdmin(this.selectedUser.role)) {
+      alert('System administrator roles cannot be changed.');
+      return;
+    }
+    
     this.updatingUser = true;
     
-    console.log(`Attempting to update role for user ${this.selectedUser.id} to ${newRole}`);
+    console.log(`Updating role for user ${this.selectedUser.id} to ${newRole}`);
     
-    // First check if the endpoint exists and is accessible
-    this.apiService.get<any>(`users/${this.selectedUser.id}`)
-      .subscribe({
-        next: () => {
-          // User exists, now try to update role
-          this.performRoleUpdate(newRole);
-        },
-        error: (err) => {
-          console.error(`Error checking if user exists: ${this.selectedUser?.id}`, err);
-          
-          // Show error with more helpful message
-          if (err.status === 404) {
-            alert(`Cannot update role: User with ID ${this.selectedUser?.id} not found in the system.`);
-          } else {
-            alert(`Cannot connect to user service. Role update may not work currently. Error: ${err.status}`);
-          }
-          
-          // Update UI optimistically anyway for demo/testing
-          this.updateRoleLocally(newRole);
-          this.updatingUser = false;
-        }
-      });
-  }
-
-  // Perform the actual role update API call
-  private performRoleUpdate(newRole: string): void {
-    if (!this.selectedUser) return;
-    
-    // Log the API call being made
-    console.log(`Making API request to update role: PUT users/${this.selectedUser.id}/role`);
-    console.log('Request payload:', { role: newRole });
-    
+    // Call the API directly without checking if the user exists first
     this.apiService.put(`users/${this.selectedUser.id}/role`, { role: newRole })
       .subscribe({
         next: (response) => {
@@ -848,7 +771,7 @@ Error: ${errorMessage}`);
           
           alert(errorMessage);
           
-          // Update UI optimistically anyway for demo/testing
+          // Update UI optimistically anyway
           this.updateRoleLocally(newRole);
           this.updatingUser = false;
         }
@@ -880,40 +803,9 @@ Error: ${errorMessage}`);
     // Convert friendly status name to backend format
     const backendStatus = newStatus === 'Active' ? 'ACTIVATED' : 'DEACTIVATED';
     
-    console.log(`Attempting to update status for user ${this.selectedUser.id} to ${newStatus} (${backendStatus})`);
+    console.log(`Updating status for user ${this.selectedUser.id} to ${newStatus} (${backendStatus})`);
     
-    // First check if the endpoint exists and is accessible
-    this.apiService.get<any>(`users/${this.selectedUser.id}`)
-      .subscribe({
-        next: () => {
-          // User exists, now try to update status
-          this.performStatusUpdate(newStatus, backendStatus);
-        },
-        error: (err) => {
-          console.error(`Error checking if user exists: ${this.selectedUser?.id}`, err);
-          
-          // Show error with more helpful message
-          if (err.status === 404) {
-            alert(`Cannot update status: User with ID ${this.selectedUser?.id} not found in the system.`);
-          } else {
-            alert(`Cannot connect to user service. Status update may not work currently. Error: ${err.status}`);
-          }
-          
-          // Update UI optimistically anyway for demo/testing
-          this.updateStatusLocally(newStatus);
-          this.updatingUser = false;
-        }
-      });
-  }
-
-  // Perform the actual status update API call
-  private performStatusUpdate(newStatus: string, backendStatus: string): void {
-    if (!this.selectedUser) return;
-    
-    // Log the API call being made
-    console.log(`Making API request to update status: PUT users/${this.selectedUser.id}/status`);
-    console.log('Request payload:', { status: backendStatus });
-    
+    // Call the API directly without checking if the user exists first
     this.apiService.put(`users/${this.selectedUser.id}/status`, { status: backendStatus })
       .subscribe({
         next: (response) => {
@@ -945,7 +837,7 @@ Error: ${errorMessage}`);
           
           alert(errorMessage);
           
-          // Update UI optimistically anyway for demo/testing
+          // Update UI optimistically anyway
           this.updateStatusLocally(newStatus);
           this.updatingUser = false;
         }
@@ -974,5 +866,32 @@ Error: ${errorMessage}`);
     
     const date = new Date(timestamp);
     return date.toLocaleString();
+  }
+  
+  /**
+   * Copy text to clipboard
+   * @param text Text to copy to clipboard
+   */
+  copyToClipboard(text: string): void {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        // You could show a toast notification here, but we'll keep it simple
+        console.log('Copied to clipboard:', text);
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
+      });
+  }
+
+  // Helper method to check if a user is an admin (either system or company)
+  isUserAdmin(role: string): boolean {
+    const normalizedRole = role.toUpperCase();
+    return normalizedRole.includes('ADMIN');
+  }
+
+  // Helper method to check specifically for system admin role
+  isSystemAdmin(role: string): boolean {
+    const normalizedRole = role.toUpperCase();
+    return normalizedRole === 'SYSTEM_ADMIN';
   }
 } 
