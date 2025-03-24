@@ -1,6 +1,9 @@
 package com.cloudmen.backend.api.controllers;
 
+import com.cloudmen.backend.api.dtos.CompanyDetailDTO;
+import com.cloudmen.backend.api.dtos.CompanyListDTO;
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
+import com.cloudmen.backend.repositories.TeamleaderCompanyRepository;
 import com.cloudmen.backend.services.TeamleaderCompanyService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -17,6 +20,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * Controller for exposing Teamleader company data
@@ -29,14 +35,20 @@ public class TeamleaderCompanyController {
     private final TeamleaderCompanyService companyService;
     private final TeamleaderOAuthService oAuthService;
     private final ObjectMapper objectMapper;
+    private final TeamleaderCompanyRepository companyRepository;
 
     public TeamleaderCompanyController(
             TeamleaderCompanyService companyService,
             TeamleaderOAuthService oAuthService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            TeamleaderCompanyRepository companyRepository) {
         this.companyService = companyService;
         this.oAuthService = oAuthService;
         this.objectMapper = objectMapper;
+        this.companyRepository = companyRepository;
+
+        // Log the base path that this controller is mapped to
+        logger.info("TeamleaderCompanyController initialized with base path: /api/teamleader/companies");
     }
 
     /**
@@ -101,13 +113,13 @@ public class TeamleaderCompanyController {
     }
 
     /**
-     * Get a list of companies from the local database
+     * Get a list of companies from the local database with simplified DTOs
      * 
      * @param page      Page number (0-based)
      * @param size      Number of items per page
      * @param sortBy    Field to sort by
      * @param direction Sort direction (asc or desc)
-     * @return List of companies
+     * @return List of company DTOs
      */
     @GetMapping
     public ResponseEntity<Map<String, Object>> getCompanies(
@@ -125,8 +137,13 @@ public class TeamleaderCompanyController {
             Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
             List<TeamleaderCompany> companies = companyService.getAllCompanies();
 
+            // Convert entities to DTOs
+            List<CompanyListDTO> companyDtos = companies.stream()
+                    .map(CompanyListDTO::fromEntity)
+                    .collect(Collectors.toList());
+
             Map<String, Object> response = new HashMap<>();
-            response.put("companies", companies);
+            response.put("companies", companyDtos);
             response.put("currentPage", page);
             response.put("totalItems", companies.size());
             response.put("totalPages", (int) Math.ceil((double) companies.size() / size));
@@ -154,7 +171,9 @@ public class TeamleaderCompanyController {
         TeamleaderCompany company = companyService.getCompanyByTeamleaderId(id);
 
         if (company != null) {
-            return ResponseEntity.ok(company);
+            // Convert entity to detailed DTO
+            CompanyDetailDTO companyDetailDTO = CompanyDetailDTO.fromEntity(company);
+            return ResponseEntity.ok(companyDetailDTO);
         } else {
             Map<String, Object> response = new HashMap<>();
             response.put("error", true);
@@ -175,7 +194,13 @@ public class TeamleaderCompanyController {
 
         try {
             Iterable<TeamleaderCompany> companies = companyService.searchCompaniesByName(query);
-            return ResponseEntity.ok(companies);
+
+            // Convert entities to DTOs
+            List<CompanyListDTO> companyDtos = StreamSupport.stream(companies.spliterator(), false)
+                    .map(CompanyListDTO::fromEntity)
+                    .collect(Collectors.toList());
+
+            return ResponseEntity.ok(companyDtos);
         } catch (Exception e) {
             logger.error("Error searching companies", e);
             Map<String, Object> response = new HashMap<>();
@@ -204,6 +229,125 @@ public class TeamleaderCompanyController {
                 result.has("error") ? "error" : "success");
 
         return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Update the status of a company
+     * 
+     * @param id           The Teamleader company ID
+     * @param statusUpdate Status update data containing new status
+     * @return Updated company details
+     */
+    @PutMapping("/{id}/status")
+    public ResponseEntity<Object> updateCompanyStatus(
+            @PathVariable("id") String id,
+            @RequestBody Map<String, String> statusUpdate) {
+
+        logger.info("Received request to update status for company ID: {}", id);
+        logger.info("Full request body: {}", statusUpdate);
+
+        // First check if this API endpoint is actually being called
+        logger.info("====== STATUS UPDATE API CALL RECEIVED ======");
+        logger.info("ID from path: {}", id);
+        logger.info("Request body: {}", statusUpdate);
+
+        String newStatus = statusUpdate.get("status");
+        if (newStatus == null) {
+            logger.warn("Status field is missing in the request body");
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", true);
+            response.put("message", "Status field is required");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        // Validate status value
+        if (!newStatus.equals("Active") && !newStatus.equals("Inactive")) {
+            logger.warn("Invalid status value: {}", newStatus);
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", true);
+            response.put("message", "Status must be either 'Active' or 'Inactive'");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        logger.info("Processing status change to: {}", newStatus);
+
+        try {
+            // Try first by MongoDB ID to match what frontend sends
+            logger.info("Attempting to look up company by id (could be either MongoDB _id or teamleaderId)");
+            TeamleaderCompany company = null;
+
+            // First try MongoDB ID (which is what we send in the DTO)
+            try {
+                Optional<TeamleaderCompany> companyById = companyRepository.findById(id);
+                if (companyById.isPresent()) {
+                    company = companyById.get();
+                    logger.info("Found company by MongoDB _id: {}, name: {}", id, company.getName());
+                } else {
+                    logger.info("Company not found by MongoDB _id, trying teamleaderId");
+                }
+            } catch (Exception e) {
+                logger.warn("Error looking up by MongoDB ID (probably not a valid ObjectId): {}", e.getMessage());
+            }
+
+            // If not found by MongoDB ID, try teamleaderId
+            if (company == null) {
+                company = companyService.getCompanyByTeamleaderId(id);
+            }
+
+            if (company == null) {
+                logger.warn("Company not found with ID: {}", id);
+                Map<String, Object> response = new HashMap<>();
+                response.put("error", true);
+                response.put("message", "Company not found with ID: " + id);
+                return ResponseEntity.notFound().build();
+            }
+
+            logger.info("Found company: {}, current status: {}", company.getName(),
+                    company.getCustomFields() != null && company.getCustomFields().containsKey("status")
+                            ? company.getCustomFields().get("status")
+                            : "undefined");
+
+            // Update the company's status
+            Map<String, Object> customFields = company.getCustomFields();
+            if (customFields == null) {
+                logger.info("Creating new customFields map for company");
+                customFields = new HashMap<>();
+                company.setCustomFields(customFields);
+            }
+
+            // Store status in customFields - this is how the status is managed in this
+            // application
+            customFields.put("status", newStatus);
+            logger.info("Updated customFields with new status");
+
+            // Save the updated company
+            company = companyService.saveCompany(company);
+            logger.info("Company saved successfully");
+
+            // Return the updated company
+            CompanyDetailDTO updatedCompany = CompanyDetailDTO.fromEntity(company);
+            logger.info("Returning updated company with status: {}", updatedCompany.getStatus());
+            return ResponseEntity.ok(updatedCompany);
+        } catch (Exception e) {
+            logger.error("Error updating company status", e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", true);
+            response.put("message", "Error updating company status: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * Test endpoint to verify the status path routing works
+     */
+    @GetMapping("/{id}/status/test")
+    public ResponseEntity<Object> testStatusEndpoint(@PathVariable("id") String id) {
+        logger.info("Test status endpoint reached for ID: {}", id);
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Status endpoint test successful");
+        response.put("id", id);
+        return ResponseEntity.ok(response);
     }
 
     /**

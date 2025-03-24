@@ -73,4 +73,10 @@ public interface AuthenticationLogRepository extends MongoRepository<Authenticat
         Page<AuthenticationLog> findByEmailAndPrimaryDomainAndSuccessfulAndTimestampBetween(
                         String email, String primaryDomain, boolean successful,
                         LocalDateTime start, LocalDateTime end, Pageable pageable);
+
+        // Find the latest successful login for a user
+        AuthenticationLog findTopByUserIdAndSuccessfulOrderByTimestampDesc(String userId, boolean successful);
+        
+        // Find the latest successful login for an email
+        AuthenticationLog findTopByEmailAndSuccessfulOrderByTimestampDesc(String email, boolean successful);
 }

@@ -6,5 +6,6 @@ package com.cloudmen.backend.domain.enums;
 public enum StatusType {
     ACTIVATED, // Active user with full access
     PENDING, // User waiting for activation
-    DEACTIVATED // User is deactivated
+    DEACTIVATED, // User is deactivated
+    REJECTED // User request was explicitly rejected
 }

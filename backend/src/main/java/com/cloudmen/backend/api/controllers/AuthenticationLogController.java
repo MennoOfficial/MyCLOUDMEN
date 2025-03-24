@@ -179,4 +179,28 @@ public class AuthenticationLogController {
         authenticationLogService.deleteLogsOlderThan(cutoffDate);
         return ResponseEntity.noContent().build();
     }
+
+    /**
+     * Get the last successful login time for a user by ID
+     * 
+     * @param userId User ID
+     * @return The timestamp of the last successful login
+     */
+    @GetMapping("/user/{userId}/last-login")
+    public ResponseEntity<LocalDateTime> getLastLoginByUserId(@PathVariable String userId) {
+        LocalDateTime lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
+        return ResponseEntity.ok(lastLogin);
+    }
+    
+    /**
+     * Get the last successful login time for a user by email
+     * 
+     * @param email User's email
+     * @return The timestamp of the last successful login
+     */
+    @GetMapping("/email/{email}/last-login")
+    public ResponseEntity<LocalDateTime> getLastLoginByEmail(@PathVariable String email) {
+        LocalDateTime lastLogin = authenticationLogService.getLastSuccessfulLoginByEmail(email);
+        return ResponseEntity.ok(lastLogin);
+    }
 }
