@@ -716,9 +716,9 @@
     border-radius: 12px;
     font-size: 12px;
     font-weight: 500;
-    background-color: var(--role-badge-bg, #f0f4f9);
-    color: var(--role-badge-text, #455b76);
-    border: 1px solid rgba(var(--role-badge-text-rgb, 69, 91, 118), 0.15);
+    background-color: var(--silver-lining);
+    color: var(--deep-ocean);
+    border: 1px solid var(--mist);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     transition: all 0.2s ease;
     
@@ -729,39 +729,27 @@
     
     // Different styling based on role classes
     &.admin-role {
-      --role-badge-bg: var(--admin-role-bg, #eeffee);
-      --role-badge-text: var(--admin-role-text, #218f21);
-      --role-badge-text-rgb: var(--admin-role-text-rgb, 33, 143, 33);
-      background-color: var(--role-badge-bg);
-      color: var(--role-badge-text);
-      border: 1px solid rgba(var(--role-badge-text-rgb), 0.2);
+      background-color: var(--ocean-blue-soft);
+      color: var(--ocean-blue);
+      border: 1px solid var(--ocean-blue-soft);
     }
     
     &.system-role {
-      --role-badge-bg: var(--system-role-bg, #fff0e4);
-      --role-badge-text: var(--system-role-text, #e86500);
-      --role-badge-text-rgb: var(--system-role-text-rgb, 232, 101, 0);
-      background-color: var(--role-badge-bg);
-      color: var(--role-badge-text);
-      border: 1px solid rgba(var(--role-badge-text-rgb), 0.2);
+      background-color: var(--aqua-spring-soft);
+      color: var(--aqua-spring);
+      border: 1px solid var(--aqua-spring-soft);
     }
     
     &.user-role {
-      --role-badge-bg: var(--user-role-bg, #f0f4f9);
-      --role-badge-text: var(--user-role-text, #455b76);
-      --role-badge-text-rgb: var(--user-role-text-rgb, 69, 91, 118);
-      background-color: var(--role-badge-bg);
-      color: var(--role-badge-text);
-      border: 1px solid rgba(var(--role-badge-text-rgb), 0.15);
+      background-color: var(--forest-green-soft);
+      color: var(--forest-green);
+      border: 1px solid var(--forest-green-soft);
     }
     
     &.default-role {
-      --role-badge-bg: #e9edf2;
-      --role-badge-text: #566d8c;
-      --role-badge-text-rgb: 86, 109, 140;
-      background-color: var(--role-badge-bg);
-      color: var(--role-badge-text);
-      border: 1px solid rgba(var(--role-badge-text-rgb), 0.15);
+      background-color: var(--silver-lining);
+      color: var(--deep-ocean);
+      border: 1px solid var(--mist);
     }
   }
   
@@ -2003,31 +1991,6 @@
   p {
     font-size: 14px;
     margin: 0;
-  }
-}
-
-// Update role badge styling - remove hover effects and use color variables
-.role-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  
-  &.user-role {
-    background-color: #edf7ff;
-    color: #0072c6;
-  }
-  
-  &.admin-role {
-    background-color: #fff0e5;
-    color: #ff7043;
-  }
-  
-  &.system-role {
-    background-color: #f0e6ff;
-    color: #6200ea;
   }
 }
 

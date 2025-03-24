@@ -541,22 +541,22 @@ Error: ${errorMessage}`);
    * Determines the CSS class for a role badge based on the role value
    */
   getRoleClass(role: string): string {
-    if (!role) return 'user-role';
+    if (!role) return 'role-pill role-company-user';
     
     const normalizedRole = role.toUpperCase();
     
     if (normalizedRole.includes('ADMIN')) {
       // Check if it's a system admin
       if (normalizedRole.includes('SYSTEM')) {
-        return 'system-role';
+        return 'role-pill role-system-admin';
       }
       // Otherwise it's a company admin
-      return 'admin-role';
+      return 'role-pill role-company-admin';
     } else if (normalizedRole.includes('SYSTEM')) {
-      return 'system-role';
+      return 'role-pill role-system-admin';
     } else {
       // Default for regular users or unknown roles
-      return 'user-role';
+      return 'role-pill role-company-user';
     }
   }
 

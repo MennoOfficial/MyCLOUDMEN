@@ -28,16 +28,15 @@
           </div>
 
           <div class="notification-content">
-            <div
-              class="notification-item"
-              *ngFor="let user of pendingUsers"
-            >
+            <div class="notification-item" *ngFor="let user of pendingUsers">
               <div class="notification-user-avatar">
                 {{ user.name.charAt(0).toUpperCase() }}
               </div>
               <div class="notification-user-info">
                 <div class="notification-user-name">{{ user.name }}</div>
-                <div class="notification-user-email" title="{{ user.email }}">{{ user.email }}</div>
+                <div class="notification-user-email" title="{{ user.email }}">
+                  {{ user.email }}
+                </div>
                 <div class="notification-time">
                   {{ formatTimeAgo(user.requestedAt) }}
                 </div>
@@ -61,7 +60,7 @@
                 </button>
               </div>
             </div>
-            
+
             <!-- Empty state when there are no pending requests -->
             <div class="empty-notification" *ngIf="pendingUsers.length === 0">
               <span class="material-icons">done_all</span>
@@ -249,9 +248,9 @@
                 <td class="user-name">{{ user.name }}</td>
                 <td class="user-email">{{ user.email }}</td>
                 <td class="user-role">
-                  <span [class]="'role-badge ' + getRoleClass(user.role)">
-                    {{ formatRole(user.role) }}
-                  </span>
+                  <span [class]="getRoleClass(user.role)">{{
+                    formatRole(user.role)
+                  }}</span>
                 </td>
                 <td class="user-status">
                   <span
@@ -290,9 +289,9 @@
                 </div>
               </div>
               <div class="user-card-footer">
-                <span [class]="'role-badge ' + getRoleClass(user.role)">
-                  {{ formatRole(user.role) }}
-                </span>
+                <span [class]="getRoleClass(user.role)">{{
+                  formatRole(user.role)
+                }}</span>
                 <span
                   class="status-badge small"
                   [ngClass]="{
@@ -354,7 +353,13 @@
   </div>
 
   <!-- Status Change Confirmation Popup -->
-  <div class="status-popup-overlay" *ngIf="showStatusPopup" (click)="cancelStatusChange()" aria-modal="true" role="dialog">
+  <div
+    class="status-popup-overlay"
+    *ngIf="showStatusPopup"
+    (click)="cancelStatusChange()"
+    aria-modal="true"
+    role="dialog"
+  >
     <div class="status-popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
         <span class="material-icons warning-icon">warning</span>
@@ -366,7 +371,8 @@
           Are you sure you want to change the status of
           <strong>{{ company?.name }}</strong> from
           <strong>{{ company?.status }}</strong> to
-          <strong>{{ newStatus }}</strong>?
+          <strong>{{ newStatus }}</strong
+          >?
         </p>
 
         <div class="status-change-preview">
@@ -399,11 +405,17 @@
 
         <div *ngIf="newStatus === 'Inactive'" class="status-info warning-text">
           <span class="material-icons">info</span>
-          <span>Inactive companies won't appear in regular searches and may have limited functionality.</span>
+          <span
+            >Inactive companies won't appear in regular searches and may have
+            limited functionality.</span
+          >
         </div>
         <div *ngIf="newStatus === 'Active'" class="status-info success-text">
           <span class="material-icons">check_circle</span>
-          <span>Active companies have full access to all features and appear in regular searches.</span>
+          <span
+            >Active companies have full access to all features and appear in
+            regular searches.</span
+          >
         </div>
       </div>
 
@@ -432,7 +444,13 @@
   </div>
 
   <!-- Pending User Actions Popup -->
-  <div class="status-popup-overlay" *ngIf="showPendingPopup" (click)="hidePendingPopup()" aria-modal="true" role="dialog">
+  <div
+    class="status-popup-overlay"
+    *ngIf="showPendingPopup"
+    (click)="hidePendingPopup()"
+    aria-modal="true"
+    role="dialog"
+  >
     <div class="pending-popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
         <span class="material-icons">person_add</span>
@@ -443,9 +461,9 @@
         <div class="pending-user-avatar">
           {{ selectedPendingUser.name.charAt(0).toUpperCase() }}
         </div>
-        
+
         <h4 class="pending-user-title">{{ selectedPendingUser.name }}</h4>
-        
+
         <div class="pending-user-details">
           <div class="pending-detail-item">
             <span class="material-icons">email</span>
@@ -453,7 +471,10 @@
           </div>
           <div class="pending-detail-item">
             <span class="material-icons">schedule</span>
-            <span class="detail-value">Requested {{ formatTimeAgo(selectedPendingUser.requestedAt) }}</span>
+            <span class="detail-value"
+              >Requested
+              {{ formatTimeAgo(selectedPendingUser.requestedAt) }}</span
+            >
           </div>
         </div>
 
@@ -464,10 +485,7 @@
       </div>
 
       <div class="popup-actions">
-        <button
-          class="cancel-btn"
-          (click)="hidePendingPopup()"
-        >
+        <button class="cancel-btn" (click)="hidePendingPopup()">
           <span class="material-icons">arrow_back</span>
           Back
         </button>
@@ -492,8 +510,17 @@
   </div>
 
   <!-- Pending User Confirmation Popup -->
-  <div class="status-popup-overlay" *ngIf="showUserActionConfirmPopup" (click)="cancelUserAction()" aria-modal="true" role="dialog">
-    <div class="pending-popup user-action-confirm" (click)="$event.stopPropagation()">
+  <div
+    class="status-popup-overlay"
+    *ngIf="showUserActionConfirmPopup"
+    (click)="cancelUserAction()"
+    aria-modal="true"
+    role="dialog"
+  >
+    <div
+      class="pending-popup user-action-confirm"
+      (click)="$event.stopPropagation()"
+    >
       <div
         class="popup-header"
         [ngClass]="{
@@ -511,7 +538,10 @@
 
       <div class="popup-content" *ngIf="selectedPendingUser">
         <p class="confirmation-text">
-          Are you sure you want to <span class="reject" *ngIf="confirmAction === 'reject'">reject</span><span *ngIf="confirmAction === 'approve'">approve</span> this user request?
+          Are you sure you want to
+          <span class="reject" *ngIf="confirmAction === 'reject'">reject</span
+          ><span *ngIf="confirmAction === 'approve'">approve</span> this user
+          request?
         </p>
 
         <div class="pending-user-details">
@@ -525,11 +555,14 @@
           </div>
           <div class="pending-detail-item">
             <span class="material-icons">schedule</span>
-            <span class="detail-value">Requested {{ formatTimeAgo(selectedPendingUser.requestedAt) }}</span>
+            <span class="detail-value"
+              >Requested
+              {{ formatTimeAgo(selectedPendingUser.requestedAt) }}</span
+            >
           </div>
         </div>
 
-        <div 
+        <div
           class="confirmation-info"
           [ngClass]="{
             'success-info': confirmAction === 'approve',
@@ -574,8 +607,8 @@
             <span class="material-icons">block</span>
             Reject
           </button>
-          <button 
-            class="cancel-btn" 
+          <button
+            class="cancel-btn"
             (click)="cancelUserAction()"
             (touchstart)="cancelUserAction()"
             role="button"
@@ -611,7 +644,11 @@
             <span class="user-email">{{ selectedUser.email }}</span>
           </div>
         </div>
-        <button class="close-button" (click)="hideUserDetail()" aria-label="Close user details">
+        <button
+          class="close-button"
+          (click)="hideUserDetail()"
+          aria-label="Close user details"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>
@@ -625,28 +662,36 @@
               <span class="info-label">User ID</span>
               <div class="info-value monospace">
                 {{ selectedUser.id }}
-                <button class="copy-btn" title="Copy ID to clipboard" (click)="copyToClipboard(selectedUser.id)">
+                <button
+                  class="copy-btn"
+                  title="Copy ID to clipboard"
+                  (click)="copyToClipboard(selectedUser.id)"
+                >
                   <span class="material-icons">content_copy</span>
                 </button>
               </div>
             </div>
-            
+
             <div class="info-item">
               <span class="info-label">Last Login</span>
               <div class="info-value">
-                {{ selectedUser.lastLogin ? (selectedUser.lastLogin | date: 'MMM d, y, h:mm a') : 'Never logged in' }}
+                {{
+                  selectedUser.lastLogin
+                    ? (selectedUser.lastLogin | date : "MMM d, y, h:mm a")
+                    : "Never logged in"
+                }}
               </div>
             </div>
-            
+
             <div class="info-item">
               <span class="info-label">Current Role</span>
               <div class="info-value">
-                <span [class]="'role-badge ' + getRoleClass(selectedUser.role)">
-                  {{ formatRole(selectedUser.role) }}
-                </span>
+                <span [class]="getRoleClass(selectedUser.role)">{{
+                  formatRole(selectedUser.role)
+                }}</span>
               </div>
             </div>
-            
+
             <div class="info-item">
               <span class="info-label">Current Status</span>
               <div class="info-value">
@@ -664,7 +709,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Role Management Section - Only hide for system admins -->
         <div class="detail-section" *ngIf="!isSystemAdmin(selectedUser.role)">
           <h4 class="section-title">Change Role</h4>
@@ -672,23 +717,40 @@
             <button
               *ngFor="let role of availableRoles"
               class="action-button role-button"
-              [ngClass]="[getRoleClass(role), selectedUser.role === role ? 'selected' : '']"
+              [ngClass]="[
+                getRoleClass(role),
+                selectedUser.role === role ? 'selected' : ''
+              ]"
               [disabled]="updatingUser || selectedUser.role === role"
               (click)="updateUserRole(role)"
             >
-              <span class="material-icons" *ngIf="role.toUpperCase().includes('ADMIN')">admin_panel_settings</span>
-              <span class="material-icons" *ngIf="!role.toUpperCase().includes('ADMIN')">person</span>
+              <span
+                class="material-icons"
+                *ngIf="role.toUpperCase().includes('ADMIN')"
+                >admin_panel_settings</span
+              >
+              <span
+                class="material-icons"
+                *ngIf="!role.toUpperCase().includes('ADMIN')"
+                >person</span
+              >
               {{ formatRole(role) }}
             </button>
           </div>
           <p class="helper-text" *ngIf="!isUserAdmin(selectedUser.role)">
             You can set this user to a regular user role
           </p>
-          <p class="helper-text" *ngIf="isUserAdmin(selectedUser.role) && !isSystemAdmin(selectedUser.role)">
+          <p
+            class="helper-text"
+            *ngIf="
+              isUserAdmin(selectedUser.role) &&
+              !isSystemAdmin(selectedUser.role)
+            "
+          >
             You can change this admin to a regular user
           </p>
         </div>
-        
+
         <!-- Status Management Section -->
         <div class="detail-section">
           <h4 class="section-title">Change Status</h4>
@@ -704,7 +766,7 @@
               (click)="updateUserStatus(status)"
             >
               <span class="material-icons">
-                {{ status === 'Active' ? 'check_circle' : 'cancel' }}
+                {{ status === "Active" ? "check_circle" : "cancel" }}
               </span>
               {{ status }}
             </button>
@@ -725,9 +787,7 @@
           <span class="material-icons info-icon">info</span>
           <span>Changes are applied immediately</span>
         </div>
-        <button class="close-btn" (click)="hideUserDetail()">
-          Close
-        </button>
+        <button class="close-btn" (click)="hideUserDetail()">Close</button>
       </div>
     </div>
   </div>
