@@ -22,10 +22,10 @@ jobs:
       - name: Build Backend Docker Image
         run: |
           cd backend
-          docker build -t ghcr.io/${{ github.repository }}/backend:latest .
+          docker build -t ghcr.io/${{ github.repository | toLowerCase }}/backend:latest .
           
       - name: Push Backend Image to GHCR
-        run: docker push ghcr.io/${{ github.repository }}/backend:latest
+        run: docker push ghcr.io/${{ github.repository | toLowerCase }}/backend:latest
 
   # 🔹 Build and Push Frontend Image
   frontend:
@@ -40,7 +40,7 @@ jobs:
       - name: Build Frontend Docker Image
         run: |
           cd frontend
-          docker build -t ghcr.io/${{ github.repository }}/frontend:latest .
+          docker build -t ghcr.io/${{ github.repository | toLowerCase }}/frontend:latest .
 
       - name: Push Frontend Image to GHCR
-        run: docker push ghcr.io/${{ github.repository }}/frontend:latest
+        run: docker push ghcr.io/${{ github.repository | toLowerCase }}/frontend:latest
