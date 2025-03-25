@@ -1,11 +1,13 @@
 name: Build and Push to GHCR
+
 on:
   push:
     branches:
-      - main  # Runs when pushing to 'main'
+      - main # Runs when pushing to 'main'
   pull_request:
     branches:
-      - main  # Runs on pull requests
+      - main # Runs on pull requests
+
 jobs:
   # 🔹 Build and Push Backend Image
   backend:
@@ -13,25 +15,32 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+      
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      
       - name: Build Backend Docker Image
         run: |
           cd backend
-          docker build -t ghcr.io/${{ lower(github.repository) }}/backend:latest .
+          docker build -t ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/backend:latest .
+      
       - name: Push Backend Image to GHCR
-        run: docker push ghcr.io/${{ lower(github.repository) }}/backend:latest
+        run: docker push ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/backend:latest
+
   # 🔹 Build and Push Frontend Image
   frontend:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
+      
       - name: Log in to GitHub Container Registry
         run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      
       - name: Build Frontend Docker Image
         run: |
           cd frontend
-          docker build -t ghcr.io/${{ lower(github.repository) }}/frontend:latest .
+          docker build -t ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/frontend:latest .
+      
       - name: Push Frontend Image to GHCR
-        run: docker push ghcr.io/${{ lower(github.repository) }}/frontend:latest
+        run: docker push ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/frontend:latest
