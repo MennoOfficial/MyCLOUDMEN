@@ -27,8 +27,13 @@
         <div class="icon-wrapper">
           <img
             [src]="
-              user.picture ||
-              'https://isobarscience.com/wp-content/uploads/2020/09/default-profile-picture1.jpg'
+              user.picture
+                ? user.picture.startsWith(
+                    'https://lh3.googleusercontent.com/'
+                  ) || user.picture.startsWith('https://s.gravatar.com/')
+                  ? getProxyImageUrl(user.picture)
+                  : user.picture
+                : 'https://isobarscience.com/wp-content/uploads/2020/09/default-profile-picture1.jpg'
             "
             alt="Profile"
             class="profile-avatar"
@@ -41,7 +46,9 @@
           </div>
         </div>
         <div class="profile-info">
-          <span class="profile-name">{{ user.name }}</span>
+          <div class="profile-name-container">
+            <span class="profile-name">{{ user.name }}</span>
+          </div>
           <div class="role-pills">
             <div
               *ngFor="let role of user.roles"

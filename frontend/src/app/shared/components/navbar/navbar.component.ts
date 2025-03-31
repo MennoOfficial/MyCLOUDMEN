@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { AuthService, User } from '../../../core/auth/auth.service';
 import { BehaviorSubject, Subject, takeUntil, Observable, map } from 'rxjs';
+import { EnvironmentService } from '../../../core/services/environment.service';
 
 @Component({
   selector: 'app-navbar',
@@ -50,7 +51,10 @@ export class NavbarComponent implements OnInit, OnDestroy {
   
   navItems: any[] = [];
   
-  constructor(private authService: AuthService) {
+  constructor(
+    private authService: AuthService,
+    private environmentService: EnvironmentService
+  ) {
     // Initialize user$ stream
     this.user$ = this.authService.user$.pipe(
       takeUntil(this.destroy$),
@@ -200,6 +204,18 @@ export class NavbarComponent implements OnInit, OnDestroy {
       return;
     }
     
+    // Check if it's a Google profile image that might have CORS issues
+    if (imageUrl.startsWith('https://lh3.googleusercontent.com/') || 
+        imageUrl.startsWith('https://s.gravatar.com/')) {
+      // Use our proxy endpoint instead of direct access
+      // URL encode the image URL
+      const encodedUrl = encodeURIComponent(imageUrl);
+      const baseUrl = this.environmentService.apiUrl;
+      
+      imageUrl = `${baseUrl}/proxy/image?url=${encodedUrl}`;
+      console.log('Using proxy for profile image:', imageUrl);
+    }
+    
     const img = new Image();
     img.onload = () => {
       console.log('Profile image loaded successfully:', imageUrl);
@@ -210,5 +226,16 @@ export class NavbarComponent implements OnInit, OnDestroy {
       this.profileImageLoading = false;
     };
     img.src = imageUrl; // Set src after setting up event handlers
+  }
+
+  // Add the encodeURIComponent method to fix the linter error
+  encodeURIComponent(url: string): string {
+    return encodeURIComponent(url);
+  }
+
+  // Get proxy URL for images with CORS issues
+  getProxyImageUrl(originalUrl: string): string {
+    const encodedUrl = encodeURIComponent(originalUrl);
+    return `${this.environmentService.apiUrl}/proxy/image?url=${encodedUrl}`;
   }
 }
