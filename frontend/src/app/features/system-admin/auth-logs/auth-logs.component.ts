@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { environment } from '../../../../environments/environment';
+import { EnvironmentService } from '../../../core/services/environment.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -64,7 +64,8 @@ export class AuthLogsComponent implements OnInit {
 
   constructor(
     private http: HttpClient,
-    private authService: AuthService
+    private authService: AuthService,
+    private environmentService: EnvironmentService
   ) { }
 
   ngOnInit(): void {
@@ -76,7 +77,7 @@ export class AuthLogsComponent implements OnInit {
     this.loading = true;
     this.error = '';
     
-    let url = `${environment.apiUrl}/auth-logs?page=${this.currentPage}&size=${this.pageSize}`;
+    let url = `${this.environmentService.apiUrl}/auth-logs?page=${this.currentPage}&size=${this.pageSize}`;
     
     // Apply filters if set
     const params: string[] = [];
