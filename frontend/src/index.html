@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <script type="module" src="/@vite/client"></script>
     <meta charset="utf-8" />
     <title>MyCLOUDMEN</title>
     <base href="/" />
@@ -15,20 +14,21 @@
     <link
       rel="icon"
       type="image/png"
-      href="https://media.licdn.com/dms/image/v2/C4E0BAQFsdaRGkQ6aCQ/company-logo_200_200/company-logo_200_200/0/1658846403183/cloudmen_logo?e=2147483647&v=beta&t=dnRjkGfxx74Gr0eTamE0EiNx7Io3nMmAn9HTXsAWlAM"
+      href="https://images.squarespace-cdn.com/content/v1/5ccbf1d3af468332420ae5e1/1556995239077-1Z7JWQXDUSZF5LXCWSQ1/favicon.ico?format=100w"
     />
 
     <!-- Apple Touch Icon (for iOS devices) -->
     <link
       rel="apple-touch-icon"
-      href="https://media.licdn.com/dms/image/v2/C4E0BAQFsdaRGkQ6aCQ/company-logo_200_200/company-logo_200_200/0/1658846403183/cloudmen_logo?e=2147483647&v=beta&t=dnRjkGfxx74Gr0eTamE0EiNx7Io3nMmAn9HTXsAWlAM"
+      href="https://images.squarespace-cdn.com/content/v1/5ccbf1d3af468332420ae5e1/1556995239077-1Z7JWQXDUSZF5LXCWSQ1/favicon.ico?format=100w"
     />
 
     <link rel="stylesheet" href="styles.css" />
+    <!-- Load environment variables before any other scripts -->
+    <script src="assets/env.js"></script>
   </head>
   <body>
     <app-root></app-root>
-    <script src="polyfills.js" type="module"></script>
-    <script src="main.js" type="module"></script>
+    <!-- Angular automatically adds these scripts during build -->
   </body>
 </html>
