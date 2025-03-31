@@ -1,10 +1,11 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Inject, Optional } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, of, Subject } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
 import { AuthService as Auth0Service } from '@auth0/auth0-angular';
 import { Router } from '@angular/router';
-import { environment } from '../../../environments/environment';
+import { EnvironmentService } from '../services/environment.service';
+import { DOCUMENT } from '@angular/common';
 
 export type UserRole = 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER';
 
@@ -26,8 +27,8 @@ export class AuthService {
   private userSubject = new BehaviorSubject<User | null>(null);
   private sessionTimeoutId: any = null;
   private warningTimeoutId: any = null;
-  private readonly SESSION_DURATION = 20 * 60 * 1000;
-  private readonly WARNING_BEFORE_TIMEOUT = 15 * 1000;
+  private readonly SESSION_DURATION = 2 * 60 * 60 * 1000;
+  private readonly WARNING_BEFORE_TIMEOUT = 5 * 60 * 1000;
   
   // New subject to emit session timeout warnings
   private sessionTimeoutWarningSubject = new Subject<number>();
@@ -36,17 +37,25 @@ export class AuthService {
   public user$ = this.userSubject.asObservable();
   
   constructor(
-    private auth0: Auth0Service,
+    @Inject(DOCUMENT) private document: Document,
     private router: Router,
-    private http: HttpClient
+    private http: HttpClient,
+    private environmentService: EnvironmentService,
+    @Optional() @Inject(Auth0Service) private auth0: Auth0Service
   ) {
     this.loadUserFromStorage();
-    this.initAuth0User();
+    
+    if (this.auth0) {
+      this.initAuth0User();
+    } else {
+      console.error('Auth0Service is not available. Authentication features will be disabled.');
+    }
+  }
+  
+  private initAuth0User(): void {
     this.startSessionTimer();
     this.setupAuthenticationListeners();
-  }
-
-  private initAuth0User(): void {
+    
     // First check if we're already authenticated
     this.auth0.isAuthenticated$.subscribe(isAuthenticated => {
       if (isAuthenticated) {
@@ -72,6 +81,8 @@ export class AuthService {
   }
 
   private setupAuthenticationListeners(): void {
+    if (!this.auth0) return;
+    
     // Listen for authentication errors
     this.auth0.error$.subscribe(error => {
       if (error) {
@@ -147,18 +158,11 @@ export class AuthService {
         console.log('Sending user data to backend for sync:', userData);
         
         // Send the complete user data to the backend
-        this.http.post(`${environment.apiUrl}/api/auth0/log-authentication`, userData)
+        this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication`, userData)
           .pipe(
             catchError(error => {
               console.error('Failed to log authentication:', error);
-              // Try again with the fallback URL
-              return this.http.post(`http://localhost:8080/api/auth0/log-authentication`, userData)
-                .pipe(
-                  catchError(fallbackError => {
-                    console.error('Failed to log authentication (fallback):', fallbackError);
-                    return of(null);
-                  })
-                );
+              return of(null);
             })
           )
           .subscribe(response => {
@@ -166,18 +170,11 @@ export class AuthService {
           });
       } else {
         // Fallback to basic logging if user profile is not available
-        this.http.post(`${environment.apiUrl}/api/auth0/log-authentication`, { email })
+        this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication`, { email })
           .pipe(
             catchError(error => {
               console.error('Failed to log authentication:', error);
-              // Try again with the fallback URL
-              return this.http.post(`http://localhost:8080/api/auth0/log-authentication`, { email })
-                .pipe(
-                  catchError(fallbackError => {
-                    console.error('Failed to log authentication (fallback):', fallbackError);
-                    return of(null);
-                  })
-                );
+              return of(null);
             })
           )
           .subscribe(response => {
@@ -190,24 +187,14 @@ export class AuthService {
   private logFailedAuthentication(email: string | null, reason: string): void {
     console.log('Logging failed authentication for:', email, 'Reason:', reason);
     
-    this.http.post(`${environment.apiUrl}/auth0/log-authentication-failure`, { 
+    this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication-failure`, { 
       email: email || 'unknown', 
       reason 
     })
     .pipe(
       catchError(error => {
         console.error('Failed to log authentication failure:', error);
-        // Try again with the full URL
-        return this.http.post(`http://localhost:8080/auth0/log-authentication-failure`, { 
-          email: email || 'unknown', 
-          reason 
-        })
-        .pipe(
-          catchError(fallbackError => {
-            console.error('Failed to log authentication failure (fallback):', fallbackError);
-            return of(null);
-          })
-        );
+        return of(null);
       })
     )
     .subscribe(response => {
@@ -254,41 +241,66 @@ export class AuthService {
     const encodedAuth0Id = encodeURIComponent(auth0Id);
     
     console.log('Fetching user profile for:', auth0Id);
+    console.log('API URL being used:', this.environmentService.apiUrl);
     
-    this.http.get<User>(`${environment.apiUrl}/users/${encodedAuth0Id}`)
+    // Add a timestamp to bypass any caching
+    const timestamp = new Date().getTime();
+    const cacheBypass = `?_t=${timestamp}`;
+    
+    // Use only the environment service API URL, don't try fallbacks
+    this.http.get<User>(`${this.environmentService.apiUrl}/users/${encodedAuth0Id}${cacheBypass}`, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    })
       .pipe(
         catchError(error => {
           console.log('Error fetching user profile:', error);
+          
+          // Last resort - create a new user
           if (error.status === 404) {
             console.log('User not found, creating new user');
             return this.createNewUser(auth0User);
           }
-          this.logFailedAuthentication(auth0User.email, `Failed to fetch user profile: ${error.message || error.status}`);
+          
           return of(this.createDefaultUser(auth0User));
         })
       )
-      .subscribe(user => {
-        if (user) {
-          console.log('User profile received:', user);
-          
-          // Ensure roles is always an array
-          if (!Array.isArray(user.roles)) {
-            user.roles = user.roles ? [user.roles as UserRole] : ['COMPANY_USER'];
+      .subscribe({
+        next: (user) => {
+          if (user) {
+            console.log('User profile received:', user);
+            
+            // Ensure roles is always an array with at least one role
+            if (!Array.isArray(user.roles) || user.roles.length === 0) {
+              user.roles = ['COMPANY_USER'];
+            }
+            
+            // Force UI update by clearing and re-adding user
+            this.userSubject.next(null);
+            setTimeout(() => {
+              this.userSubject.next(user);
+              this.saveUserToStorage(user);
+              
+              // Only redirect if this is the initial login
+              if (this.router.url === '/' || this.router.url === '/callback') {
+                this.redirectBasedOnRoles(user.roles);
+              }
+              
+              // Log successful authentication
+              if (auth0User.email) {
+                this.logSuccessfulAuthentication(auth0User.email);
+              }
+            }, 100);
           }
-          
-          // Update the user subject
-          this.userSubject.next(user);
-          this.saveUserToStorage(user);
-          
-          // Only redirect if this is the initial login
-          if (!this.userSubject.value) {
-            this.redirectBasedOnRoles(user.roles);
-          }
-          
-          // Log successful authentication
-          if (auth0User.email) {
-            this.logSuccessfulAuthentication(auth0User.email);
-          }
+        },
+        error: (err) => {
+          console.error('Final error getting user profile:', err);
+          const defaultUser = this.createDefaultUser(auth0User);
+          this.userSubject.next(defaultUser);
+          this.saveUserToStorage(defaultUser);
         }
       });
   }
@@ -303,9 +315,10 @@ export class AuthService {
       provider: auth0User.sub.split('|')[0]
     };
     
-    return this.http.post<User>(`${environment.apiUrl}/users/register`, newUser)
+    return this.http.post<User>(`${this.environmentService.apiUrl}/users/register`, newUser)
       .pipe(
         catchError(error => {
+          console.error('Failed to create user:', error);
           this.logFailedAuthentication(auth0User.email, `Failed to create user: ${error.message || error.status}`);
           return of(this.createDefaultUser(auth0User));
         })
@@ -335,6 +348,11 @@ export class AuthService {
   }
 
   login(): void {
+    if (!this.auth0) {
+      console.error('Auth0 not initialized');
+      return;
+    }
+    
     // Clear any previous errors
     sessionStorage.removeItem('auth_error');
     
@@ -344,6 +362,11 @@ export class AuthService {
   }
 
   logout(): void {
+    if (!this.auth0) {
+      console.error('Auth0 not initialized');
+      return;
+    }
+    
     this.userSubject.next(null);
     sessionStorage.removeItem('user_profile');
     this.auth0.logout({
@@ -354,10 +377,19 @@ export class AuthService {
   }
 
   getAccessToken(): Observable<string> {
+    if (!this.auth0) {
+      console.error('Auth0 not initialized');
+      return of('');
+    }
     return this.auth0.getAccessTokenSilently();
   }
 
   handleAuthCallback(): void {
+    if (!this.auth0) {
+      console.error('Auth0 not initialized');
+      return;
+    }
+    
     this.auth0.handleRedirectCallback().subscribe({
       next: () => console.log('Auth callback handled successfully'),
       error: () => this.router.navigate(['/'])
@@ -365,6 +397,10 @@ export class AuthService {
   }
 
   isAuthenticated(): Observable<boolean> {
+    if (!this.auth0) {
+      console.error('Auth0 not initialized');
+      return of(false);
+    }
     return this.auth0.isAuthenticated$;
   }
 
@@ -454,5 +490,58 @@ export class AuthService {
     this.clearSessionTimeout();
     // Start a fresh timer
     this.startSessionTimer();
+  }
+
+  // Force a refresh of the user data from the backend
+  forceSyncUserWithBackend(): void {
+    console.log('Forcing sync with backend...');
+    
+    if (!this.auth0) {
+      console.error('Auth0 not initialized, cannot sync user');
+      return;
+    }
+    
+    // Clear existing user data first
+    sessionStorage.removeItem('user_profile');
+    this.userSubject.next(null);
+    
+    // Get fresh user data from Auth0
+    this.auth0.user$.subscribe(auth0User => {
+      if (auth0User && auth0User.sub) {
+        console.log('Got Auth0 user for forced sync:', auth0User);
+        
+        // Clear any caches
+        const timestamp = new Date().getTime();
+        const auth0Id = auth0User.sub;
+        const encodedAuth0Id = encodeURIComponent(auth0Id);
+        
+        // Try a direct request to the backend using environment service URL
+        this.http.get<User>(`${this.environmentService.apiUrl}/users/${encodedAuth0Id}?_t=${timestamp}`, {
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        }).subscribe({
+          next: (user) => {
+            console.log('Force-refreshed user from backend:', user);
+            if (user) {
+              // Ensure roles array
+              if (!Array.isArray(user.roles) || user.roles.length === 0) {
+                user.roles = ['COMPANY_USER'];
+              }
+              
+              // Update our store
+              this.userSubject.next(user);
+              this.saveUserToStorage(user);
+            }
+          },
+          error: (err) => {
+            console.error('Error force-refreshing user:', err);
+            // If we can't get the user, fetch or create it through the normal flow
+            this.fetchOrCreateUserProfile(auth0User);
+          }
+        });
+      }
+    });
   }
 }

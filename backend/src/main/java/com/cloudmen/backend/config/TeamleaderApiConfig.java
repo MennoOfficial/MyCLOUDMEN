@@ -1,5 +1,6 @@
 package com.cloudmen.backend.config;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.stereotype.Component;
@@ -13,34 +14,22 @@ import org.springframework.stereotype.Component;
 @Component
 public class TeamleaderApiConfig {
 
-    /**
-     * Base URL for the Teamleader API
-     */
-    private String baseUrl = "https://api.focus.teamleader.eu";
+    @Value("${teamleader.baseUrl:https://api.focus.teamleader.eu}")
+    private String baseUrl;
 
-    /**
-     * OAuth2 authorization URL
-     */
-    private String authUrl = "https://focus.teamleader.eu/oauth2/authorize";
+    @Value("${teamleader.authUrl:https://focus.teamleader.eu/oauth2/authorize}")
+    private String authUrl;
 
-    /**
-     * OAuth2 token URL
-     */
-    private String tokenUrl = "https://focus.teamleader.eu/oauth2/access_token";
+    @Value("${teamleader.tokenUrl:https://focus.teamleader.eu/oauth2/access_token}")
+    private String tokenUrl;
 
-    /**
-     * OAuth2 client ID
-     */
+    @Value("${teamleader.clientId}")
     private String clientId;
 
-    /**
-     * OAuth2 client secret
-     */
+    @Value("${teamleader.clientSecret}")
     private String clientSecret;
 
-    /**
-     * OAuth2 redirect URI for authorization code flow
-     */
+    @Value("${teamleader.redirectUri}")
     private String redirectUri;
 
     /**
