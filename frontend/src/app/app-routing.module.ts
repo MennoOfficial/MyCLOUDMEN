@@ -24,6 +24,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/system-admin/companies/companies.component').then(c => c.CompaniesComponent)
       },
       {
+        path: 'system-admin/companies/:id',
+        canActivate: [roleGuard],
+        data: { requiredRoles: ['SYSTEM_ADMIN'] },
+        loadComponent: () => import('./features/system-admin/companies/company-detail/company-detail.component').then(c => c.CompanyDetailComponent)
+      },
+      {
         path: 'system-admin/auth-logs',
         canActivate: [roleGuard],
         data: { requiredRoles: ['SYSTEM_ADMIN'] },

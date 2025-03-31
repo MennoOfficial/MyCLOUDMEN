@@ -23,7 +23,6 @@ public class UserDTO {
     private StatusType status; // Current user status
     private String primaryDomain; // Primary domain for company association
     private String customerGoogleId;
-    private String phoneNumber;
     private LocalDateTime dateTimeAdded;
 
     public UserDTO() {
@@ -116,14 +115,6 @@ public class UserDTO {
 
     public void setCustomerGoogleId(String customerGoogleId) {
         this.customerGoogleId = customerGoogleId;
-    }
-
-    public String getPhoneNumber() {
-        return phoneNumber;
-    }
-
-    public void setPhoneNumber(String phoneNumber) {
-        this.phoneNumber = phoneNumber;
     }
 
     public LocalDateTime getDateTimeAdded() {

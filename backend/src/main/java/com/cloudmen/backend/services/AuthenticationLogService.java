@@ -305,4 +305,26 @@ public class AuthenticationLogService {
             return authenticationLogRepository.findAll(pageable);
         }
     }
+
+    /**
+     * Get the last successful login time for a user by ID
+     * 
+     * @param userId The user ID
+     * @return The timestamp of the last successful login, or null if none exists
+     */
+    public LocalDateTime getLastSuccessfulLoginByUserId(String userId) {
+        AuthenticationLog lastLogin = authenticationLogRepository.findTopByUserIdAndSuccessfulOrderByTimestampDesc(userId, true);
+        return lastLogin != null ? lastLogin.getTimestamp() : null;
+    }
+
+    /**
+     * Get the last successful login time for a user by email
+     * 
+     * @param email The user's email
+     * @return The timestamp of the last successful login, or null if none exists
+     */
+    public LocalDateTime getLastSuccessfulLoginByEmail(String email) {
+        AuthenticationLog lastLogin = authenticationLogRepository.findTopByEmailAndSuccessfulOrderByTimestampDesc(email, true);
+        return lastLogin != null ? lastLogin.getTimestamp() : null;
+    }
 }

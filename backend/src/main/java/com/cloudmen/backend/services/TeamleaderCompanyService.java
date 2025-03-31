@@ -514,6 +514,38 @@ public class TeamleaderCompanyService {
      * @return The company, or null if not found
      */
     public TeamleaderCompany getCompanyByTeamleaderId(String teamleaderId) {
+        logger.info("Looking up company by teamleaderId: {}", teamleaderId);
+
+        // Check if this might be a MongoDB ID instead
+        if (teamleaderId.length() == 24) { // MongoDB ObjectId is typically 24 chars
+            logger.info("ID appears to be a MongoDB ObjectId, will check both ID and teamleaderId");
+            // Try first by teamleaderId
+            Optional<TeamleaderCompany> company = companyRepository.findByTeamleaderId(teamleaderId);
+
+            if (company.isPresent()) {
+                logger.info("Found company by teamleaderId: {}, company name: {}",
+                        teamleaderId, company.get().getName());
+                return company.get();
+            } else {
+                // If not found, maybe it's the MongoDB _id
+                logger.info("Company not found by teamleaderId, checking if it's a MongoDB ID");
+                try {
+                    Optional<TeamleaderCompany> companyById = companyRepository.findById(teamleaderId);
+                    if (companyById.isPresent()) {
+                        logger.info("Found company by MongoDB ID: {}, company name: {}",
+                                teamleaderId, companyById.get().getName());
+                        return companyById.get();
+                    }
+                } catch (Exception e) {
+                    logger.warn("Error looking up by MongoDB ID: {}", e.getMessage());
+                }
+            }
+
+            logger.warn("Company not found by either teamleaderId or MongoDB ID: {}", teamleaderId);
+            return null;
+        }
+
+        logger.info("Looking up company by teamleaderId only: {}", teamleaderId);
         return companyRepository.findByTeamleaderId(teamleaderId).orElse(null);
     }
 
@@ -525,6 +557,43 @@ public class TeamleaderCompanyService {
      */
     public Iterable<TeamleaderCompany> searchCompaniesByName(String name) {
         return companyRepository.findByNameContainingIgnoreCase(name);
+    }
+
+    /**
+     * Save a company to the database
+     * 
+     * @param company The company to save
+     * @return The saved company
+     */
+    public TeamleaderCompany saveCompany(TeamleaderCompany company) {
+        // Update timestamps
+        company.setUpdatedAt(LocalDateTime.now());
+
+        logger.info("Saving company to database - ID: {}, TeamleaderID: {}, Name: {}",
+                company.getId(), company.getTeamleaderId(), company.getName());
+
+        if (company.getCustomFields() != null) {
+            logger.info("Custom fields being saved: {}", company.getCustomFields());
+        }
+
+        try {
+            // Save to database
+            TeamleaderCompany savedCompany = companyRepository.save(company);
+            logger.info("Successfully saved company to database: {} with ID: {}",
+                    savedCompany.getName(), savedCompany.getId());
+
+            // Verify the status was saved correctly
+            if (savedCompany.getCustomFields() != null && savedCompany.getCustomFields().containsKey("status")) {
+                logger.info("Verified saved status: {}", savedCompany.getCustomFields().get("status"));
+            } else {
+                logger.warn("Status field not found in saved company's custom fields");
+            }
+
+            return savedCompany;
+        } catch (Exception e) {
+            logger.error("Error saving company to database", e);
+            throw e;
+        }
     }
 
     /**
