@@ -127,15 +127,22 @@ public class SecurityConfig {
         logger.info("Configuring CORS");
 
         CorsConfiguration configuration = new CorsConfiguration();
-        // Allow requests from the Angular frontend (dev and potentially prod servers)
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost:4200", "http://localhost:8080"));
+        // Get the allowed origins from application.properties
+        configuration.setAllowedOrigins(Arrays.asList(
+                "http://localhost:4200", // Angular dev server
+                "http://127.0.0.1:4200", // Also handle localhost as IP
+                "http://localhost:8080", // Spring Boot dev server
+                "https://www.mycloudmen.mennoplochaet.be",
+                "https://mycloudmen.mennoplochaet.be"));
         // Allow standard HTTP methods
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"));
         // Allow common headers
         configuration.setAllowedHeaders(
-                Arrays.asList("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"));
+                Arrays.asList("Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With",
+                        "Access-Control-Request-Method", "Access-Control-Request-Headers",
+                        "Cache-Control", "Pragma", "Expires"));
         // Allow the Authorization header to be exposed to the client
-        configuration.setExposedHeaders(Arrays.asList("Authorization"));
+        configuration.setExposedHeaders(Arrays.asList("Authorization", "Access-Control-Allow-Origin"));
         // Allow credentials (cookies, authorization headers)
         configuration.setAllowCredentials(true);
         // Cache preflight requests for 1 hour
