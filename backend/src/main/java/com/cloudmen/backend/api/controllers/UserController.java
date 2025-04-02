@@ -145,8 +145,19 @@ public class UserController {
      */
     private List<User> filterUsersByDomain(List<User> users, String domain) {
         return users.stream()
-                .filter(user -> user.getPrimaryDomain() != null &&
-                        user.getPrimaryDomain().equalsIgnoreCase(domain))
+                .filter(user -> {
+                    // Check primaryDomain first
+                    if (user.getPrimaryDomain() != null &&
+                            user.getPrimaryDomain().equalsIgnoreCase(domain)) {
+                        return true;
+                    }
+                    // Fallback to email domain if primaryDomain is null/empty
+                    if (user.getEmail() != null && user.getEmail().contains("@")) {
+                        String emailDomain = user.getEmail().substring(user.getEmail().indexOf('@') + 1);
+                        return emailDomain.equalsIgnoreCase(domain);
+                    }
+                    return false;
+                })
                 .collect(Collectors.toList());
     }
 
@@ -381,24 +392,25 @@ public class UserController {
     /**
      * Update a user's role
      * 
-     * @param id   The MongoDB ID of the user to update
+     * @param id          The MongoDB ID of the user to update
      * @param roleRequest The role update request
-     * @return ResponseEntity containing the updated user if found, 404 Not Found otherwise
+     * @return ResponseEntity containing the updated user if found, 404 Not Found
+     *         otherwise
      */
     @PutMapping("/{id}/role")
     public ResponseEntity<User> updateUserRole(
-            @PathVariable String id, 
+            @PathVariable String id,
             @RequestBody Map<String, String> roleRequest) {
-        
+
         String roleName = roleRequest.get("role");
         if (roleName == null || roleName.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         try {
             // Convert the role string to RoleType enum
             RoleType newRole = RoleType.valueOf(roleName);
-            
+
             Optional<User> userOptional = userService.getUserById(id);
             if (userOptional.isEmpty()) {
                 return ResponseEntity.notFound().build();
@@ -408,40 +420,41 @@ public class UserController {
             // Set the new role as the first (primary) role
             user.setRoles(Collections.singletonList(newRole));
             user.setDateTimeChanged(LocalDateTime.now());
-            
+
             Optional<User> updatedUserOptional = userService.updateUser(id, user);
             if (updatedUserOptional.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             return ResponseEntity.ok(updatedUserOptional.get());
         } catch (IllegalArgumentException e) {
             // Invalid role name
             return ResponseEntity.badRequest().build();
         }
     }
-    
+
     /**
      * Update a user's status
      * 
-     * @param id   The MongoDB ID of the user to update
+     * @param id            The MongoDB ID of the user to update
      * @param statusRequest The status update request
-     * @return ResponseEntity containing the updated user if found, 404 Not Found otherwise
+     * @return ResponseEntity containing the updated user if found, 404 Not Found
+     *         otherwise
      */
     @PutMapping("/{id}/status")
     public ResponseEntity<User> updateUserStatus(
-            @PathVariable String id, 
+            @PathVariable String id,
             @RequestBody Map<String, String> statusRequest) {
-        
+
         String statusName = statusRequest.get("status");
         if (statusName == null || statusName.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         try {
             // Convert the status string to StatusType enum
             StatusType newStatus = StatusType.valueOf(statusName);
-            
+
             Optional<User> userOptional = userService.getUserById(id);
             if (userOptional.isEmpty()) {
                 return ResponseEntity.notFound().build();
@@ -450,12 +463,12 @@ public class UserController {
             User user = userOptional.get();
             user.setStatus(newStatus);
             user.setDateTimeChanged(LocalDateTime.now());
-            
+
             Optional<User> updatedUserOptional = userService.updateUser(id, user);
             if (updatedUserOptional.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             return ResponseEntity.ok(updatedUserOptional.get());
         } catch (IllegalArgumentException e) {
             // Invalid status name

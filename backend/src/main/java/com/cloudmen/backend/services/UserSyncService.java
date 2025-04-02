@@ -383,39 +383,6 @@ public class UserSyncService {
     }
 
     /**
-     * Extract domain from website URL
-     * 
-     * @param website Website URL
-     * @return Domain part of the website
-     */
-    private String extractDomainFromWebsite(String website) {
-        if (website == null || website.isEmpty()) {
-            return null;
-        }
-
-        // Remove protocol (http://, https://)
-        String domain = website.toLowerCase();
-        if (domain.startsWith("http://")) {
-            domain = domain.substring(7);
-        } else if (domain.startsWith("https://")) {
-            domain = domain.substring(8);
-        }
-
-        // Remove www. prefix if present
-        if (domain.startsWith("www.")) {
-            domain = domain.substring(4);
-        }
-
-        // Remove path and query parameters
-        int pathIndex = domain.indexOf('/');
-        if (pathIndex > 0) {
-            domain = domain.substring(0, pathIndex);
-        }
-
-        return domain;
-    }
-
-    /**
      * Extract domain from email address
      * 
      * @param email Email address

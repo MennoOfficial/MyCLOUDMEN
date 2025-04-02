@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ import org.springframework.web.client.RestTemplate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * Service for interacting with Teamleader API to fetch company data
@@ -504,7 +507,23 @@ public class TeamleaderCompanyService {
      * @return List of companies
      */
     public List<TeamleaderCompany> getAllCompanies() {
-        return companyRepository.findAll();
+        // Filter to only include companies with MyCLOUDMEN access
+        return companyRepository.findAll().stream()
+                .filter(company -> {
+                    Map<String, Object> customFields = company.getCustomFields();
+                    if (customFields == null)
+                        return false;
+
+                    // Check for MyCLOUDMEN access field
+                    Object accessField = customFields.get(teamleaderConfig.getMyCloudmenAccessFieldId());
+                    if (accessField instanceof Map) {
+                        Map<?, ?> accessFieldMap = (Map<?, ?>) accessField;
+                        Object value = accessFieldMap.get("value");
+                        return value instanceof Boolean && (Boolean) value;
+                    }
+                    return false;
+                })
+                .collect(Collectors.toList());
     }
 
     /**
@@ -557,6 +576,17 @@ public class TeamleaderCompanyService {
      */
     public Iterable<TeamleaderCompany> searchCompaniesByName(String name) {
         return companyRepository.findByNameContainingIgnoreCase(name);
+    }
+
+    /**
+     * Search for companies by name with pagination
+     * 
+     * @param name     The name to search for
+     * @param pageable Pagination information
+     * @return Page of matching companies
+     */
+    public Page<TeamleaderCompany> searchCompaniesByName(String name, Pageable pageable) {
+        return companyRepository.findByNameContainingIgnoreCase(name, pageable);
     }
 
     /**

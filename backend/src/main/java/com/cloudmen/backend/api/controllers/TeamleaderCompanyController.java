@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -135,7 +136,16 @@ public class TeamleaderCompanyController {
                     : Sort.Direction.ASC;
 
             Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
-            List<TeamleaderCompany> companies = companyService.getAllCompanies();
+
+            // Use the repository's findAllWithMyCLOUDMENAccess instead of findAll
+            org.springframework.data.domain.Page<TeamleaderCompany> companiesPage = companyRepository
+                    .findAllWithMyCLOUDMENAccess(pageable);
+
+            // Get content and total count from the page object
+            List<TeamleaderCompany> companies = companiesPage.getContent();
+            long totalItems = companiesPage.getTotalElements();
+
+            logger.info("Retrieved {} companies from database, total count: {}", companies.size(), totalItems);
 
             // Convert entities to DTOs
             List<CompanyListDTO> companyDtos = companies.stream()
@@ -145,8 +155,8 @@ public class TeamleaderCompanyController {
             Map<String, Object> response = new HashMap<>();
             response.put("companies", companyDtos);
             response.put("currentPage", page);
-            response.put("totalItems", companies.size());
-            response.put("totalPages", (int) Math.ceil((double) companies.size() / size));
+            response.put("totalItems", totalItems);
+            response.put("totalPages", companiesPage.getTotalPages());
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -186,21 +196,42 @@ public class TeamleaderCompanyController {
      * Search for companies by name
      * 
      * @param query The search query
+     * @param page  Page number (0-based)
+     * @param size  Number of items per page
      * @return List of matching companies
      */
     @GetMapping("/search")
-    public ResponseEntity<Object> searchCompanies(@RequestParam("query") String query) {
-        logger.info("Searching companies with query: {}", query);
+    public ResponseEntity<Object> searchCompanies(
+            @RequestParam("query") String query,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        logger.info("Searching companies with query: '{}', page: {}, size: {}", query, page, size);
 
         try {
-            Iterable<TeamleaderCompany> companies = companyService.searchCompaniesByName(query);
+            Pageable pageable = PageRequest.of(page, size);
+            // Use the repository method that filters by MyCLOUDMEN access
+            Page<TeamleaderCompany> companiesPage = companyRepository
+                    .findByNameContainingIgnoreCaseWithMyCLOUDMENAccess(query, pageable);
+
+            List<TeamleaderCompany> companies = companiesPage.getContent();
+            long totalItems = companiesPage.getTotalElements();
+
+            logger.info("Found {} matching companies, total count: {}", companies.size(), totalItems);
 
             // Convert entities to DTOs
-            List<CompanyListDTO> companyDtos = StreamSupport.stream(companies.spliterator(), false)
+            List<CompanyListDTO> companyDtos = companies.stream()
                     .map(CompanyListDTO::fromEntity)
                     .collect(Collectors.toList());
 
-            return ResponseEntity.ok(companyDtos);
+            // Create response with pagination info
+            Map<String, Object> response = new HashMap<>();
+            response.put("companies", companyDtos);
+            response.put("currentPage", page);
+            response.put("totalItems", totalItems);
+            response.put("totalPages", companiesPage.getTotalPages());
+
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("Error searching companies", e);
             Map<String, Object> response = new HashMap<>();
