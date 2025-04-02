@@ -22,39 +22,51 @@
 
         <!-- Notification Popup -->
         <div class="notification-popup" *ngIf="showNotificationPopup">
-          <div class="notification-header">
+          <div class="popup-header">
             <h3>Pending Account Requests</h3>
-            <span class="notification-count-badge">{{ pendingCount }}</span>
+            <span class="count-badge">{{ pendingCount }}</span>
           </div>
 
-          <div class="notification-content">
-            <div class="notification-item" *ngFor="let user of pendingUsers">
-              <div class="notification-user-avatar">
-                {{ user.name.charAt(0).toUpperCase() }}
-              </div>
-              <div class="notification-user-info">
-                <div class="notification-user-name">{{ user.name }}</div>
-                <div class="notification-user-email" title="{{ user.email }}">
-                  {{ user.email }}
+          <div class="popup-content">
+            <div class="pending-user-card" *ngFor="let user of pendingUsers">
+              <div class="user-info-row">
+                <div class="user-avatar">
+                  <img
+                    *ngIf="user.picture"
+                    [src]="user.picture"
+                    [alt]="user.name || 'User'"
+                    (error)="user.picture = ''"
+                    onerror="this.style.display='none'"
+                  />
+                  <span>{{
+                    user.name.charAt(0) || user.email.charAt(0) || "?"
+                  }}</span>
                 </div>
-                <div class="notification-time">
-                  {{ formatTimeAgo(user.requestedAt) }}
+                <div class="user-details">
+                  <div class="user-name">{{ user.name || "New User" }}</div>
+                  <div class="user-email">{{ user.email }}</div>
+                  <div class="request-time">
+                    <span class="material-icons">schedule</span>
+                    <span>{{
+                      formatTimeAgo(
+                        user.requestedAt || user.dateTimeAdded || ""
+                      )
+                    }}</span>
+                  </div>
                 </div>
               </div>
-              <div class="notification-actions">
+              <div class="action-buttons">
                 <button
                   class="action-btn reject-btn"
                   (click)="rejectUser(user.id)"
-                  title="Reject user"
-                  aria-label="Reject user request"
+                  title="Reject"
                 >
                   <span class="material-icons">close</span>
                 </button>
                 <button
                   class="action-btn approve-btn"
                   (click)="approveUser(user.id)"
-                  title="Approve user"
-                  aria-label="Approve user request"
+                  title="Approve"
                 >
                   <span class="material-icons">check</span>
                 </button>

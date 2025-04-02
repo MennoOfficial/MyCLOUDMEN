@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
 import { CompanyDetail } from '../../../../core/models/company.model';
-import { environment } from '../../../../../environments/environment';
+import { EnvironmentService } from '../../../../core/services/environment.service';
 
 interface User {
   id: string;
@@ -82,7 +82,8 @@ export class CompanyDetailComponent implements OnInit {
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private apiService: ApiService
+    private apiService: ApiService,
+    private environmentService: EnvironmentService
   ) {}
 
   @HostListener('document:click', ['$event'])
@@ -136,6 +137,8 @@ export class CompanyDetailComponent implements OnInit {
           // After loading company, fetch users with the same domain
           this.fetchCompanyUsers();
           this.fetchPendingUsers();
+          
+          console.log('COMPANY DATA:', JSON.stringify(response, null, 2));
         },
         error: (err) => {
           console.error(`Error fetching company details for ID ${companyId}:`, err);
@@ -151,31 +154,56 @@ export class CompanyDetailComponent implements OnInit {
     
     this.loadingUsers = true;
     
-    // Extract domain from company email for the API query
-    const domain = this.company.email.split('@')[1];
+    // Safely extract domain from company email for the API query
+    const emailParts = this.company.email.trim().split('@');
+    if (emailParts.length !== 2 || !emailParts[1]) {
+      console.error('Invalid company email format:', this.company.email);
+      this.loadingUsers = false;
+      this.companyUsers = [];
+      return;
+    }
+    
+    const domain = emailParts[1];
+    
+    console.log('Fetching users with domain:', domain);
     
     // Call the enhanced API to get non-pending users with the company's domain
     this.apiService.get<any[]>(`users?domain=${domain}&excludeStatus=PENDING`)
       .subscribe({
         next: (users) => {
-          // Map API response to User interface format
-          this.companyUsers = users.map(user => ({
-            id: user.id,
-            name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-            email: user.email,
-            // Handle roles from the API response
-            role: user.roles && user.roles.length > 0 ? user.roles[0] : 'COMPANY_USER',
-            // Convert status to friendly display format
-            status: user.status === 'ACTIVATED' ? 'Active' : 
-                   user.status === 'DEACTIVATED' ? 'Inactive' : 
-                   user.status,
-            lastLogin: user.lastLogin || null
-          }));
-          console.log('Mapped company users:', this.companyUsers);
-          this.loadingUsers = false;
+          try {
+            console.log('Full raw response:', JSON.stringify(users));
+            console.log('Raw API response for users:', users);
+            console.log('Number of users returned from API:', users.length);
+            
+            // Map API response to User interface format
+            this.companyUsers = users.map(user => {
+              console.log('Processing user:', user);
+              return {
+                id: user.id,
+                name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+                email: user.email,
+                // Handle roles from the API response
+                role: user.roles && user.roles.length > 0 ? user.roles[0] : 'COMPANY_USER',
+                // Convert status to friendly display format
+                status: user.status === 'ACTIVATED' ? 'Active' : 
+                       user.status === 'DEACTIVATED' ? 'Inactive' : 
+                       user.status,
+                lastLogin: user.lastLogin || null
+              };
+            });
+            
+            console.log('Mapped company users:', this.companyUsers);
+            this.loadingUsers = false;
+          } catch (error) {
+            console.error('Error processing user data:', error);
+            this.loadingUsers = false;
+            this.companyUsers = []; // Set empty array on error
+          }
         },
         error: (err) => {
           console.error(`Error fetching users for domain ${domain}:`, err);
+          console.error('Error details:', err.status, err.message, err.error);
           this.loadingUsers = false;
           this.companyUsers = []; // Set empty array on error
         }
@@ -187,19 +215,35 @@ export class CompanyDetailComponent implements OnInit {
     
     console.log('Company email:', this.company.email);
     
-    // Extract primary domain from company email
-    const companyEmailParts = this.company.email.split('@');
+    // Safely extract domain from company email
+    const companyEmailParts = this.company.email.trim().split('@');
+    if (companyEmailParts.length !== 2 || !companyEmailParts[1]) {
+      console.error('Invalid company email format:', this.company.email);
+      this.pendingUsers = [];
+      this.pendingCount = 0;
+      this.hasPendingUsers = false;
+      return;
+    }
+    
     const companyDomain = companyEmailParts[1];
 
     console.log('Searching for pending users with domain:', companyDomain);
-    // Use the new direct endpoint to get pending users by domain
-    this.apiService.get<PendingUser[]>(`users?domain=${companyDomain}&status=PENDING`)
+    // Use the direct endpoint to get pending users by domain
+    this.apiService.get<PendingUser[]>(`users?domain=${encodeURIComponent(companyDomain)}&status=PENDING`)
       .subscribe({
         next: (pendingUsers) => {
           console.log('Pending users from API:', pendingUsers);
-          this.pendingUsers = pendingUsers;
-          this.pendingCount = this.pendingUsers.length;
-          this.hasPendingUsers = this.pendingCount > 0;
+          // Process the results properly
+          if (Array.isArray(pendingUsers)) {
+            this.pendingUsers = pendingUsers.filter(user => user != null); // Filter nulls just in case
+            this.pendingCount = this.pendingUsers.length;
+            this.hasPendingUsers = this.pendingCount > 0;
+          } else {
+            console.error('API did not return a valid array for pending users:', pendingUsers);
+            this.pendingUsers = [];
+            this.pendingCount = 0;
+            this.hasPendingUsers = false;
+          }
         },
         error: (err) => {
           console.error(`Error fetching pending users:`, err);
@@ -249,7 +293,7 @@ export class CompanyDetailComponent implements OnInit {
     
     // Log the API URL for debugging
     const apiUrl = `teamleader/companies/${idToUse}/status`;
-    const fullUrl = `${environment.apiUrl}/${apiUrl}`;
+    const fullUrl = `${this.environmentService.apiUrl}/${apiUrl}`;
     console.log('Endpoint path:', apiUrl);
     console.log('Full API URL being called:', fullUrl);
     
@@ -508,28 +552,47 @@ Error: ${errorMessage}`);
   /**
    * Formats a timestamp into a human-readable time difference (e.g., "2 hours ago")
    */
-  formatTimeAgo(timestamp: string | Date): string {
-    if (!timestamp) return 'Unknown';
+  formatTimeAgo(timestamp: string | Date | undefined): string {
+    if (!timestamp) {
+      return 'Unknown';
+    }
     
-    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-    
-    if (diffSec < 60) {
-      return `Just now`;
-    } else if (diffMin < 60) {
-      return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'} ago`;
-    } else if (diffHour < 24) {
-      return `${diffHour} ${diffHour === 1 ? 'hour' : 'hours'} ago`;
-    } else if (diffDay < 30) {
-      return `${diffDay} ${diffDay === 1 ? 'day' : 'days'} ago`;
-    } else {
-      // For older dates, just show the date
-      return date.toLocaleDateString();
+    try {
+      // Convert string to Date object
+      const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'Unknown';
+      }
+      
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      
+      // Handle future dates
+      if (diffMs < 0) {
+        return 'Just now';
+      }
+      
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHour = Math.floor(diffMin / 60);
+      const diffDay = Math.floor(diffHour / 24);
+      
+      if (diffSec < 60) {
+        return 'Just now';
+      } else if (diffMin < 60) {
+        return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'} ago`;
+      } else if (diffHour < 24) {
+        return `${diffHour} ${diffHour === 1 ? 'hour' : 'hours'} ago`;
+      } else if (diffDay < 30) {
+        return `${diffDay} ${diffDay === 1 ? 'day' : 'days'} ago`;
+      } else {
+        // For older dates, show the actual date
+        return date.toLocaleDateString();
+      }
+    } catch (error) {
+      return 'Unknown';
     }
   }
 
