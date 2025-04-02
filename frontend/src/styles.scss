@@ -252,11 +252,61 @@ button {
     
     &.role-company-admin {
       background-color: var(--ocean-blue-soft);
-  color: var(--ocean-blue);
+      color: var(--ocean-blue);
     }
     
     &.role-company-user {
       background-color: var(--forest-green-soft);
-  color: var(--forest-green);
+      color: var(--forest-green);
+    }
+  }
+
+  /* Status Badges */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    
+    &.small {
+      font-size: 12px;
+      padding: 3px 8px;
+    }
+    
+    .status-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: block;
+    }
+    
+    &.status-active {
+      background-color: var(--forest-green-soft);
+      color: var(--forest-green);
+      
+      .status-indicator {
+        background-color: var(--forest-green);
+      }
+    }
+    
+    &.status-inactive {
+      background-color: var(--fire-red-soft);
+      color: var(--fire-red);
+      
+      .status-indicator {
+        background-color: var(--fire-red);
+      }
+    }
+    
+    &.status-pending {
+      background-color: var(--sunset-orange-soft);
+      color: var(--sunset-orange);
+      
+      .status-indicator {
+        background-color: var(--sunset-orange);
+      }
     }
   }

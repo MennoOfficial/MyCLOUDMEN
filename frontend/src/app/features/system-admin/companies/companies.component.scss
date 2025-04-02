@@ -434,27 +434,6 @@
     }
   }
   
-  // Status column
-  .status-col {
-    .status-badge {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: var(--radius-pill);
-      font-size: 12px;
-      font-weight: 500;
-      
-      &.status-active {
-        background-color: var(--forest-green-soft);
-        color: var(--forest-green);
-      }
-      
-      &.status-inactive {
-        background-color: var(--fire-red-soft);
-        color: var(--fire-red);
-      }
-    }
-  }
   
   // Actions column
   .actions-col {

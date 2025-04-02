@@ -81,8 +81,8 @@ export class CompaniesComponent implements OnInit {
       .subscribe({
         next: (response) => {
           this.companies = response.companies;
-          this.totalCompanies = response.totalItems;
-          this.applyFilters();
+          this.filteredCompanies = response.companies; // Directly use what the server returned
+          this.totalCompanies = response.totalItems; // Keep server's total count
           this.loading = false;
         },
         error: (err) => {
@@ -118,12 +118,12 @@ export class CompaniesComponent implements OnInit {
     this.loading = true;
     this.error = false;
     
-    this.apiService.get<CompanyListItem[]>(`teamleader/companies/search?query=${encodeURIComponent(this.searchQuery)}`)
+    this.apiService.get<CompanyListResponse>(`teamleader/companies/search?query=${encodeURIComponent(this.searchQuery)}&page=${this.pageIndex}&size=${this.pageSize}`)
       .subscribe({
         next: (response) => {
-          this.companies = response;
-          this.totalCompanies = response.length;
-          this.filteredCompanies = this.getPaginatedData(response);
+          this.companies = response.companies;
+          this.filteredCompanies = response.companies; // Directly use search results
+          this.totalCompanies = response.totalItems;
           this.loading = false;
         },
         error: (err) => {
@@ -141,31 +141,14 @@ export class CompaniesComponent implements OnInit {
   }
 
   applyFilters(): void {
-    let filtered = this.companies;
-    
-    // Apply search filter
-    if (this.searchQuery && this.searchQuery.trim()) {
-      const query = this.searchQuery.toLowerCase();
-      filtered = filtered.filter(company => 
-        company.name.toLowerCase().includes(query) || 
-        (company.email && company.email.toLowerCase().includes(query)) ||
-        (company.vatNumber && company.vatNumber.toLowerCase().includes(query)) ||
-        (company.phoneNumber && company.phoneNumber.toLowerCase().includes(query))
-      );
-    }
-    
-    // Apply status filter
+    // Only apply status filter - we'll let the server handle pagination
     if (this.statusFilter !== 'All') {
-      filtered = filtered.filter(company => company.status === this.statusFilter);
+      let filtered = this.companies.filter(company => company.status === this.statusFilter);
+      this.filteredCompanies = filtered;
+      this.totalCompanies = filtered.length; // Update total count for client-side filtering
+    } else {
+      this.filteredCompanies = this.companies; // No filtering needed
     }
-    
-    this.totalCompanies = filtered.length;
-    this.filteredCompanies = this.getPaginatedData(filtered);
-  }
-
-  getPaginatedData(data: CompanyListItem[]): CompanyListItem[] {
-    const startIndex = this.pageIndex * this.pageSize;
-    return data.slice(startIndex, startIndex + this.pageSize);
   }
 
   onPageChange(event: PageEvent): void {
