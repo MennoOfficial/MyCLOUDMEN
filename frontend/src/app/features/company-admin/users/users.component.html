@@ -661,42 +661,80 @@
   </div>
 
   <!-- User approval popup -->
-  <div class="notification-popup" *ngIf="showApprovePopup">
-    <div class="popup-content">
-      <p>Are you sure you want to approve this user?</p>
-      <div class="confirmation-text">
-        You are approving
-        <span class="approve"
-          >{{ selectedUser?.firstName }} {{ selectedUser?.lastName }}</span
-        >
-      </div>
-      <div class="action-buttons">
-        <button class="action-button cancel" (click)="showApprovePopup = false">
-          Cancel
+  <div class="confirmation-popup-overlay" *ngIf="showApprovePopup">
+    <div class="confirmation-popup">
+      <div class="confirmation-header">
+        <h3>Approve Account Request</h3>
+        <button class="close-button" (click)="showApprovePopup = false">
+          <span class="material-icons">close</span>
         </button>
-        <button class="action-button approve-btn" (click)="processApproval()">
-          Approve
+      </div>
+      <div class="confirmation-body">
+        <div class="user-info" *ngIf="selectedUser">
+          <div class="avatar" *ngIf="!selectedUser.picture">
+            {{ selectedUser.firstName.charAt(0).toUpperCase() }}
+          </div>
+          <img
+            *ngIf="selectedUser.picture"
+            [src]="selectedUser.picture"
+            alt="{{ selectedUser.firstName }} {{ selectedUser.lastName }}"
+            class="avatar-img"
+            onerror="this.src='assets/images/avatar-placeholder.png'"
+          />
+          <div class="details">
+            <h4>{{ selectedUser.firstName }} {{ selectedUser.lastName }}</h4>
+            <p>{{ selectedUser.email }}</p>
+          </div>
+        </div>
+      </div>
+      <div class="confirmation-actions">
+        <button class="btn-cancel" (click)="showApprovePopup = false">
+          <span class="material-icons">close</span> Cancel
+        </button>
+        <button class="btn-approve" (click)="processApproval()">
+          <span class="material-icons">check_circle</span> Approve
         </button>
       </div>
     </div>
   </div>
 
   <!-- User rejection popup -->
-  <div class="notification-popup" *ngIf="showRejectPopup">
-    <div class="popup-content">
-      <p>Are you sure you want to reject this user?</p>
-      <div class="confirmation-text">
-        You are rejecting
-        <span class="reject"
-          >{{ selectedUser?.firstName }} {{ selectedUser?.lastName }}</span
-        >
-      </div>
-      <div class="action-buttons">
-        <button class="action-button cancel" (click)="showRejectPopup = false">
-          Cancel
+  <div class="confirmation-popup-overlay" *ngIf="showRejectPopup">
+    <div class="confirmation-popup">
+      <div class="confirmation-header">
+        <h3>Reject Account Request</h3>
+        <button class="close-button" (click)="showRejectPopup = false">
+          <span class="material-icons">close</span>
         </button>
-        <button class="action-button reject-btn" (click)="processRejection()">
-          Reject
+      </div>
+      <div class="confirmation-body">
+        <div class="user-info" *ngIf="selectedUser">
+          <div class="avatar" *ngIf="!selectedUser.picture">
+            {{ selectedUser.firstName.charAt(0).toUpperCase() }}
+          </div>
+          <img
+            *ngIf="selectedUser.picture"
+            [src]="selectedUser.picture"
+            alt="{{ selectedUser.firstName }} {{ selectedUser.lastName }}"
+            class="avatar-img"
+            onerror="this.src='assets/images/avatar-placeholder.png'"
+          />
+          <div class="details">
+            <h4>{{ selectedUser.firstName }} {{ selectedUser.lastName }}</h4>
+            <p>{{ selectedUser.email }}</p>
+          </div>
+        </div>
+        <p class="confirmation-message">
+          Are you sure you want to reject this user? Their request will be
+          denied.
+        </p>
+      </div>
+      <div class="confirmation-actions">
+        <button class="btn-cancel" (click)="showRejectPopup = false">
+          <span class="material-icons">close</span> Cancel
+        </button>
+        <button class="btn-reject" (click)="processRejection()">
+          <span class="material-icons">block</span> Reject
         </button>
       </div>
     </div>
