@@ -15,6 +15,10 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * REST Controller for managing users in the MyCLOUDMEN system.
  * Provides endpoints for creating, reading, updating, and deleting users,
@@ -26,6 +30,7 @@ import java.util.stream.Collectors;
 public class UserController {
     private final UserService userService;
     private final UserSyncService userSyncService;
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
     /**
      * Constructor with dependency injection for UserService and UserSyncService
@@ -381,24 +386,25 @@ public class UserController {
     /**
      * Update a user's role
      * 
-     * @param id   The MongoDB ID of the user to update
+     * @param id          The MongoDB ID of the user to update
      * @param roleRequest The role update request
-     * @return ResponseEntity containing the updated user if found, 404 Not Found otherwise
+     * @return ResponseEntity containing the updated user if found, 404 Not Found
+     *         otherwise
      */
     @PutMapping("/{id}/role")
     public ResponseEntity<User> updateUserRole(
-            @PathVariable String id, 
+            @PathVariable String id,
             @RequestBody Map<String, String> roleRequest) {
-        
+
         String roleName = roleRequest.get("role");
         if (roleName == null || roleName.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         try {
             // Convert the role string to RoleType enum
             RoleType newRole = RoleType.valueOf(roleName);
-            
+
             Optional<User> userOptional = userService.getUserById(id);
             if (userOptional.isEmpty()) {
                 return ResponseEntity.notFound().build();
@@ -408,40 +414,41 @@ public class UserController {
             // Set the new role as the first (primary) role
             user.setRoles(Collections.singletonList(newRole));
             user.setDateTimeChanged(LocalDateTime.now());
-            
+
             Optional<User> updatedUserOptional = userService.updateUser(id, user);
             if (updatedUserOptional.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             return ResponseEntity.ok(updatedUserOptional.get());
         } catch (IllegalArgumentException e) {
             // Invalid role name
             return ResponseEntity.badRequest().build();
         }
     }
-    
+
     /**
      * Update a user's status
      * 
-     * @param id   The MongoDB ID of the user to update
+     * @param id            The MongoDB ID of the user to update
      * @param statusRequest The status update request
-     * @return ResponseEntity containing the updated user if found, 404 Not Found otherwise
+     * @return ResponseEntity containing the updated user if found, 404 Not Found
+     *         otherwise
      */
     @PutMapping("/{id}/status")
     public ResponseEntity<User> updateUserStatus(
-            @PathVariable String id, 
+            @PathVariable String id,
             @RequestBody Map<String, String> statusRequest) {
-        
+
         String statusName = statusRequest.get("status");
         if (statusName == null || statusName.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         try {
             // Convert the status string to StatusType enum
             StatusType newStatus = StatusType.valueOf(statusName);
-            
+
             Optional<User> userOptional = userService.getUserById(id);
             if (userOptional.isEmpty()) {
                 return ResponseEntity.notFound().build();
@@ -450,16 +457,43 @@ public class UserController {
             User user = userOptional.get();
             user.setStatus(newStatus);
             user.setDateTimeChanged(LocalDateTime.now());
-            
+
             Optional<User> updatedUserOptional = userService.updateUser(id, user);
             if (updatedUserOptional.isEmpty()) {
                 return ResponseEntity.notFound().build();
             }
-            
+
             return ResponseEntity.ok(updatedUserOptional.get());
         } catch (IllegalArgumentException e) {
             // Invalid status name
             return ResponseEntity.badRequest().build();
         }
+    }
+
+    /**
+     * Get the current authenticated user based on the Auth0 token
+     * 
+     * @param request HTTP request containing the Auth0 user info
+     * @return ResponseEntity containing the user if found, 404 Not Found otherwise
+     */
+    @GetMapping("/me")
+    public ResponseEntity<User> getCurrentUser(HttpServletRequest request) {
+        // Extract the Auth0 user ID from the request
+        String auth0Id = request.getUserPrincipal().getName();
+
+        if (auth0Id == null || auth0Id.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // Remove the auth0| prefix if present
+        if (auth0Id.startsWith("auth0|")) {
+            auth0Id = auth0Id.substring(6);
+        }
+
+        logger.info("Getting current user for Auth0 ID: {}", auth0Id);
+
+        return userService.getUserByAuth0Id(auth0Id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 }
