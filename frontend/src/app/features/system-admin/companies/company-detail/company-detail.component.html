@@ -38,7 +38,7 @@
                   {{ user.email }}
                 </div>
                 <div class="notification-time">
-                  {{ formatTimeAgo(user.requestedAt) }}
+                  {{ formatTimeAgo(user.dateTimeAdded || user.requestedAt) }}
                 </div>
               </div>
               <div class="notification-actions">
@@ -539,9 +539,12 @@
       <div class="popup-content" *ngIf="selectedPendingUser">
         <p class="confirmation-text">
           Are you sure you want to
-          <span class="reject" *ngIf="confirmAction === 'reject'">reject</span
-          ><span *ngIf="confirmAction === 'approve'">approve</span> this user
-          request?
+          <span class="reject" *ngIf="confirmAction === 'reject'">reject</span>
+          <span class="approve" *ngIf="confirmAction === 'approve'"
+            >approve</span
+          >
+          the account request for <strong>{{ selectedPendingUser.name }}</strong
+          >?
         </p>
 
         <div class="pending-user-details">
@@ -555,10 +558,15 @@
           </div>
           <div class="pending-detail-item">
             <span class="material-icons">schedule</span>
-            <span class="detail-value"
-              >Requested
-              {{ formatTimeAgo(selectedPendingUser.requestedAt) }}</span
-            >
+            <span class="detail-value">
+              Requested
+              {{
+                formatTimeAgo(
+                  selectedPendingUser.dateTimeAdded ||
+                    selectedPendingUser.requestedAt
+                )
+              }}
+            </span>
           </div>
         </div>
 
@@ -572,52 +580,52 @@
           <span class="material-icons">{{
             confirmAction === "approve" ? "info" : "warning"
           }}</span>
-          <span *ngIf="confirmAction === 'approve'"
-            >The user will be granted access to the system and appear in the
-            company users list.</span
-          >
-          <span *ngIf="confirmAction === 'reject'"
-            >The user's request will be denied and they will need to request
-            access again if needed.</span
-          >
+          <span *ngIf="confirmAction === 'approve'">
+            The user will be granted access to the system and appear in the
+            company users list.
+          </span>
+          <span *ngIf="confirmAction === 'reject'">
+            The user's request will be denied and they will need to request
+            access again if needed.
+          </span>
         </div>
+      </div>
 
-        <div class="popup-actions">
-          <button
-            *ngIf="confirmAction === 'approve'"
-            class="approve-btn"
-            (click)="confirmUserAction()"
-            (touchstart)="confirmUserAction()"
-            role="button"
-            tabindex="0"
-            aria-label="Approve user"
-          >
-            <span class="material-icons">check</span>
-            Approve
-          </button>
-          <button
-            *ngIf="confirmAction === 'reject'"
-            class="reject-btn"
-            (click)="confirmUserAction()"
-            (touchstart)="confirmUserAction()"
-            role="button"
-            tabindex="0"
-            aria-label="Reject user"
-          >
-            <span class="material-icons">block</span>
-            Reject
-          </button>
-          <button
-            class="cancel-btn"
-            (click)="cancelUserAction()"
-            (touchstart)="cancelUserAction()"
-            role="button"
-            tabindex="0"
-            aria-label="Cancel"
-          >
-            Cancel
-          </button>
-        </div>
+      <div class="popup-actions">
+        <button
+          *ngIf="confirmAction === 'approve'"
+          class="approve-btn"
+          (click)="confirmUserAction()"
+          (touchstart)="confirmUserAction()"
+          role="button"
+          tabindex="0"
+          aria-label="Approve user"
+        >
+          <span class="material-icons">check</span>
+          Approve
+        </button>
+        <button
+          *ngIf="confirmAction === 'reject'"
+          class="reject-btn"
+          (click)="confirmUserAction()"
+          (touchstart)="confirmUserAction()"
+          role="button"
+          tabindex="0"
+          aria-label="Reject user"
+        >
+          <span class="material-icons">block</span>
+          Reject
+        </button>
+        <button
+          class="cancel-btn"
+          (click)="cancelUserAction()"
+          (touchstart)="cancelUserAction()"
+          role="button"
+          tabindex="0"
+          aria-label="Cancel"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   </div>

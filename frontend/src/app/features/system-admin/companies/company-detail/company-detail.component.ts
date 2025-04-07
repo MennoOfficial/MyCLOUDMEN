@@ -4,7 +4,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
 import { CompanyDetail } from '../../../../core/models/company.model';
-import { environment } from '../../../../../environments/environment';
+import { EnvironmentService } from '../../../../core/services/environment.service';
 
 interface User {
   id: string;
@@ -79,10 +79,20 @@ export class CompanyDetailComponent implements OnInit {
   availableStatuses = ['Active', 'Inactive'];
   updatingUser = false;
 
+  // Toast notification
+  showToast = false;
+  toastMessage = '';
+  toastType: 'success' | 'error' = 'success';
+
+  showQuickConfirm = false;
+  quickConfirmAction: 'approve' | 'reject' = 'approve';
+  quickConfirmUserId: string = '';
+
   constructor(
     private route: ActivatedRoute,
     private router: Router,
-    private apiService: ApiService
+    private apiService: ApiService,
+    private environmentService: EnvironmentService
   ) {}
 
   @HostListener('document:click', ['$event'])
@@ -249,7 +259,7 @@ export class CompanyDetailComponent implements OnInit {
     
     // Log the API URL for debugging
     const apiUrl = `teamleader/companies/${idToUse}/status`;
-    const fullUrl = `${environment.apiUrl}/${apiUrl}`;
+    const fullUrl = `${this.environmentService.apiUrl}/${apiUrl}`;
     console.log('Endpoint path:', apiUrl);
     console.log('Full API URL being called:', fullUrl);
     
@@ -273,7 +283,6 @@ export class CompanyDetailComponent implements OnInit {
             } else {
               // If response is not as expected, use new status
               this.company.status = newStatus;
-              console.log(`Updated company status to ${newStatus} (unexpected API response format)`);
             }
           }
           
@@ -281,14 +290,6 @@ export class CompanyDetailComponent implements OnInit {
           this.updatingStatus = false;
         },
         error: (err) => {
-          // Revert on error
-          console.error('Error updating company status:', err.message);
-          console.error('Status code:', err.status);
-          console.error('Full error object:', err);
-          console.error('Endpoint used:', apiUrl);
-          console.error('Full URL called:', fullUrl);
-          console.error('Payload:', { status: newStatus });
-          
           let errorMessage = '';
           
           // Try to extract error details from the response if available
@@ -305,7 +306,6 @@ export class CompanyDetailComponent implements OnInit {
           
           if (this.company) {
             this.company.status = previousStatus;
-            console.log(`Reverted company status to ${previousStatus} due to API error`);
           }
           
           // Show an error notification with more details
@@ -336,153 +336,62 @@ Error: ${errorMessage}`);
     this.selectedPendingUser = null;
   }
 
+  showToastNotification(message: string, type: 'success' | 'error' = 'success'): void {
+    this.toastMessage = message;
+    this.toastType = type;
+    this.showToast = true;
+    
+    // Auto-hide the toast after 3 seconds
+    setTimeout(() => {
+      this.showToast = false;
+    }, 3000);
+  }
+
   approveUser(userId: string): void {
-    if (!userId) return;
-    
-    // Find the user being approved
-    const user = this.pendingUsers.find(u => u.id === userId);
-    if (!user) {
-      console.error(`User with ID ${userId} not found in pending users list`);
-      return;
-    }
-    
-    // Show the confirmation popup
-    this.selectedPendingUser = user;
     this.pendingUserId = userId;
     this.confirmAction = 'approve';
     this.showUserActionConfirmPopup = true;
-    
-    // Close the notification popup to avoid UI clutter
     this.showNotificationPopup = false;
+    
+    // Find and set the selectedPendingUser for the popup
+    const user = this.pendingUsers.find(u => u.id === userId);
+    if (user) {
+      this.selectedPendingUser = user;
+    }
+    
+    // Prevent background scrolling
+    this.disableBodyScroll();
   }
 
   rejectUser(userId: string): void {
-    if (!userId) return;
-    
-    // Find the user being rejected
-    const user = this.pendingUsers.find(u => u.id === userId);
-    if (!user) {
-      console.error(`User with ID ${userId} not found in pending users list`);
-      return;
-    }
-    
-    // Show the confirmation popup
-    this.selectedPendingUser = user;
     this.pendingUserId = userId;
     this.confirmAction = 'reject';
     this.showUserActionConfirmPopup = true;
-    
-    // Close the notification popup to avoid UI clutter
     this.showNotificationPopup = false;
-  }
-  
-  confirmUserAction(): void {
-    // Hide the confirmation popup
-    this.showUserActionConfirmPopup = false;
     
-    if (this.confirmAction === 'approve') {
-      this.processApproval(this.pendingUserId);
+    // Find and set the selectedPendingUser for the popup
+    const user = this.pendingUsers.find(u => u.id === userId);
+    if (user) {
+      this.selectedPendingUser = user;
+    }
+    
+    // Prevent background scrolling
+    this.disableBodyScroll();
+  }
+
+  cancelQuickAction(): void {
+    this.showQuickConfirm = false;
+    this.showNotificationPopup = true;
+  }
+
+  async confirmQuickAction(): Promise<void> {
+    if (this.quickConfirmAction === 'approve') {
+      await this.handleApproveUser(this.quickConfirmUserId);
     } else {
-      this.processRejection(this.pendingUserId);
+      await this.handleRejectUser(this.quickConfirmUserId);
     }
-  }
-  
-  cancelUserAction(): void {
-    this.showUserActionConfirmPopup = false;
-    this.selectedPendingUser = null;
-    this.pendingUserId = '';
-  }
-  
-  processApproval(userId: string): void {
-    if (!userId) return;
-    
-    // Find the user being approved
-    const user = this.pendingUsers.find(u => u.id === userId);
-    if (!user) {
-      console.error(`User with ID ${userId} not found in pending users list`);
-      return;
-    }
-    
-    console.log(`Approving user: ${user.name} (${user.email})`);
-    
-    // Create a copy of the user for adding to the company users list
-    const approvedUser: User = {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.roles[0] || 'COMPANY_USER',
-      status: 'Active'
-    };
-    
-    // Optimistically update UI first for better UX
-    // 1. Remove from pending users
-    this.pendingUsers = this.pendingUsers.filter(u => u.id !== userId);
-    this.pendingCount = this.pendingUsers.length;
-    this.hasPendingUsers = this.pendingCount > 0;
-    
-    // 2. Add to company users
-    this.companyUsers = [...this.companyUsers, approvedUser];
-    
-    // Call the new dedicated API endpoint to approve the pending user
-    this.apiService.post(`users/pending/${userId}/approve`, {})
-      .subscribe({
-        next: (response) => {
-          console.log(`User ${userId} approved successfully`);
-          
-          // Refresh the company users list to ensure data consistency
-          this.fetchCompanyUsers();
-        },
-        error: (err) => {
-          console.error(`Error approving user ${userId}:`, err);
-          
-          // Revert the optimistic update if the API call fails
-          if (user) {
-            // Add back to pending users
-            this.pendingUsers.push(user);
-            this.pendingCount = this.pendingUsers.length;
-            this.hasPendingUsers = true;
-            
-            // Remove from company users
-            this.companyUsers = this.companyUsers.filter(u => u.id !== userId);
-          }
-        }
-      });
-  }
-  
-  processRejection(userId: string): void {
-    if (!userId) return;
-    
-    // Find the user being rejected
-    const user = this.pendingUsers.find(u => u.id === userId);
-    if (!user) {
-      console.error(`User with ID ${userId} not found in pending users list`);
-      return;
-    }
-    
-    console.log(`Rejecting user: ${user.name} (${user.email})`);
-    
-    // Optimistically update UI first for better UX
-    this.pendingUsers = this.pendingUsers.filter(u => u.id !== userId);
-    this.pendingCount = this.pendingUsers.length;
-    this.hasPendingUsers = this.pendingCount > 0;
-    
-    // Call the new dedicated API endpoint to reject the pending user
-    this.apiService.post(`users/pending/${userId}/reject`, {})
-      .subscribe({
-        next: (response) => {
-          console.log(`User ${userId} rejected successfully`);
-        },
-        error: (err) => {
-          console.error(`Error rejecting user ${userId}:`, err);
-          
-          // Revert the optimistic update if the API call fails
-          if (user) {
-            this.pendingUsers.push(user);
-            this.pendingCount = this.pendingUsers.length;
-            this.hasPendingUsers = true;
-          }
-        }
-      });
+    this.showQuickConfirm = false;
+    this.showNotificationPopup = true;
   }
 
   formatRole(role: string): string {
@@ -508,28 +417,47 @@ Error: ${errorMessage}`);
   /**
    * Formats a timestamp into a human-readable time difference (e.g., "2 hours ago")
    */
-  formatTimeAgo(timestamp: string | Date): string {
-    if (!timestamp) return 'Unknown';
+  formatTimeAgo(timestamp: string | Date | undefined): string {
+    if (!timestamp) {
+      return 'Unknown';
+    }
     
-    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHour = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHour / 24);
-    
-    if (diffSec < 60) {
-      return `Just now`;
-    } else if (diffMin < 60) {
-      return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'} ago`;
-    } else if (diffHour < 24) {
-      return `${diffHour} ${diffHour === 1 ? 'hour' : 'hours'} ago`;
-    } else if (diffDay < 30) {
-      return `${diffDay} ${diffDay === 1 ? 'day' : 'days'} ago`;
-    } else {
-      // For older dates, just show the date
-      return date.toLocaleDateString();
+    try {
+      // Convert string to Date object
+      const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return 'Unknown';
+      }
+      
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      
+      // Handle future dates
+      if (diffMs < 0) {
+        return 'Just now';
+      }
+      
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHour = Math.floor(diffMin / 60);
+      const diffDay = Math.floor(diffHour / 24);
+      
+      if (diffSec < 60) {
+        return 'Just now';
+      } else if (diffMin < 60) {
+        return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'} ago`;
+      } else if (diffHour < 24) {
+        return `${diffHour} ${diffHour === 1 ? 'hour' : 'hours'} ago`;
+      } else if (diffDay < 30) {
+        return `${diffDay} ${diffDay === 1 ? 'day' : 'days'} ago`;
+      } else {
+        // For older dates, show the actual date
+        return date.toLocaleDateString();
+      }
+    } catch (error) {
+      return 'Unknown';
     }
   }
 
@@ -893,5 +821,112 @@ Error: ${errorMessage}`);
   isSystemAdmin(role: string): boolean {
     const normalizedRole = role.toUpperCase();
     return normalizedRole === 'SYSTEM_ADMIN';
+  }
+
+  async handleApproveUser(userId: string): Promise<void> {
+    if (!userId) return;
+    
+    try {
+      console.log(`Calling API endpoint: users/pending/${userId}/approve`);
+      await this.apiService.post(`users/pending/${userId}/approve`, {}).toPromise();
+      this.showToastNotification('User approved successfully', 'success');
+      this.fetchPendingUsers();
+    } catch (err) {
+      console.error('Error approving user:', err);
+      console.error('API endpoint used:', `users/pending/${userId}/approve`);
+      this.showToastNotification('Failed to approve user. Please try again.', 'error');
+    }
+  }
+
+  async handleRejectUser(userId: string): Promise<void> {
+    if (!userId) return;
+    
+    try {
+      console.log(`Calling API endpoint: users/pending/${userId}/reject`);
+      await this.apiService.post(`users/pending/${userId}/reject`, {}).toPromise();
+      this.showToastNotification('User rejected successfully', 'success');
+      this.fetchPendingUsers();
+    } catch (err) {
+      console.error('Error rejecting user:', err);
+      console.error('API endpoint used:', `users/pending/${userId}/reject`);
+      this.showToastNotification('Failed to reject user. Please try again.', 'error');
+    }
+  }
+
+  confirmUserAction(): void {
+    if (!this.pendingUserId) return;
+
+    const action = this.confirmAction;
+    
+    // Show a loading indicator
+    this.updatingUser = true;
+    
+    // Use handleApproveUser or handleRejectUser which have proper error handling
+    if (action === 'approve') {
+      this.handleApproveUser(this.pendingUserId)
+        .then(() => {
+          // Close all popups
+          this.showUserActionConfirmPopup = false;
+          this.showPendingPopup = false;
+          this.showNotificationPopup = false;
+          this.updatingUser = false;
+          this.enableBodyScroll();
+        })
+        .catch(() => {
+          this.updatingUser = false;
+          this.enableBodyScroll();
+        });
+    } else { // reject
+      this.handleRejectUser(this.pendingUserId)
+        .then(() => {
+          // Close all popups
+          this.showUserActionConfirmPopup = false;
+          this.showPendingPopup = false;
+          this.showNotificationPopup = false;
+          this.updatingUser = false;
+          this.enableBodyScroll();
+        })
+        .catch(() => {
+          this.updatingUser = false;
+          this.enableBodyScroll();
+        });
+    }
+  }
+
+  cancelUserAction(): void {
+    this.showUserActionConfirmPopup = false;
+    this.showPendingPopup = false;
+    
+    // Enable scrolling
+    this.enableBodyScroll();
+  }
+
+  // Add these utility methods for scroll management
+  private disableBodyScroll(): void {
+    const scrollY = window.scrollY;
+    document.body.classList.add('body-no-scroll');
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    document.body.style.overflow = 'hidden';
+    
+    // Set scrollbar width as CSS variable to prevent layout shift
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.documentElement.style.setProperty('--scrollbar-width', `${scrollbarWidth}px`);
+    document.documentElement.style.setProperty('--scroll-position', `${scrollY}px`);
+  }
+  
+  private enableBodyScroll(): void {
+    const scrollY = document.documentElement.style.getPropertyValue('--scroll-position') || '0';
+    document.body.classList.remove('body-no-scroll');
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.width = '';
+    document.body.style.overflow = '';
+    window.scrollTo(0, parseInt(scrollY || '0'));
+    
+    // Remove the CSS custom properties
+    document.documentElement.style.removeProperty('--scrollbar-width');
+    document.documentElement.style.removeProperty('--scroll-position');
   }
 } 

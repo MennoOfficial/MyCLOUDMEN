@@ -1,1 +1,742 @@
-<p>users works!</p>
+<div class="company-detail-container">
+  <!-- Back button and header -->
+  <div class="detail-header">
+    <div class="header-content">
+      <h1 class="company-name">Your Users</h1>
+
+      <!-- Notification bell with popup -->
+      <div class="notification-container" *ngIf="hasPendingUsers">
+        <button
+          class="notification-bell"
+          title="Pending account requests"
+          (click)="toggleNotificationPopup($event)"
+          aria-label="Show pending account requests"
+        >
+          <span class="material-icons">notifications_active</span>
+          <span class="notification-count">{{ pendingCount }}</span>
+        </button>
+
+        <!-- Notification Popup -->
+        <div class="notification-popup" *ngIf="showNotificationPopup">
+          <div class="notification-header">
+            <h3>Pending Account Requests</h3>
+            <span class="notification-count-badge">{{ pendingCount }}</span>
+          </div>
+
+          <div class="notification-content">
+            <div class="notification-item" *ngFor="let user of pendingUsers">
+              <div class="notification-user-avatar" *ngIf="!user.picture">
+                {{ user.name.charAt(0).toUpperCase() }}
+              </div>
+              <img
+                *ngIf="user.picture"
+                [src]="user.picture"
+                class="notification-user-avatar-img"
+                alt="{{ user.name }}"
+                onerror="this.src='assets/images/avatar-placeholder.png'"
+              />
+              <div class="notification-user-info">
+                <div class="notification-user-name">{{ user.name }}</div>
+                <div class="notification-user-email" title="{{ user.email }}">
+                  {{ user.email }}
+                </div>
+                <div class="notification-time">
+                  {{ formatTimeAgo(user.requestedAt) }}
+                </div>
+              </div>
+              <div class="notification-actions">
+                <button
+                  class="action-btn reject-btn"
+                  (click)="rejectUser(user.id); $event.stopPropagation()"
+                  title="Reject user"
+                  aria-label="Reject user request"
+                >
+                  <span class="material-icons">close</span>
+                </button>
+                <button
+                  class="action-btn approve-btn"
+                  (click)="approveUser(user.id); $event.stopPropagation()"
+                  title="Approve user"
+                  aria-label="Approve user request"
+                >
+                  <span class="material-icons">check</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Empty state when there are no pending requests -->
+            <div class="empty-notification" *ngIf="pendingUsers.length === 0">
+              <span class="material-icons">done_all</span>
+              <p>All account requests have been processed</p>
+              <small>Check back later for new requests</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p *ngIf="companyDomain" class="users-domain-info">
+      Users associated with domain <strong>{{ companyDomain }}</strong>
+    </p>
+  </div>
+
+  <!-- Loading state -->
+  <div *ngIf="loadingUsers" class="loading-container">
+    <div class="loading-spinner"></div>
+    <p>Loading users...</p>
+  </div>
+
+  <!-- Error state -->
+  <div *ngIf="error" class="error-container">
+    <span class="material-icons error-icon">error_outline</span>
+    <p>{{ errorMessage || "Failed to load users. Please try again." }}</p>
+    <button class="retry-button" (click)="fetchCompanyUsers()">Retry</button>
+  </div>
+
+  <!-- Users content -->
+  <div class="detail-content" *ngIf="!loadingUsers && !error">
+    <div class="company-card">
+      <div class="detail-section">
+        <!-- Search and Filter Controls -->
+        <div class="search-filter-container">
+          <div class="search-box">
+            <span class="material-icons search-icon">search</span>
+            <input
+              type="text"
+              placeholder="Search users..."
+              [(ngModel)]="searchQuery"
+              (input)="applyFilters()"
+            />
+            <button
+              *ngIf="searchQuery"
+              class="clear-search"
+              (click)="clearSearch()"
+            >
+              <span class="material-icons">close</span>
+            </button>
+          </div>
+
+          <div class="filters-group">
+            <div class="filters">
+              <div class="filter-select">
+                <select
+                  id="status-filter"
+                  [(ngModel)]="statusFilter"
+                  (change)="applyFilters()"
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+              <div class="filter-select">
+                <select
+                  id="role-filter"
+                  [(ngModel)]="roleFilter"
+                  (change)="applyFilters()"
+                >
+                  <option value="all">All Roles</option>
+                  <option value="COMPANY_USER">User</option>
+                  <option value="COMPANY_ADMIN">Admin</option>
+                </select>
+              </div>
+            </div>
+
+            <button
+              *ngIf="
+                searchQuery || statusFilter !== 'all' || roleFilter !== 'all'
+              "
+              class="clear-filters-btn"
+              (click)="clearFilters()"
+            >
+              <span class="material-icons">filter_alt_off</span>
+              Clear filters
+            </button>
+          </div>
+        </div>
+
+        <!-- Users table -->
+        <div *ngIf="filteredUsers.length > 0" class="users-table-container">
+          <!-- Desktop table view -->
+          <table class="users-table desktop-table">
+            <thead>
+              <tr>
+                <th class="user-avatar-col"></th>
+                <th class="sortable-column" (click)="sortUsers('name')">
+                  Name
+                  <span class="material-icons sort-icon">{{
+                    getSortIcon("name")
+                  }}</span>
+                </th>
+                <th class="sortable-column" (click)="sortUsers('email')">
+                  Email
+                  <span class="material-icons sort-icon">{{
+                    getSortIcon("email")
+                  }}</span>
+                </th>
+                <th class="sortable-column" (click)="sortUsers('role')">
+                  Role
+                  <span class="material-icons sort-icon">{{
+                    getSortIcon("role")
+                  }}</span>
+                </th>
+                <th class="sortable-column" (click)="sortUsers('status')">
+                  Status
+                  <span class="material-icons sort-icon">{{
+                    getSortIcon("status")
+                  }}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let user of filteredUsers"
+                class="user-row"
+                (click)="showUserDetail(user)"
+              >
+                <td class="user-avatar-col">
+                  <div class="user-avatar" *ngIf="!user.picture">
+                    {{ user.name.charAt(0).toUpperCase() }}
+                  </div>
+                  <img
+                    *ngIf="user.picture"
+                    [src]="user.picture"
+                    alt="{{ user.name }}"
+                    class="user-avatar-img"
+                    onerror="this.src='assets/images/avatar-placeholder.png'"
+                  />
+                </td>
+                <td class="user-name">{{ user.name }}</td>
+                <td class="user-email">{{ user.email }}</td>
+                <td class="user-role">
+                  <span [class]="getRoleClass(user.role)">{{
+                    formatRole(user.role)
+                  }}</span>
+                </td>
+                <td class="user-status">
+                  <span
+                    class="status-badge small"
+                    [ngClass]="{
+                      'status-active':
+                        user.status === 'Active' || user.status === 'ACTIVATED',
+                      'status-inactive':
+                        user.status === 'Inactive' ||
+                        user.status === 'DEACTIVATED',
+                      'status-pending': user.status === 'PENDING'
+                    }"
+                  >
+                    <span class="status-indicator"></span>
+                    {{ formatStatus(user.status) }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Mobile card view -->
+          <div class="mobile-cards-view">
+            <div
+              *ngIf="filteredUsers && filteredUsers.length > 0; else noUsers"
+              class="user-cards"
+            >
+              <div
+                *ngFor="let user of filteredUsers"
+                class="user-card"
+                [ngClass]="{ inactive: user.status === 'INACTIVE' }"
+              >
+                <div class="user-card-header">
+                  <div class="user-avatar" *ngIf="!user.picture">
+                    {{ user.name.charAt(0).toUpperCase() }}
+                  </div>
+                  <img
+                    *ngIf="user.picture"
+                    [src]="user.picture"
+                    alt="{{ user.name }}"
+                    class="user-avatar-img"
+                    onerror="this.src='assets/images/avatar-placeholder.png'"
+                  />
+                  <div class="user-card-name-email">
+                    <div class="user-name">{{ user.name }}</div>
+                    <div class="user-email">{{ user.email }}</div>
+                  </div>
+                </div>
+                <div class="user-card-footer">
+                  <span [class]="getRoleClass(user.role)">{{
+                    formatRole(user.role)
+                  }}</span>
+                  <span
+                    class="status-badge small"
+                    [ngClass]="{
+                      'status-active':
+                        user.status === 'Active' || user.status === 'ACTIVATED',
+                      'status-inactive':
+                        user.status === 'Inactive' ||
+                        user.status === 'DEACTIVATED',
+                      'status-pending': user.status === 'PENDING'
+                    }"
+                  >
+                    <span class="status-indicator"></span>
+                    {{ formatStatus(user.status) }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <ng-template #noUsers>
+              <div class="no-users">
+                <p>No users found</p>
+              </div>
+            </ng-template>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div
+          *ngIf="
+            !loadingUsers &&
+            filteredUsers.length === 0 &&
+            companyUsers.length > 0
+          "
+          class="no-users"
+        >
+          <span class="material-icons">search_off</span>
+          <p>No users match your search criteria</p>
+          <button class="clear-filters-btn" (click)="clearFilters()">
+            Clear filters
+          </button>
+        </div>
+
+        <div
+          *ngIf="!loadingUsers && companyUsers.length === 0"
+          class="no-users"
+        >
+          <span class="material-icons">person_off</span>
+          <p>No users found for this company's domain</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Detail Popup -->
+  <div
+    class="user-detail-popup-overlay"
+    *ngIf="showUserDetailPopup && selectedUser"
+    (click)="hideUserDetail()"
+    aria-modal="true"
+    role="dialog"
+    tabindex="-1"
+    aria-labelledby="user-detail-title"
+  >
+    <div class="user-detail-popup" (click)="$event.stopPropagation()">
+      <!-- Header -->
+      <div class="popup-header">
+        <div class="user-detail-avatar" *ngIf="!selectedUser.picture">
+          {{ selectedUser.firstName.charAt(0).toUpperCase() }}
+        </div>
+        <img
+          *ngIf="selectedUser.picture"
+          [src]="selectedUser.picture"
+          alt="{{ selectedUser.firstName }} {{ selectedUser.lastName }}"
+          class="user-detail-avatar-img"
+          onerror="this.src='assets/images/avatar-placeholder.png'"
+        />
+        <div class="header-content">
+          <h3 id="user-detail-title">
+            {{ selectedUser.firstName }} {{ selectedUser.lastName }}
+          </h3>
+          <div class="user-meta">
+            <span class="user-email">{{ selectedUser.email }}</span>
+          </div>
+        </div>
+        <button
+          class="close-button"
+          (click)="hideUserDetail(); $event.stopPropagation()"
+          aria-label="Close user details"
+        >
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      <div class="popup-content">
+        <!-- User Information Section -->
+        <div class="detail-section">
+          <h4 class="section-title">User Information</h4>
+          <div class="info-grid">
+            <div class="info-item">
+              <span class="info-label">User ID</span>
+              <div class="info-value monospace">
+                {{ selectedUser.id }}
+                <button
+                  class="copy-btn"
+                  title="Copy ID to clipboard"
+                  (click)="copyToClipboard(selectedUser.id)"
+                >
+                  <span class="material-icons">content_copy</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <span class="info-label">Last Login</span>
+              <div class="info-value">
+                {{
+                  selectedUser.lastLogin
+                    ? formatTimeAgo(selectedUser.lastLogin)
+                    : "Never logged in"
+                }}
+              </div>
+            </div>
+
+            <div class="info-item">
+              <span class="info-label">Current Role</span>
+              <div class="info-value">
+                <span [class]="getRoleClass(selectedUser.role || '')">
+                  {{ formatRole(selectedUser.role || "") }}
+                </span>
+              </div>
+            </div>
+
+            <div class="info-item">
+              <span class="info-label">Current Status</span>
+              <div class="info-value">
+                <span
+                  class="status-badge"
+                  [ngClass]="{
+                    'status-active':
+                      selectedUser.status === 'Active' ||
+                      selectedUser.status === 'ACTIVATED',
+                    'status-inactive':
+                      selectedUser.status === 'Inactive' ||
+                      selectedUser.status === 'DEACTIVATED'
+                  }"
+                >
+                  <span class="status-indicator"></span>
+                  {{ formatStatus(selectedUser.status || "") }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status Management Section -->
+        <div class="detail-section" *ngIf="canModifyUser(selectedUser)">
+          <h4 class="section-title">Change Status</h4>
+          <div class="action-buttons status-buttons">
+            <button
+              *ngFor="let status of availableStatuses"
+              class="action-button status-button"
+              [ngClass]="[
+                status === 'Active' ? 'active-btn' : 'inactive-btn',
+                formatStatus(selectedUser.status || '') === status
+                  ? 'selected'
+                  : ''
+              ]"
+              [disabled]="
+                updatingUser ||
+                formatStatus(selectedUser.status || '') === status
+              "
+              (click)="updateUserStatus(status)"
+            >
+              <span class="material-icons">
+                {{ status === "Active" ? "check_circle" : "cancel" }}
+              </span>
+              {{ status }}
+            </button>
+          </div>
+          <p class="helper-text">
+            <span *ngIf="formatStatus(selectedUser.status || '') === 'Active'">
+              Set to <strong>Inactive</strong> to disable the user's account
+            </span>
+            <span
+              *ngIf="formatStatus(selectedUser.status || '') === 'Inactive'"
+            >
+              Set to <strong>Active</strong> to enable the user's account
+            </span>
+          </p>
+        </div>
+
+        <!-- Role Management Section -->
+        <div class="detail-section" *ngIf="canModifyUser(selectedUser)">
+          <h4 class="section-title">Change Role</h4>
+          <div class="action-buttons role-buttons">
+            <button
+              *ngFor="let role of availableRoles"
+              class="action-button role-button"
+              [ngClass]="[
+                'role-btn-' + role.toLowerCase(),
+                selectedUser.role === role ? 'selected' : ''
+              ]"
+              [disabled]="updatingUser || selectedUser.role === role"
+              (click)="updateUserRole(role)"
+            >
+              <span class="material-icons">
+                {{
+                  role === "COMPANY_ADMIN" ? "admin_panel_settings" : "person"
+                }}
+              </span>
+              {{ formatRole(role) }}
+            </button>
+          </div>
+          <p class="helper-text">
+            <span *ngIf="selectedUser.role === 'COMPANY_USER'">
+              Set to <strong>Admin</strong> to give this user administrative
+              privileges
+            </span>
+            <span *ngIf="selectedUser.role === 'COMPANY_ADMIN'">
+              Set to <strong>User</strong> to remove administrative privileges
+            </span>
+          </p>
+        </div>
+      </div>
+
+      <div class="popup-footer">
+        <div class="footer-note">
+          <span class="material-icons info-icon">info</span>
+          <span>Changes are applied immediately</span>
+        </div>
+        <button class="close-btn" (click)="hideUserDetail()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Show loading indicator when updating user -->
+  <div class="updating-overlay" *ngIf="updatingUser">
+    <div class="spinner-container">
+      <div class="spinner"></div>
+      <p>Updating user...</p>
+    </div>
+  </div>
+
+  <!-- Pending User Action Confirmation Popup -->
+  <div
+    class="confirmation-popup-overlay"
+    *ngIf="showUserActionConfirmPopup && selectedPendingUser"
+    (click)="cancelUserAction()"
+  >
+    <div class="confirmation-popup" (click)="$event.stopPropagation()">
+      <div class="confirmation-header">
+        <h3>
+          {{
+            confirmAction === "approve"
+              ? "Approve Account Request"
+              : "Reject Account Request"
+          }}
+        </h3>
+        <button
+          class="close-button"
+          (click)="cancelUserAction(); $event.stopPropagation()"
+          aria-label="Close"
+        >
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="confirmation-body">
+        <div class="user-info">
+          <div class="avatar" *ngIf="!selectedPendingUser.picture">
+            {{ selectedPendingUser.name.charAt(0).toUpperCase() }}
+          </div>
+          <img
+            *ngIf="selectedPendingUser.picture"
+            [src]="selectedPendingUser.picture"
+            alt="{{ selectedPendingUser.name }}"
+            class="avatar-img"
+            onerror="this.src='assets/images/avatar-placeholder.png'"
+          />
+          <div class="details">
+            <h4>{{ selectedPendingUser.name }}</h4>
+            <p>{{ selectedPendingUser.email }}</p>
+          </div>
+        </div>
+        <p class="confirmation-message">
+          {{
+            confirmAction === "approve"
+              ? "Are you sure you want to approve this user? They will gain access to the system with the following capabilities:\n• User Management\n• Invoice Access\n• Account Settings"
+              : "Are you sure you want to reject this user? Their request will be denied."
+          }}
+        </p>
+      </div>
+
+      <div class="confirmation-actions">
+        <button
+          class="btn-cancel"
+          (click)="cancelUserAction(); $event.stopPropagation()"
+        >
+          Cancel
+        </button>
+        <button
+          [ngClass]="{
+            'btn-approve': confirmAction === 'approve',
+            'btn-reject': confirmAction === 'reject'
+          }"
+          (click)="confirmUserAction(); $event.stopPropagation()"
+        >
+          {{ confirmAction === "approve" ? "Approve" : "Reject" }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pending User Details Popup -->
+  <div
+    class="status-popup-overlay"
+    *ngIf="showPendingPopup && selectedPendingUser"
+    (click)="hidePendingPopup()"
+    aria-modal="true"
+    role="dialog"
+  >
+    <div class="pending-popup" (click)="$event.stopPropagation()">
+      <div class="popup-header">
+        <span class="material-icons">person_add</span>
+        <h3>Account Request</h3>
+      </div>
+
+      <div class="popup-content" *ngIf="selectedPendingUser">
+        <div class="pending-user-avatar">
+          {{ selectedPendingUser.name.charAt(0).toUpperCase() }}
+        </div>
+
+        <h4 class="pending-user-title">{{ selectedPendingUser.name }}</h4>
+
+        <div class="pending-user-details">
+          <div class="pending-detail-item">
+            <span class="material-icons">email</span>
+            <span class="detail-value">{{ selectedPendingUser.email }}</span>
+          </div>
+          <div class="pending-detail-item">
+            <span class="material-icons">schedule</span>
+            <span class="detail-value"
+              >Requested
+              {{ formatTimeAgo(selectedPendingUser.requestedAt) }}</span
+            >
+          </div>
+        </div>
+
+        <div class="pending-actions-prompt">
+          <span class="material-icons">help_outline</span>
+          <p>How would you like to proceed with this request?</p>
+        </div>
+      </div>
+
+      <div class="popup-actions">
+        <button class="cancel-btn" (click)="hidePendingPopup()">
+          <span class="material-icons">arrow_back</span>
+          Back
+        </button>
+        <div class="decision-buttons">
+          <button
+            class="reject-btn"
+            (click)="
+              rejectUser(selectedPendingUser.id); $event.stopPropagation()
+            "
+          >
+            <span class="material-icons">close</span>
+            Reject
+          </button>
+          <button
+            class="approve-btn"
+            (click)="
+              approveUser(selectedPendingUser.id); $event.stopPropagation()
+            "
+          >
+            <span class="material-icons">check</span>
+            Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div
+    class="toast-notification"
+    *ngIf="showToast"
+    [ngClass]="{
+      success: toastType === 'success',
+      error: toastType === 'error'
+    }"
+  >
+    <span class="material-icons">{{
+      toastType === "success" ? "check_circle" : "error"
+    }}</span>
+    <span class="toast-message">{{ toastMessage }}</span>
+  </div>
+
+  <!-- User approval popup -->
+  <div class="confirmation-popup-overlay" *ngIf="showApprovePopup">
+    <div class="confirmation-popup">
+      <div class="confirmation-header">
+        <h3>Approve Account Request</h3>
+        <button class="close-button" (click)="showApprovePopup = false">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="confirmation-body">
+        <div class="user-info" *ngIf="selectedUser">
+          <div class="avatar" *ngIf="!selectedUser.picture">
+            {{ selectedUser.firstName.charAt(0).toUpperCase() }}
+          </div>
+          <img
+            *ngIf="selectedUser.picture"
+            [src]="selectedUser.picture"
+            alt="{{ selectedUser.firstName }} {{ selectedUser.lastName }}"
+            class="avatar-img"
+            onerror="this.src='assets/images/avatar-placeholder.png'"
+          />
+          <div class="details">
+            <h4>{{ selectedUser.firstName }} {{ selectedUser.lastName }}</h4>
+            <p>{{ selectedUser.email }}</p>
+          </div>
+        </div>
+      </div>
+      <div class="confirmation-actions">
+        <button class="btn-cancel" (click)="showApprovePopup = false">
+          <span class="material-icons">close</span> Cancel
+        </button>
+        <button class="btn-approve" (click)="processApproval()">
+          <span class="material-icons">check_circle</span> Approve
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User rejection popup -->
+  <div class="confirmation-popup-overlay" *ngIf="showRejectPopup">
+    <div class="confirmation-popup">
+      <div class="confirmation-header">
+        <h3>Reject Account Request</h3>
+        <button class="close-button" (click)="showRejectPopup = false">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="confirmation-body">
+        <div class="user-info" *ngIf="selectedUser">
+          <div class="avatar" *ngIf="!selectedUser.picture">
+            {{ selectedUser.firstName.charAt(0).toUpperCase() }}
+          </div>
+          <img
+            *ngIf="selectedUser.picture"
+            [src]="selectedUser.picture"
+            alt="{{ selectedUser.firstName }} {{ selectedUser.lastName }}"
+            class="avatar-img"
+            onerror="this.src='assets/images/avatar-placeholder.png'"
+          />
+          <div class="details">
+            <h4>{{ selectedUser.firstName }} {{ selectedUser.lastName }}</h4>
+            <p>{{ selectedUser.email }}</p>
+          </div>
+        </div>
+        <p class="confirmation-message">
+          Are you sure you want to reject this user? Their request will be
+          denied.
+        </p>
+      </div>
+      <div class="confirmation-actions">
+        <button class="btn-cancel" (click)="showRejectPopup = false">
+          <span class="material-icons">close</span> Cancel
+        </button>
+        <button class="btn-reject" (click)="processRejection()">
+          <span class="material-icons">block</span> Reject
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

@@ -298,10 +298,11 @@
   
   .cancel-button {
     background-color: var(--silver-lining);
-    color: var(--charcoal);
+    background-color: var(--deep-ocean-soft);
+    color: var(--deep-ocean);
     
     &:hover {
-      background-color: var(--silver-lining-hover);
+      background-color: var(--silver-lining);
     }
   }
   
