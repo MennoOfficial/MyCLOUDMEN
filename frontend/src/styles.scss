@@ -3,43 +3,54 @@
 :root {
     /* Primary Colors */
     --deep-ocean: #2c3e50;
+    --deep-ocean-rgb: 44, 62, 80;
     --deep-ocean-soft: rgba(44, 62, 80, 0.08);
     --deep-ocean-semi-transparent: rgba(44, 62, 80, 0.9);
     --deep-ocean-hover: #2c3e50db;
   
     --arctic-dawn: #f8f9fa;
     --silver-lining: #e9ecef;
+    --silver-lining-rgb: 233, 236, 239;
     --google-snow: #fafafa;
   
     /* Action Colors */
     --fire-red: #e75253;
+    --fire-red-rgb: 231, 82, 83;
     --fire-red-soft: rgba(231, 82, 83, 0.08);
     --fire-red-hover: #d34142;
     --aqua-spring: #54bfae;
+    --aqua-spring-rgb: 84, 191, 174;
     --aqua-spring-soft: rgba(42, 169, 147, 0.08);
     --aqua-spring-hover: #4ab3a2;
     --ocean-blue: #3498db;
+    --ocean-blue-rgb: 52, 152, 219;
     --ocean-blue-soft: rgba(52, 152, 219, 0.08);
     --ocean-blue-hover: #2e86c1;
     --sunset-orange: #e67e22;
+    --sunset-orange-rgb: 230, 126, 34;
     --sunset-orange-hover: #d35400;
     --sunset-orange-soft: rgba(230, 126, 34, 0.08);
     --forest-green: #27ae60;
+    --forest-green-rgb: 39, 174, 96;
     --forest-green-soft: rgba(39, 174, 96, 0.08);
     --forest-green-hover: #229954;
     --google-blue: #4285f4;
+    --google-blue-rgb: 66, 133, 244;
     --google-blue-soft: rgba(66, 133, 244, 0.08);
     --google-blue-hover: #3367d6;
     --purple-rain: #9b59b6;
+    --purple-rain-rgb: 155, 89, 182;
     --purple-rain-soft: rgba(155, 89, 182, 0.08);
     --purple-rain-hover: #8e44ad;
     --teamleader-blue: #00adb1;
+    --teamleader-blue-rgb: 0, 173, 177;
     --teamleader-blue-soft: rgba(0, 173, 177, 0.08);
     --teamleader-blue-hover: #009094;
   
     /* Neutral Colors */
     --charcoal: #2c3e50;
     --slate: #7f8c8d;
+    --slate-rgb: 127, 140, 141;
     --mist: #bdc3c7;
     --cloud: #ecf0f1;
   
@@ -246,17 +257,17 @@ button {
     letter-spacing: 0.5px;
     
     &.role-system-admin {
-      background-color: var(--aqua-spring-soft);
-      color: var(--aqua-spring);
+      background-color: var(--deep-ocean-soft);
+      color: var(--deep-ocean);
     }
     
     &.role-company-admin {
-      background-color: var(--ocean-blue-soft);
-  color: var(--ocean-blue);
+      background-color: var(--purple-rain-soft);
+  color: var(--purple-rain);
     }
     
     &.role-company-user {
-      background-color: var(--forest-green-soft);
-  color: var(--forest-green);
+      background-color: var(--google-blue-soft);
+  color: var(--google-blue);
     }
   }
