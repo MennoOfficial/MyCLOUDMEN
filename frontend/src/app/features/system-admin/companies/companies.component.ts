@@ -86,7 +86,6 @@ export class CompaniesComponent implements OnInit {
           this.loading = false;
         },
         error: (err) => {
-          console.error('Error fetching companies:', err);
           this.error = true;
           this.loading = false;
           
@@ -95,9 +94,7 @@ export class CompaniesComponent implements OnInit {
             this.authRequired = true;
             this.authUrl = err.error.authUrl;
           } else {
-            // For demo purposes, load mock data if API fails
-            console.log('Error fetching companies:', err);
-            this.loadMockData();
+            console.error('Error fetching companies:', err);
           }
         }
       });
@@ -127,7 +124,6 @@ export class CompaniesComponent implements OnInit {
           this.loading = false;
         },
         error: (err) => {
-          console.error('Error searching companies:', err);
           this.error = true;
           this.loading = false;
         }
@@ -184,97 +180,7 @@ export class CompaniesComponent implements OnInit {
     this.applyFilters();
   }
 
-  loadMockData(): void {
-    // Mock data for development/demo
-    const mockCompanies: CompanyListItem[] = [
-      {
-        id: '1',
-        teamleaderId: '1',
-        name: 'TechCorp Solutions',
-        email: 'info@techcorp.com',
-        phoneNumber: '+32 9 876 5432',
-        vatNumber: 'BE0987654321',
-        status: 'Active',
-        syncedAt: new Date().toISOString()
-      },
-      {
-        id: '2',
-        teamleaderId: '2',
-        name: 'DataFlow Analytics',
-        email: 'contact@dataflow.io',
-        phoneNumber: '+32 1 234 5678',
-        vatNumber: 'BE0123456789',
-        status: 'Active',
-        syncedAt: new Date().toISOString()
-      },
-      {
-        id: '3',
-        teamleaderId: '3',
-        name: 'HealthTech Innovations',
-        email: 'info@healthtech.com',
-        phoneNumber: '+32 5 678 9123',
-        vatNumber: 'BE0567891234',
-        status: 'Inactive',
-        syncedAt: new Date().toISOString()
-      },
-      {
-        id: '4',
-        teamleaderId: '4',
-        name: 'EduSmart Systems',
-        email: 'contact@edusmart.edu',
-        phoneNumber: '+32 3 456 7891',
-        vatNumber: 'BE0345678912',
-        status: 'Active',
-        syncedAt: new Date().toISOString()
-      },
-      {
-        id: '5',
-        teamleaderId: '5',
-        name: 'GreenEnergy Solutions',
-        email: 'info@greenenergy.be',
-        phoneNumber: '+32 2 345 6789',
-        vatNumber: 'BE0234567891',
-        status: 'Active',
-        syncedAt: new Date().toISOString()
-      },
-      {
-        id: '6',
-        teamleaderId: '6',
-        name: 'CloudNet Services',
-        email: 'support@cloudnet.io',
-        phoneNumber: '+32 4 567 8912',
-        vatNumber: 'BE0456789123',
-        status: 'Inactive',
-        syncedAt: new Date().toISOString()
-      },
-      {
-        id: '7',
-        teamleaderId: '7',
-        name: 'BioMed Research',
-        email: 'contact@biomed-research.org',
-        phoneNumber: '+32 6 789 1234',
-        vatNumber: 'BE0678912345',
-        status: 'Active',
-        syncedAt: new Date().toISOString()
-      },
-      {
-        id: '8',
-        teamleaderId: '8',
-        name: 'Innovate Digital',
-        email: 'hello@innovate-digital.com',
-        phoneNumber: '+32 8 912 3456',
-        vatNumber: 'BE0891234567',
-        status: 'Active',
-        syncedAt: new Date().toISOString()
-      }
-    ];
-    
-    this.companies = mockCompanies;
-    this.totalCompanies = this.companies.length;
-    this.applyFilters();
-    this.loading = false;
-  }
-
+  
   getPaginationArray(): number[] {
     const totalPages = Math.ceil(this.totalCompanies / this.pageSize);
     
