@@ -79,6 +79,12 @@
             <artifactId>dotenv-java</artifactId>
             <version>2.3.2</version>
         </dependency>
+
+        <!-- Add this dependency if it doesn't exist -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
     </dependencies>
 
 <build>
