@@ -82,6 +82,15 @@ public class TeamleaderFinanceController {
         // Get invoices for the specific company
         List<TeamleaderInvoiceListDto> invoices = invoiceService.findByCustomerId(customerId);
 
+        // Debug: log the structure of the first invoice to help with frontend debugging
+        if (!invoices.isEmpty()) {
+            TeamleaderInvoiceListDto example = invoices.get(0);
+            log.info("Example invoice structure - ID: {}, Number: {}, Total: {}, Currency: {}",
+                    example.getId(), example.getNumber(), example.getTotal(), example.getCurrency());
+        } else {
+            log.info("No invoices found for company {}", customerId);
+        }
+
         // If status filter is provided, filter the results
         if (status != null && !status.isEmpty()) {
             invoices = invoices.stream()

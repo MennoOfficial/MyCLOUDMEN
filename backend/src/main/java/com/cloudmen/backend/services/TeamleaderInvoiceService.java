@@ -689,10 +689,22 @@ public class TeamleaderInvoiceService {
         // Parse total amount if present
         if (node.has("total")) {
             JsonNode total = node.get("total");
-            if (total.has("amount") && !total.get("amount").isNull()) {
+
+            // Try to extract the amount from different possible paths
+            if (total.has("tax_exclusive") && total.get("tax_exclusive").has("amount")) {
+                dto.setTotal(new BigDecimal(total.get("tax_exclusive").get("amount").asText()));
+            } else if (total.has("payable") && total.get("payable").has("amount")) {
+                dto.setTotal(new BigDecimal(total.get("payable").get("amount").asText()));
+            } else if (total.has("tax_inclusive") && total.get("tax_inclusive").has("amount")) {
+                dto.setTotal(new BigDecimal(total.get("tax_inclusive").get("amount").asText()));
+            } else if (total.has("amount") && !total.get("amount").isNull()) {
                 dto.setTotal(new BigDecimal(total.get("amount").asText()));
             }
-            if (total.has("currency") && !total.get("currency").isNull()) {
+
+            // Currency extraction logic
+            if (total.has("tax_exclusive") && total.get("tax_exclusive").has("currency")) {
+                dto.setCurrency(total.get("tax_exclusive").get("currency").asText());
+            } else if (total.has("currency") && !total.get("currency").isNull()) {
                 dto.setCurrency(total.get("currency").asText());
             }
         }
@@ -741,10 +753,22 @@ public class TeamleaderInvoiceService {
         // Parse total amount if present
         if (node.has("total")) {
             JsonNode total = node.get("total");
-            if (total.has("amount") && !total.get("amount").isNull()) {
+
+            // Try to extract the amount from different possible paths
+            if (total.has("tax_exclusive") && total.get("tax_exclusive").has("amount")) {
+                dto.setTotal(new BigDecimal(total.get("tax_exclusive").get("amount").asText()));
+            } else if (total.has("payable") && total.get("payable").has("amount")) {
+                dto.setTotal(new BigDecimal(total.get("payable").get("amount").asText()));
+            } else if (total.has("tax_inclusive") && total.get("tax_inclusive").has("amount")) {
+                dto.setTotal(new BigDecimal(total.get("tax_inclusive").get("amount").asText()));
+            } else if (total.has("amount") && !total.get("amount").isNull()) {
                 dto.setTotal(new BigDecimal(total.get("amount").asText()));
             }
-            if (total.has("currency") && !total.get("currency").isNull()) {
+
+            // Currency extraction logic
+            if (total.has("tax_exclusive") && total.get("tax_exclusive").has("currency")) {
+                dto.setCurrency(total.get("tax_exclusive").get("currency").asText());
+            } else if (total.has("currency") && !total.get("currency").isNull()) {
                 dto.setCurrency(total.get("currency").asText());
             }
         }

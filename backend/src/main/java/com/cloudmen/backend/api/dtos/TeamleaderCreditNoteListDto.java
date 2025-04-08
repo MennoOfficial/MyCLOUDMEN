@@ -2,6 +2,7 @@ package com.cloudmen.backend.api.dtos;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -45,7 +46,13 @@ public class TeamleaderCreditNoteListDto {
     /**
      * Total credit note amount
      */
-    private BigDecimal total;
+    @JsonProperty("total")
+    private BigDecimal total = BigDecimal.ZERO;
+
+    @JsonProperty("total_formatted")
+    public String getTotalFormatted() {
+        return total != null ? total.toString() : "0";
+    }
 
     /**
      * Currency code (e.g., "EUR")

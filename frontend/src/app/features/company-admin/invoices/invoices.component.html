@@ -1,1 +1,581 @@
-<p>invoices works!</p>
+<div class="page-container">
+  <!-- Header -->
+  <div class="page-header">
+    <h1>Financial Management</h1>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <div class="tab-container">
+    <div class="tabs">
+      <div
+        class="tab"
+        [class.active]="activeTab === 'invoices'"
+        (click)="setActiveTab('invoices')"
+      >
+        <span class="material-icons">receipt</span>
+        <span>Invoices</span>
+      </div>
+      <div
+        class="tab"
+        [class.active]="activeTab === 'creditNotes'"
+        (click)="setActiveTab('creditNotes')"
+      >
+        <span class="material-icons">request_quote</span>
+        <span>Credit Notes</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search and filter section -->
+  <div class="filters-section">
+    <div class="search-container">
+      <div class="search-box">
+        <span class="material-icons">search</span>
+        <input
+          type="text"
+          [(ngModel)]="searchTerm"
+          placeholder="Search by invoice number or amount..."
+          (keyup.enter)="applyFilter()"
+        />
+      </div>
+
+      <div class="filter-group">
+        <div class="date-range">
+          <label>Date Range:</label>
+          <div class="date-inputs">
+            <input
+              type="date"
+              [(ngModel)]="dateRangeStart"
+              placeholder="From"
+            />
+            <span class="date-separator">to</span>
+            <input type="date" [(ngModel)]="dateRangeEnd" placeholder="To" />
+          </div>
+        </div>
+
+        <div class="status-filter">
+          <label>Status:</label>
+          <select [(ngModel)]="selectedStatus">
+            <option value="">All</option>
+            <option value="paid">Paid</option>
+            <option value="outstanding">Outstanding</option>
+            <option value="overdue">Overdue</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn primary" (click)="applyFilter()">
+          <span class="material-icons">filter_alt</span>
+          Apply Filters
+        </button>
+        <button class="btn secondary" (click)="resetFilters()">
+          <span class="material-icons">clear</span>
+          Reset
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Invoices Tab Content -->
+  <div
+    *ngIf="activeTab === 'invoices' && !selectedItem"
+    class="content-container"
+  >
+    <!-- Outstanding Invoices -->
+    <div class="section">
+      <div
+        class="section-header"
+        (click)="toggleSection('outstandingInvoices')"
+      >
+        <div class="section-title">
+          <h2>Outstanding Invoices</h2>
+          <span class="badge">{{ outstandingInvoices.length }}</span>
+        </div>
+        <button class="toggle-btn">
+          <span class="material-icons">{{
+            getSectionIcon(outstandingInvoicesCollapsed)
+          }}</span>
+        </button>
+      </div>
+
+      <div
+        class="section-content"
+        [class.collapsed]="outstandingInvoicesCollapsed"
+      >
+        <div *ngIf="isLoading" class="loading-state">
+          <span class="material-icons spin">sync</span>
+          <span>Loading invoices...</span>
+        </div>
+
+        <div *ngIf="hasError" class="error-state">
+          <span class="material-icons">error_outline</span>
+          <span>{{ errorMessage }}</span>
+          <button class="btn secondary" (click)="loadInvoices()">
+            <span class="material-icons">refresh</span>
+            Retry
+          </button>
+        </div>
+
+        <div
+          *ngIf="!isLoading && !hasError && outstandingInvoices.length === 0"
+          class="empty-state"
+        >
+          <span class="material-icons">inventory</span>
+          <span>No outstanding invoices found</span>
+        </div>
+
+        <div
+          *ngIf="!isLoading && !hasError && outstandingInvoices.length > 0"
+          class="table-responsive"
+        >
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th>Due Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let invoice of outstandingInvoices"
+                (click)="viewDetails(invoice)"
+                class="table-row"
+              >
+                <td>{{ invoice.invoiceNumber || invoice.id }}</td>
+                <td>{{ invoice.date | date : "dd/MM/yyyy" }}</td>
+                <td>{{ invoice.dueDate | date : "dd/MM/yyyy" }}</td>
+                <td class="amount">€{{ formatAmount(invoice.totalAmount) }}</td>
+                <td>
+                  <span
+                    class="status-badge"
+                    [ngClass]="{
+                      'status-warning': invoice.status === 'outstanding',
+                      'status-danger': invoice.status === 'overdue'
+                    }"
+                  >
+                    {{ getStatusLabel(invoice.status) }}
+                  </span>
+                </td>
+                <td class="actions">
+                  <button
+                    class="icon-btn"
+                    (click)="downloadPdf(invoice); $event.stopPropagation()"
+                    title="Download PDF"
+                  >
+                    <span class="material-icons">file_download</span>
+                  </button>
+                  <button
+                    class="icon-btn"
+                    (click)="viewDetails(invoice); $event.stopPropagation()"
+                    title="View Details"
+                  >
+                    <span class="material-icons">visibility</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paid Invoices -->
+    <div class="section">
+      <div class="section-header" (click)="toggleSection('paidInvoices')">
+        <div class="section-title">
+          <h2>Paid Invoices</h2>
+          <span class="badge">{{ paidInvoices.length }}</span>
+        </div>
+        <button class="toggle-btn">
+          <span class="material-icons">{{
+            getSectionIcon(paidInvoicesCollapsed)
+          }}</span>
+        </button>
+      </div>
+
+      <div class="section-content" [class.collapsed]="paidInvoicesCollapsed">
+        <div *ngIf="isLoading" class="loading-state">
+          <span class="material-icons spin">sync</span>
+          <span>Loading invoices...</span>
+        </div>
+
+        <div *ngIf="hasError" class="error-state">
+          <span class="material-icons">error_outline</span>
+          <span>{{ errorMessage }}</span>
+          <button class="btn secondary" (click)="loadInvoices()">
+            <span class="material-icons">refresh</span>
+            Retry
+          </button>
+        </div>
+
+        <div
+          *ngIf="!isLoading && !hasError && paidInvoices.length === 0"
+          class="empty-state"
+        >
+          <span class="material-icons">inventory</span>
+          <span>No paid invoices found</span>
+        </div>
+
+        <div
+          *ngIf="!isLoading && !hasError && paidInvoices.length > 0"
+          class="table-responsive"
+        >
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th>Due Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let invoice of paidInvoices"
+                (click)="viewDetails(invoice)"
+                class="table-row"
+              >
+                <td>{{ invoice.invoiceNumber || invoice.id }}</td>
+                <td>{{ invoice.date | date : "dd/MM/yyyy" }}</td>
+                <td>{{ invoice.dueDate | date : "dd/MM/yyyy" }}</td>
+                <td class="amount">€{{ formatAmount(invoice.totalAmount) }}</td>
+                <td>
+                  <span class="status-badge status-success">
+                    {{ getStatusLabel(invoice.status) }}
+                  </span>
+                </td>
+                <td class="actions">
+                  <button
+                    class="icon-btn"
+                    (click)="downloadPdf(invoice); $event.stopPropagation()"
+                    title="Download PDF"
+                  >
+                    <span class="material-icons">file_download</span>
+                  </button>
+                  <button
+                    class="icon-btn"
+                    (click)="viewDetails(invoice); $event.stopPropagation()"
+                    title="View Details"
+                  >
+                    <span class="material-icons">visibility</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credit Notes Tab Content -->
+  <div
+    *ngIf="activeTab === 'creditNotes' && !selectedItem"
+    class="content-container"
+  >
+    <!-- Outstanding Credit Notes -->
+    <div class="section">
+      <div
+        class="section-header"
+        (click)="toggleSection('outstandingCreditNotes')"
+      >
+        <div class="section-title">
+          <h2>Outstanding Credit Notes</h2>
+          <span class="badge">{{ outstandingCreditNotes.length }}</span>
+        </div>
+        <button class="toggle-btn">
+          <span class="material-icons">{{
+            getSectionIcon(outstandingCreditNotesCollapsed)
+          }}</span>
+        </button>
+      </div>
+
+      <div
+        class="section-content"
+        [class.collapsed]="outstandingCreditNotesCollapsed"
+      >
+        <div *ngIf="isLoading" class="loading-state">
+          <span class="material-icons spin">sync</span>
+          <span>Loading credit notes...</span>
+        </div>
+
+        <div *ngIf="hasError" class="error-state">
+          <span class="material-icons">error_outline</span>
+          <span>{{ errorMessage }}</span>
+          <button class="btn secondary" (click)="loadCreditNotes()">
+            <span class="material-icons">refresh</span>
+            Retry
+          </button>
+        </div>
+
+        <div
+          *ngIf="!isLoading && !hasError && outstandingCreditNotes.length === 0"
+          class="empty-state"
+        >
+          <span class="material-icons">inventory</span>
+          <span>No outstanding credit notes found</span>
+        </div>
+
+        <div
+          *ngIf="!isLoading && !hasError && outstandingCreditNotes.length > 0"
+          class="table-responsive"
+        >
+          <table class="data-table credit-notes-table">
+            <thead>
+              <tr>
+                <th>Credit Note #</th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let creditNote of outstandingCreditNotes"
+                (click)="viewDetails(creditNote)"
+                class="table-row"
+              >
+                <td>
+                  {{ creditNote.creditNoteNumber || creditNote.id }}
+                </td>
+                <td>{{ creditNote.date | date : "dd/MM/yyyy" }}</td>
+                <td class="amount">
+                  €{{ formatAmount(creditNote.totalAmount) }}
+                </td>
+                <td>
+                  <span class="status-badge status-warning">
+                    {{ getStatusLabel(creditNote.status) }}
+                  </span>
+                </td>
+                <td class="actions">
+                  <button
+                    class="icon-btn"
+                    (click)="downloadPdf(creditNote); $event.stopPropagation()"
+                    title="Download PDF"
+                  >
+                    <span class="material-icons">file_download</span>
+                  </button>
+                  <button
+                    class="icon-btn"
+                    (click)="viewDetails(creditNote); $event.stopPropagation()"
+                    title="View Details"
+                  >
+                    <span class="material-icons">visibility</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paid Credit Notes -->
+    <div class="section">
+      <div class="section-header" (click)="toggleSection('paidCreditNotes')">
+        <div class="section-title">
+          <h2>Paid Credit Notes</h2>
+          <span class="badge">{{ paidCreditNotes.length }}</span>
+        </div>
+        <button class="toggle-btn">
+          <span class="material-icons">{{
+            getSectionIcon(paidCreditNotesCollapsed)
+          }}</span>
+        </button>
+      </div>
+
+      <div class="section-content" [class.collapsed]="paidCreditNotesCollapsed">
+        <div *ngIf="isLoading" class="loading-state">
+          <span class="material-icons spin">sync</span>
+          <span>Loading credit notes...</span>
+        </div>
+
+        <div *ngIf="hasError" class="error-state">
+          <span class="material-icons">error_outline</span>
+          <span>{{ errorMessage }}</span>
+          <button class="btn secondary" (click)="loadCreditNotes()">
+            <span class="material-icons">refresh</span>
+            Retry
+          </button>
+        </div>
+
+        <div
+          *ngIf="!isLoading && !hasError && paidCreditNotes.length === 0"
+          class="empty-state"
+        >
+          <span class="material-icons">inventory</span>
+          <span>No paid credit notes found</span>
+        </div>
+
+        <div
+          *ngIf="!isLoading && !hasError && paidCreditNotes.length > 0"
+          class="table-responsive"
+        >
+          <table class="data-table credit-notes-table">
+            <thead>
+              <tr>
+                <th>Credit Note #</th>
+                <th>Date</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let creditNote of paidCreditNotes"
+                (click)="viewDetails(creditNote)"
+                class="table-row"
+              >
+                <td>
+                  {{ creditNote.creditNoteNumber || creditNote.id }}
+                </td>
+                <td>{{ creditNote.date | date : "dd/MM/yyyy" }}</td>
+                <td class="amount">
+                  €{{ formatAmount(creditNote.totalAmount) }}
+                </td>
+                <td>
+                  <span class="status-badge status-success">
+                    {{ getStatusLabel(creditNote.status) }}
+                  </span>
+                </td>
+                <td class="actions">
+                  <button
+                    class="icon-btn"
+                    (click)="downloadPdf(creditNote); $event.stopPropagation()"
+                    title="Download PDF"
+                  >
+                    <span class="material-icons">file_download</span>
+                  </button>
+                  <button
+                    class="icon-btn"
+                    (click)="viewDetails(creditNote); $event.stopPropagation()"
+                    title="View Details"
+                  >
+                    <span class="material-icons">visibility</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detail View -->
+  <div *ngIf="selectedItem" class="detail-view-container">
+    <div class="detail-panel">
+      <div class="detail-header">
+        <div class="detail-title">
+          <button class="back-btn" (click)="selectedItem = null">
+            <span class="material-icons">arrow_back</span>
+          </button>
+          <h2>
+            {{ activeTab === "invoices" ? "Invoice" : "Credit Note" }} Details
+          </h2>
+        </div>
+        <button class="btn primary" (click)="downloadPdf(selectedItem)">
+          <span class="material-icons">file_download</span>
+          Download PDF
+        </button>
+      </div>
+
+      <div class="detail-content">
+        <!-- Invoice Details -->
+        <div *ngIf="isInvoice(selectedItem)" class="detail-grid">
+          <div class="detail-section">
+            <h3>General Information</h3>
+            <div class="detail-rows">
+              <div class="detail-row">
+                <label>Invoice Number:</label>
+                <span>{{ selectedItem.invoiceNumber }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Status:</label>
+                <span
+                  class="status-badge"
+                  [ngClass]="{
+                    'status-success': selectedItem.status === 'paid',
+                    'status-warning': selectedItem.status === 'outstanding',
+                    'status-danger': selectedItem.status === 'overdue'
+                  }"
+                >
+                  {{ getStatusLabel(selectedItem.status) }}
+                </span>
+              </div>
+              <div class="detail-row">
+                <label>Invoice Date:</label>
+                <span>{{ selectedItem.date | date : "dd/MM/yyyy" }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Due Date:</label>
+                <span>{{ selectedItem.dueDate | date : "dd/MM/yyyy" }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Payment Term:</label>
+                <span>{{ selectedItem.paymentTerm }}</span>
+              </div>
+              <div class="detail-row highlight">
+                <label>Total Amount:</label>
+                <span class="amount"
+                  >€{{ formatAmount(selectedItem.totalAmount) }}</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Credit Note Details -->
+        <div *ngIf="isCreditNote(selectedItem)" class="detail-grid">
+          <div class="detail-section">
+            <h3>General Information</h3>
+            <div class="detail-rows">
+              <div class="detail-row">
+                <label>Credit Note Number:</label>
+                <span>{{ selectedItem.creditNoteNumber }}</span>
+              </div>
+              <div class="detail-row">
+                <label>Status:</label>
+                <span
+                  class="status-badge"
+                  [ngClass]="{
+                    'status-success': selectedItem.status === 'paid',
+                    'status-warning': selectedItem.status === 'outstanding'
+                  }"
+                >
+                  {{ getStatusLabel(selectedItem.status) }}
+                </span>
+              </div>
+              <div class="detail-row">
+                <label>Credit Note Date:</label>
+                <span>{{ selectedItem.date | date : "dd/MM/yyyy" }}</span>
+              </div>
+              <div class="detail-row highlight">
+                <label>Total Amount:</label>
+                <span class="amount"
+                  >€{{ formatAmount(selectedItem.totalAmount) }}</span
+                >
+              </div>
+              <div *ngIf="selectedItem.relatedInvoiceId" class="detail-row">
+                <label>Related Invoice:</label>
+                <button class="btn secondary">
+                  <span class="material-icons">description</span>
+                  View Invoice
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
