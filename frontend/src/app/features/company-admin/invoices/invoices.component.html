@@ -238,54 +238,45 @@
               *ngFor="let invoice of filteredInvoices"
               (click)="showInvoiceDetails(invoice)"
             >
-              <div class="card-header">
-                <div class="invoice-details">
-                  <span class="invoice-number">{{
-                    invoice.invoiceNumber
-                  }}</span>
-                  <span
-                    class="status-badge small"
-                    [class.paid]="invoice.isPaid"
-                    [class.outstanding]="!invoice.isPaid && !invoice.isOverdue"
-                    [class.overdue]="invoice.isOverdue"
-                  >
-                    <span class="status-indicator"></span>
-                    {{
-                      invoice.isOverdue
-                        ? "Overdue"
-                        : invoice.isPaid
-                        ? "Paid"
-                        : "Outstanding"
-                    }}
-                  </span>
-                </div>
-                <div class="card-actions">
-                  <button
-                    class="icon-button"
-                    (click)="downloadInvoice(invoice); $event.stopPropagation()"
-                  >
-                    <i class="material-icons">file_download</i>
-                  </button>
-                </div>
+              <div class="invoice-number">
+                {{ invoice.invoiceNumber }}
+                <span
+                  class="status-badge small"
+                  [class.paid]="invoice.isPaid"
+                  [class.outstanding]="!invoice.isPaid && !invoice.isOverdue"
+                  [class.overdue]="invoice.isOverdue"
+                >
+                  <span class="status-indicator"></span>
+                  {{
+                    invoice.isOverdue
+                      ? "Overdue"
+                      : invoice.isPaid
+                      ? "Paid"
+                      : "Outstanding"
+                  }}
+                </span>
               </div>
               <div class="card-body">
-                <div class="info-row">
-                  <span class="info-label">Date:</span>
-                  <span class="info-value">{{
-                    invoice.date | date : "dd/MM/yyyy"
-                  }}</span>
-                </div>
-                <div class="info-row">
-                  <span class="info-label">Amount:</span>
-                  <span class="info-value">{{
-                    invoice.totalAmount | currency : "EUR" : "symbol" : "1.2-2"
-                  }}</span>
-                </div>
-                <div class="info-row" *ngIf="invoice.isPaid">
-                  <span class="info-label">Payment Date:</span>
-                  <span class="info-value">{{
-                    invoice.paymentDate | date : "dd/MM/yyyy"
-                  }}</span>
+                <div class="info-grid">
+                  <div class="info-item">
+                    <span class="info-label">Date</span>
+                    <span class="info-value">{{
+                      invoice.date | date : "dd/MM/yyyy"
+                    }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Amount</span>
+                    <span class="info-value">{{
+                      invoice.totalAmount
+                        | currency : "EUR" : "symbol" : "1.2-2"
+                    }}</span>
+                  </div>
+                  <div class="info-item" *ngIf="invoice.isPaid">
+                    <span class="info-label">Payment Date</span>
+                    <span class="info-value">{{
+                      invoice.paymentDate | date : "dd/MM/yyyy"
+                    }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -309,6 +300,10 @@
   ></div>
   <div class="detail-panel" *ngIf="selectedInvoice">
     <div class="detail-header">
+      <button class="back-button" (click)="closeInvoiceDetails()">
+        <i class="material-icons">arrow_back</i>
+        <span>Back</span>
+      </button>
       <h3>Invoice Details</h3>
       <button class="close-button" (click)="closeInvoiceDetails()">
         <i class="material-icons">close</i>
