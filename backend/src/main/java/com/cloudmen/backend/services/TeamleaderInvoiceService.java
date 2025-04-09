@@ -358,16 +358,16 @@ public class TeamleaderInvoiceService {
     }
 
     /**
-     * Find invoices by customer ID - fetches directly from TeamLeader API
+     * Find invoices by company ID - fetches directly from TeamLeader API
      * 
-     * This method is safe to expose through controllers as it filters by customer
+     * This method is safe to expose through controllers as it filters by company
      * context.
      * 
-     * @param customerId Customer ID
+     * @param companyId Company ID
      * @return List of invoice list DTOs
      */
-    public List<TeamleaderInvoiceListDto> findByCustomerId(String customerId) {
-        log.info("Fetching invoices by customer ID directly from TeamLeader API - customer ID: {}", customerId);
+    public List<TeamleaderInvoiceListDto> findByCustomerId(String companyId) {
+        log.info("Fetching invoices by company ID directly from TeamLeader API - company ID: {}", companyId);
 
         try {
             String accessToken = oAuthService.getAccessToken();
@@ -376,16 +376,16 @@ public class TeamleaderInvoiceService {
                 return Collections.emptyList();
             }
 
-            // Determine if customer is a company or contact
-            String customerType = determineCustomerType(customerId, accessToken);
+            // Determine if company is a company or contact
+            String customerType = determineCustomerType(companyId, accessToken);
             if (customerType == null) {
-                log.warn("Could not determine customer type for ID: {}", customerId);
+                log.warn("Could not determine customer type for ID: {}", companyId);
                 return Collections.emptyList();
             }
 
             String requestBody = String.format(
                     "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"customer\":{\"type\":\"%s\",\"id\":\"%s\"}}}",
-                    customerType, customerId);
+                    customerType, companyId);
 
             JsonNode response = webClient.post()
                     .uri("/invoices.list")
@@ -397,7 +397,7 @@ public class TeamleaderInvoiceService {
                     .block();
 
             if (response == null || !response.has("data")) {
-                log.warn("No invoices found for customer ID: {}", customerId);
+                log.warn("No invoices found for company ID: {}", companyId);
                 return Collections.emptyList();
             }
 
@@ -426,7 +426,7 @@ public class TeamleaderInvoiceService {
 
             return invoices;
         } catch (Exception e) {
-            log.error("Error fetching invoices by customer ID from TeamLeader API", e);
+            log.error("Error fetching invoices by company ID from TeamLeader API", e);
             return Collections.emptyList();
         }
     }
@@ -500,29 +500,29 @@ public class TeamleaderInvoiceService {
     }
 
     /**
-     * Search invoices by term for a specific customer - fetches directly from
+     * Search invoices by term for a specific company - fetches directly from
      * TeamLeader API and filters
-     * This method is safe to expose through controllers as it filters by customer
+     * This method is safe to expose through controllers as it filters by company
      * context.
      * 
-     * @param term       Search term
-     * @param customerId Customer ID to filter by
+     * @param term      Search term
+     * @param companyId Company ID to filter by
      * @return List of invoice list DTOs that match the search term and belong to
-     *         the specified customer
+     *         the specified company
      */
-    public List<TeamleaderInvoiceListDto> searchInvoicesByCustomer(String term, String customerId) {
-        log.info("Searching invoices for customer {} with term: {}", customerId, term);
+    public List<TeamleaderInvoiceListDto> searchInvoicesByCustomer(String term, String companyId) {
+        log.info("Searching invoices for company {} with term: {}", companyId, term);
 
-        // First get all invoices for this customer
-        List<TeamleaderInvoiceListDto> customerInvoices = findByCustomerId(customerId);
+        // First get all invoices for this company
+        List<TeamleaderInvoiceListDto> companyInvoices = findByCustomerId(companyId);
 
         // Then filter by search term
         if (term == null || term.isEmpty()) {
-            return customerInvoices;
+            return companyInvoices;
         }
 
         String searchTermLower = term.toLowerCase();
-        return customerInvoices.stream()
+        return companyInvoices.stream()
                 .filter(invoice -> (invoice.getNumber() != null
                         && invoice.getNumber().toLowerCase().contains(searchTermLower)) ||
                         (invoice.getStatus() != null && invoice.getStatus().toLowerCase().contains(searchTermLower)))
@@ -530,23 +530,23 @@ public class TeamleaderInvoiceService {
     }
 
     /**
-     * Find overdue invoices for a specific customer
-     * This method is safe to expose through controllers as it filters by customer
+     * Find overdue invoices for a specific company
+     * This method is safe to expose through controllers as it filters by company
      * context.
      * 
-     * @param customerId Customer ID to filter by
+     * @param companyId Company ID to filter by
      * @return List of overdue invoice list DTOs that belong to the specified
-     *         customer
+     *         company
      */
-    public List<TeamleaderInvoiceListDto> findOverdueInvoicesByCustomer(String customerId) {
-        log.info("Fetching overdue invoices for customer: {}", customerId);
+    public List<TeamleaderInvoiceListDto> findOverdueInvoicesByCustomer(String companyId) {
+        log.info("Fetching overdue invoices for company: {}", companyId);
 
-        // First get all invoices for this customer
-        List<TeamleaderInvoiceListDto> customerInvoices = findByCustomerId(customerId);
+        // First get all invoices for this company
+        List<TeamleaderInvoiceListDto> companyInvoices = findByCustomerId(companyId);
 
         // Then filter for overdue invoices
         LocalDate today = LocalDate.now();
-        return customerInvoices.stream()
+        return companyInvoices.stream()
                 .filter(invoice -> {
                     Boolean isOverdue = invoice.getIsOverdue();
                     if (isOverdue != null && isOverdue) {
@@ -561,25 +561,25 @@ public class TeamleaderInvoiceService {
     }
 
     /**
-     * Find invoices for a specific customer in a date range
-     * This method is safe to expose through controllers as it filters by customer
+     * Find invoices for a specific company in a date range
+     * This method is safe to expose through controllers as it filters by company
      * context.
      * 
-     * @param customerId Customer ID to filter by
-     * @param startDate  Start date
-     * @param endDate    End date
+     * @param companyId Company ID to filter by
+     * @param startDate Start date
+     * @param endDate   End date
      * @return List of invoice list DTOs that fall within the date range and belong
-     *         to the specified customer
+     *         to the specified company
      */
-    public List<TeamleaderInvoiceListDto> findByCustomerAndDateRange(String customerId, LocalDate startDate,
+    public List<TeamleaderInvoiceListDto> findByCustomerAndDateRange(String companyId, LocalDate startDate,
             LocalDate endDate) {
-        log.info("Fetching invoices for customer: {} in date range: {} to {}", customerId, startDate, endDate);
+        log.info("Fetching invoices for company: {} in date range: {} to {}", companyId, startDate, endDate);
 
-        // First get all invoices for this customer
-        List<TeamleaderInvoiceListDto> customerInvoices = findByCustomerId(customerId);
+        // First get all invoices for this company
+        List<TeamleaderInvoiceListDto> companyInvoices = findByCustomerId(companyId);
 
         // Then filter by date range
-        return customerInvoices.stream()
+        return companyInvoices.stream()
                 .filter(invoice -> {
                     LocalDate invoiceDate = invoice.getDate();
                     return invoiceDate != null &&
@@ -671,7 +671,19 @@ public class TeamleaderInvoiceService {
         TeamleaderInvoiceListDto dto = new TeamleaderInvoiceListDto();
 
         dto.setId(getTextOrNull(node, "id"));
-        dto.setNumber(getTextOrNull(node, "number"));
+
+        // Ensure we extract the invoice number, considering different possible JSON
+        // structures
+        String number = getTextOrNull(node, "number");
+        if (number == null || number.isEmpty()) {
+            // Try alternative fields if the primary one is empty
+            number = getTextOrNull(node, "invoice_number");
+            if (number == null || number.isEmpty()) {
+                // Use ID as a last resort (maybe with a prefix for clarity)
+                number = dto.getId() != null ? dto.getId() : "";
+            }
+        }
+        dto.setNumber(number);
 
         if (node.has("date") && !node.get("date").isNull()) {
             dto.setDate(LocalDate.parse(node.get("date").asText()));
@@ -721,6 +733,9 @@ public class TeamleaderInvoiceService {
         if (node.has("paid") && !node.get("paid").isNull()) {
             dto.setIsPaid(node.get("paid").asBoolean());
         }
+
+        // Initialize credit note count (will be populated later)
+        dto.setCreditNoteCount(0);
 
         return dto;
     }

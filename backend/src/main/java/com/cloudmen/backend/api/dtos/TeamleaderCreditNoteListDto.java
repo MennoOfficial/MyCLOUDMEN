@@ -49,11 +49,6 @@ public class TeamleaderCreditNoteListDto {
     @JsonProperty("total")
     private BigDecimal total = BigDecimal.ZERO;
 
-    @JsonProperty("total_formatted")
-    public String getTotalFormatted() {
-        return total != null ? total.toString() : "0";
-    }
-
     /**
      * Currency code (e.g., "EUR")
      */

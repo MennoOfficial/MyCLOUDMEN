@@ -55,11 +55,6 @@ public class TeamleaderInvoiceListDto {
     @JsonProperty("total")
     private BigDecimal total = BigDecimal.ZERO;
 
-    @JsonProperty("total_formatted")
-    public String getTotalFormatted() {
-        return total != null ? total.toString() : "0";
-    }
-
     /**
      * Currency code (e.g., "EUR")
      */
@@ -79,4 +74,9 @@ public class TeamleaderInvoiceListDto {
      * Whether the invoice is overdue (calculated field)
      */
     private Boolean isOverdue;
+
+    /**
+     * Count of related credit notes for this invoice
+     */
+    private Integer creditNoteCount = 0;
 }

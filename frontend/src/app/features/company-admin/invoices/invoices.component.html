@@ -1,581 +1,409 @@
-<div class="page-container">
-  <!-- Header -->
-  <div class="page-header">
-    <h1>Financial Management</h1>
+<!-- Invoices Page - Cloudmen Design System Implementation -->
+<div class="page-container" [class.has-detail-open]="isDetailViewVisible">
+  <!-- Page Header -->
+  <div class="page-header" [class.dimmed]="isDetailViewVisible">
+    <h2>Invoices</h2>
   </div>
 
-  <!-- Navigation Tabs -->
-  <div class="tab-container">
-    <div class="tabs">
-      <div
-        class="tab"
-        [class.active]="activeTab === 'invoices'"
-        (click)="setActiveTab('invoices')"
-      >
-        <span class="material-icons">receipt</span>
-        <span>Invoices</span>
-      </div>
-      <div
-        class="tab"
-        [class.active]="activeTab === 'creditNotes'"
-        (click)="setActiveTab('creditNotes')"
-      >
-        <span class="material-icons">request_quote</span>
-        <span>Credit Notes</span>
-      </div>
+  <!-- Tab navigation -->
+  <div class="tab-navigation" [class.dimmed]="isDetailViewVisible">
+    <button
+      class="tab-button"
+      [class.active]="activeTab === 'outstanding'"
+      (click)="switchTab('outstanding')"
+    >
+      Outstanding
+    </button>
+    <button
+      class="tab-button"
+      [class.active]="activeTab === 'paid'"
+      (click)="switchTab('paid')"
+    >
+      Paid
+    </button>
+  </div>
+
+  <!-- Search and Filter Controls -->
+  <div class="search-filter-container" [class.dimmed]="isDetailViewVisible">
+    <div class="search-box">
+      <i class="material-icons search-icon">search</i>
+      <input
+        type="text"
+        placeholder="Search invoices..."
+        [(ngModel)]="searchText"
+        (input)="applyFilters()"
+      />
+      <button *ngIf="searchText" class="clear-search" (click)="clearSearch()">
+        <i class="material-icons">close</i>
+      </button>
     </div>
-  </div>
 
-  <!-- Search and filter section -->
-  <div class="filters-section">
-    <div class="search-container">
-      <div class="search-box">
-        <span class="material-icons">search</span>
-        <input
-          type="text"
-          [(ngModel)]="searchTerm"
-          placeholder="Search by invoice number or amount..."
-          (keyup.enter)="applyFilter()"
-        />
-      </div>
-
-      <div class="filter-group">
-        <div class="date-range">
-          <label>Date Range:</label>
-          <div class="date-inputs">
-            <input
-              type="date"
-              [(ngModel)]="dateRangeStart"
-              placeholder="From"
-            />
-            <span class="date-separator">to</span>
-            <input type="date" [(ngModel)]="dateRangeEnd" placeholder="To" />
-          </div>
+    <div class="filters-group">
+      <div class="filters">
+        <div class="filter-select">
+          <select
+            id="date-filter"
+            [(ngModel)]="dateRangeFilter"
+            (change)="applyFilters()"
+          >
+            <option value="all">All Dates</option>
+            <option value="last7">Last 7 days</option>
+            <option value="last30">Last 30 days</option>
+            <option value="last90">Last 90 days</option>
+            <option value="custom">Custom Range</option>
+          </select>
         </div>
-
-        <div class="status-filter">
-          <label>Status:</label>
-          <select [(ngModel)]="selectedStatus">
-            <option value="">All</option>
-            <option value="paid">Paid</option>
-            <option value="outstanding">Outstanding</option>
-            <option value="overdue">Overdue</option>
+        <div class="filter-select">
+          <select
+            id="amount-filter"
+            [(ngModel)]="amountRangeFilter"
+            (change)="applyFilters()"
+          >
+            <option value="all">All Amounts</option>
+            <option value="under500">Under €500</option>
+            <option value="500to1000">€500 - €1,000</option>
+            <option value="1000to5000">€1,000 - €5,000</option>
+            <option value="over5000">Over €5,000</option>
+            <option value="custom">Custom Range</option>
           </select>
         </div>
       </div>
 
-      <div class="action-buttons">
-        <button class="btn primary" (click)="applyFilter()">
-          <span class="material-icons">filter_alt</span>
-          Apply Filters
-        </button>
-        <button class="btn secondary" (click)="resetFilters()">
-          <span class="material-icons">clear</span>
-          Reset
-        </button>
+      <button
+        *ngIf="hasActiveFilters()"
+        class="clear-filters-btn"
+        (click)="clearFilters()"
+      >
+        <i class="material-icons">cancel</i>
+        Clear filters
+      </button>
+    </div>
+
+    <!-- Custom date range inputs (show when custom date range is selected) -->
+    <div class="custom-range-inputs" *ngIf="dateRangeFilter === 'custom'">
+      <div class="date-inputs">
+        <label>From:</label>
+        <input
+          type="date"
+          [(ngModel)]="dateFilter.from"
+          (change)="applyFilters()"
+        />
+      </div>
+      <div class="date-inputs">
+        <label>To:</label>
+        <input
+          type="date"
+          [(ngModel)]="dateFilter.to"
+          (change)="applyFilters()"
+        />
+      </div>
+    </div>
+
+    <!-- Custom amount range inputs (show when custom amount range is selected) -->
+    <div class="custom-range-inputs" *ngIf="amountRangeFilter === 'custom'">
+      <div class="amount-inputs">
+        <label>Min:</label>
+        <input
+          type="number"
+          [(ngModel)]="amountFilter.min"
+          (change)="applyFilters()"
+        />
+      </div>
+      <div class="amount-inputs">
+        <label>Max:</label>
+        <input
+          type="number"
+          [(ngModel)]="amountFilter.max"
+          (change)="applyFilters()"
+        />
       </div>
     </div>
   </div>
 
-  <!-- Invoices Tab Content -->
+  <!-- Main content area -->
   <div
-    *ngIf="activeTab === 'invoices' && !selectedItem"
-    class="content-container"
+    class="content-area"
+    [class.loading]="loading"
+    [class.dimmed]="isDetailViewVisible"
   >
-    <!-- Outstanding Invoices -->
-    <div class="section">
-      <div
-        class="section-header"
-        (click)="toggleSection('outstandingInvoices')"
-      >
-        <div class="section-title">
-          <h2>Outstanding Invoices</h2>
-          <span class="badge">{{ outstandingInvoices.length }}</span>
-        </div>
-        <button class="toggle-btn">
-          <span class="material-icons">{{
-            getSectionIcon(outstandingInvoicesCollapsed)
-          }}</span>
-        </button>
-      </div>
+    <!-- Error message -->
+    <div class="error-message" *ngIf="errorMessage">
+      <span>{{ errorMessage }}</span>
+    </div>
 
-      <div
-        class="section-content"
-        [class.collapsed]="outstandingInvoicesCollapsed"
-      >
-        <div *ngIf="isLoading" class="loading-state">
-          <span class="material-icons spin">sync</span>
-          <span>Loading invoices...</span>
-        </div>
-
-        <div *ngIf="hasError" class="error-state">
-          <span class="material-icons">error_outline</span>
-          <span>{{ errorMessage }}</span>
-          <button class="btn secondary" (click)="loadInvoices()">
-            <span class="material-icons">refresh</span>
-            Retry
-          </button>
-        </div>
-
+    <!-- Main content with detail panel -->
+    <div class="main-content">
+      <!-- Active tab content -->
+      <div class="active-content">
+        <!-- No results message -->
         <div
-          *ngIf="!isLoading && !hasError && outstandingInvoices.length === 0"
-          class="empty-state"
+          class="no-results"
+          *ngIf="filteredInvoices.length === 0 && !loading"
         >
-          <span class="material-icons">inventory</span>
-          <span>No outstanding invoices found</span>
+          No invoices found. Try adjusting your filters or search terms.
         </div>
 
-        <div
-          *ngIf="!isLoading && !hasError && outstandingInvoices.length > 0"
-          class="table-responsive"
-        >
-          <table class="data-table">
+        <!-- Invoices table container -->
+        <div *ngIf="filteredInvoices.length > 0" class="users-table-container">
+          <!-- Desktop table view -->
+          <table class="users-table">
             <thead>
               <tr>
-                <th>Invoice #</th>
-                <th>Date</th>
-                <th>Due Date</th>
-                <th>Amount</th>
+                <th class="sortable-header" (click)="sort('invoiceNumber')">
+                  Invoice #
+                  <span class="material-icons sort-icon">
+                    {{
+                      sortColumn === "invoiceNumber"
+                        ? sortDirection === "asc"
+                          ? "arrow_upward"
+                          : "arrow_downward"
+                        : "unfold_more"
+                    }}
+                  </span>
+                </th>
+                <th class="sortable-header" (click)="sort('date')">
+                  Date
+                  <span class="material-icons sort-icon">
+                    {{
+                      sortColumn === "date"
+                        ? sortDirection === "asc"
+                          ? "arrow_upward"
+                          : "arrow_downward"
+                        : "unfold_more"
+                    }}
+                  </span>
+                </th>
+                <th class="sortable-header" (click)="sort('amount')">
+                  Amount
+                  <span class="material-icons sort-icon">
+                    {{
+                      sortColumn === "amount"
+                        ? sortDirection === "asc"
+                          ? "arrow_upward"
+                          : "arrow_downward"
+                        : "unfold_more"
+                    }}
+                  </span>
+                </th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th class="actions-header">Actions</th>
               </tr>
             </thead>
             <tbody>
               <tr
-                *ngFor="let invoice of outstandingInvoices"
-                (click)="viewDetails(invoice)"
-                class="table-row"
+                *ngFor="let invoice of filteredInvoices"
+                class="user-row"
+                (click)="showInvoiceDetails(invoice)"
               >
-                <td>{{ invoice.invoiceNumber || invoice.id }}</td>
+                <td>{{ invoice.invoiceNumber }}</td>
                 <td>{{ invoice.date | date : "dd/MM/yyyy" }}</td>
-                <td>{{ invoice.dueDate | date : "dd/MM/yyyy" }}</td>
-                <td class="amount">€{{ formatAmount(invoice.totalAmount) }}</td>
+                <td>
+                  {{
+                    invoice.totalAmount | currency : "EUR" : "symbol" : "1.2-2"
+                  }}
+                </td>
                 <td>
                   <span
                     class="status-badge"
-                    [ngClass]="{
-                      'status-warning': invoice.status === 'outstanding',
-                      'status-danger': invoice.status === 'overdue'
-                    }"
+                    [class.paid]="invoice.isPaid"
+                    [class.outstanding]="!invoice.isPaid && !invoice.isOverdue"
+                    [class.overdue]="invoice.isOverdue"
                   >
-                    {{ getStatusLabel(invoice.status) }}
+                    <span class="status-indicator"></span>
+                    {{
+                      invoice.isOverdue
+                        ? "Overdue"
+                        : invoice.isPaid
+                        ? "Paid"
+                        : "Outstanding"
+                    }}
                   </span>
                 </td>
-                <td class="actions">
+                <td class="actions-cell">
                   <button
-                    class="icon-btn"
-                    (click)="downloadPdf(invoice); $event.stopPropagation()"
-                    title="Download PDF"
+                    class="action-button download-btn"
+                    (click)="downloadInvoice(invoice); $event.stopPropagation()"
                   >
-                    <span class="material-icons">file_download</span>
-                  </button>
-                  <button
-                    class="icon-btn"
-                    (click)="viewDetails(invoice); $event.stopPropagation()"
-                    title="View Details"
-                  >
-                    <span class="material-icons">visibility</span>
+                    <i class="material-icons">file_download</i>
                   </button>
                 </td>
               </tr>
             </tbody>
           </table>
-        </div>
-      </div>
-    </div>
 
-    <!-- Paid Invoices -->
-    <div class="section">
-      <div class="section-header" (click)="toggleSection('paidInvoices')">
-        <div class="section-title">
-          <h2>Paid Invoices</h2>
-          <span class="badge">{{ paidInvoices.length }}</span>
-        </div>
-        <button class="toggle-btn">
-          <span class="material-icons">{{
-            getSectionIcon(paidInvoicesCollapsed)
-          }}</span>
-        </button>
-      </div>
-
-      <div class="section-content" [class.collapsed]="paidInvoicesCollapsed">
-        <div *ngIf="isLoading" class="loading-state">
-          <span class="material-icons spin">sync</span>
-          <span>Loading invoices...</span>
-        </div>
-
-        <div *ngIf="hasError" class="error-state">
-          <span class="material-icons">error_outline</span>
-          <span>{{ errorMessage }}</span>
-          <button class="btn secondary" (click)="loadInvoices()">
-            <span class="material-icons">refresh</span>
-            Retry
-          </button>
-        </div>
-
-        <div
-          *ngIf="!isLoading && !hasError && paidInvoices.length === 0"
-          class="empty-state"
-        >
-          <span class="material-icons">inventory</span>
-          <span>No paid invoices found</span>
-        </div>
-
-        <div
-          *ngIf="!isLoading && !hasError && paidInvoices.length > 0"
-          class="table-responsive"
-        >
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Invoice #</th>
-                <th>Date</th>
-                <th>Due Date</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                *ngFor="let invoice of paidInvoices"
-                (click)="viewDetails(invoice)"
-                class="table-row"
-              >
-                <td>{{ invoice.invoiceNumber || invoice.id }}</td>
-                <td>{{ invoice.date | date : "dd/MM/yyyy" }}</td>
-                <td>{{ invoice.dueDate | date : "dd/MM/yyyy" }}</td>
-                <td class="amount">€{{ formatAmount(invoice.totalAmount) }}</td>
-                <td>
-                  <span class="status-badge status-success">
-                    {{ getStatusLabel(invoice.status) }}
+          <!-- Mobile cards view -->
+          <div class="mobile-cards-view">
+            <div
+              class="user-card"
+              *ngFor="let invoice of filteredInvoices"
+              (click)="showInvoiceDetails(invoice)"
+            >
+              <div class="card-header">
+                <div class="invoice-details">
+                  <span class="invoice-number">{{
+                    invoice.invoiceNumber
+                  }}</span>
+                  <span
+                    class="status-badge small"
+                    [class.paid]="invoice.isPaid"
+                    [class.outstanding]="!invoice.isPaid && !invoice.isOverdue"
+                    [class.overdue]="invoice.isOverdue"
+                  >
+                    <span class="status-indicator"></span>
+                    {{
+                      invoice.isOverdue
+                        ? "Overdue"
+                        : invoice.isPaid
+                        ? "Paid"
+                        : "Outstanding"
+                    }}
                   </span>
-                </td>
-                <td class="actions">
+                </div>
+                <div class="card-actions">
                   <button
-                    class="icon-btn"
-                    (click)="downloadPdf(invoice); $event.stopPropagation()"
-                    title="Download PDF"
+                    class="icon-button"
+                    (click)="downloadInvoice(invoice); $event.stopPropagation()"
                   >
-                    <span class="material-icons">file_download</span>
+                    <i class="material-icons">file_download</i>
                   </button>
-                  <button
-                    class="icon-btn"
-                    (click)="viewDetails(invoice); $event.stopPropagation()"
-                    title="View Details"
-                  >
-                    <span class="material-icons">visibility</span>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="info-row">
+                  <span class="info-label">Date:</span>
+                  <span class="info-value">{{
+                    invoice.date | date : "dd/MM/yyyy"
+                  }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">Amount:</span>
+                  <span class="info-value">{{
+                    invoice.totalAmount | currency : "EUR" : "symbol" : "1.2-2"
+                  }}</span>
+                </div>
+                <div class="info-row" *ngIf="invoice.isPaid">
+                  <span class="info-label">Payment Date:</span>
+                  <span class="info-value">{{
+                    invoice.paymentDate | date : "dd/MM/yyyy"
+                  }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Credit Notes Tab Content -->
+  <!-- Loading overlay -->
+  <div class="loading-overlay" *ngIf="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">Loading invoices...</div>
+  </div>
+
+  <!-- Invoice Detail Panel with Overlay - Moved completely outside the content area -->
   <div
-    *ngIf="activeTab === 'creditNotes' && !selectedItem"
-    class="content-container"
-  >
-    <!-- Outstanding Credit Notes -->
-    <div class="section">
-      <div
-        class="section-header"
-        (click)="toggleSection('outstandingCreditNotes')"
-      >
-        <div class="section-title">
-          <h2>Outstanding Credit Notes</h2>
-          <span class="badge">{{ outstandingCreditNotes.length }}</span>
-        </div>
-        <button class="toggle-btn">
-          <span class="material-icons">{{
-            getSectionIcon(outstandingCreditNotesCollapsed)
-          }}</span>
-        </button>
-      </div>
+    class="overlay"
+    *ngIf="selectedInvoice"
+    (click)="closeInvoiceDetails()"
+  ></div>
+  <div class="detail-panel" *ngIf="selectedInvoice">
+    <div class="detail-header">
+      <h3>Invoice Details</h3>
+      <button class="close-button" (click)="closeInvoiceDetails()">
+        <i class="material-icons">close</i>
+      </button>
+    </div>
 
-      <div
-        class="section-content"
-        [class.collapsed]="outstandingCreditNotesCollapsed"
-      >
-        <div *ngIf="isLoading" class="loading-state">
-          <span class="material-icons spin">sync</span>
-          <span>Loading credit notes...</span>
+    <div class="detail-content">
+      <div class="detail-view">
+        <!-- Invoice Information -->
+        <div class="info-row">
+          <label>Invoice Number:</label>
+          <div class="value">{{ selectedInvoice.invoiceNumber }}</div>
         </div>
 
-        <div *ngIf="hasError" class="error-state">
-          <span class="material-icons">error_outline</span>
-          <span>{{ errorMessage }}</span>
-          <button class="btn secondary" (click)="loadCreditNotes()">
-            <span class="material-icons">refresh</span>
-            Retry
-          </button>
+        <div class="info-row">
+          <label>Date:</label>
+          <div class="value">
+            {{ selectedInvoice.invoiceDate | date : "dd/MM/yyyy" }}
+          </div>
         </div>
 
-        <div
-          *ngIf="!isLoading && !hasError && outstandingCreditNotes.length === 0"
-          class="empty-state"
-        >
-          <span class="material-icons">inventory</span>
-          <span>No outstanding credit notes found</span>
+        <div class="info-row">
+          <label>Amount:</label>
+          <div class="value">
+            {{
+              selectedInvoice.amount?.total
+                | currency : "EUR" : "symbol" : "1.2-2"
+            }}
+          </div>
         </div>
 
-        <div
-          *ngIf="!isLoading && !hasError && outstandingCreditNotes.length > 0"
-          class="table-responsive"
-        >
-          <table class="data-table credit-notes-table">
-            <thead>
-              <tr>
-                <th>Credit Note #</th>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                *ngFor="let creditNote of outstandingCreditNotes"
-                (click)="viewDetails(creditNote)"
-                class="table-row"
-              >
-                <td>
-                  {{ creditNote.creditNoteNumber || creditNote.id }}
-                </td>
-                <td>{{ creditNote.date | date : "dd/MM/yyyy" }}</td>
-                <td class="amount">
-                  €{{ formatAmount(creditNote.totalAmount) }}
-                </td>
-                <td>
-                  <span class="status-badge status-warning">
-                    {{ getStatusLabel(creditNote.status) }}
-                  </span>
-                </td>
-                <td class="actions">
-                  <button
-                    class="icon-btn"
-                    (click)="downloadPdf(creditNote); $event.stopPropagation()"
-                    title="Download PDF"
-                  >
-                    <span class="material-icons">file_download</span>
-                  </button>
-                  <button
-                    class="icon-btn"
-                    (click)="viewDetails(creditNote); $event.stopPropagation()"
-                    title="View Details"
-                  >
-                    <span class="material-icons">visibility</span>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="info-row">
+          <label>Status:</label>
+          <div class="value">
+            <span
+              class="status-badge"
+              [class.paid]="selectedInvoice.status === 'paid'"
+              [class.outstanding]="selectedInvoice.status === 'outstanding'"
+              [class.overdue]="selectedInvoice.status === 'overdue'"
+            >
+              <span class="status-indicator"></span>
+              {{ selectedInvoice.status | titlecase }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Credit Notes Section -->
+        <div class="credit-notes-section">
+          <h4>Credit Notes</h4>
+
+          <div
+            class="no-credit-notes"
+            *ngIf="
+              !selectedInvoice.creditNotes ||
+              selectedInvoice.creditNotes.length === 0
+            "
+          >
+            No credit notes available for this invoice.
+          </div>
+
+          <div
+            *ngFor="let creditNote of selectedInvoice.creditNotes"
+            class="credit-note-item"
+          >
+            <div class="credit-note-info">
+              <div class="credit-note-number">
+                {{ creditNote.number || creditNote.creditNoteNumber }}
+              </div>
+              <div class="credit-note-date">
+                {{ creditNote.date | date : "dd/MM/yyyy" }}
+              </div>
+              <div class="credit-note-amount">
+                {{ creditNote.amount | currency : "EUR" : "symbol" : "1.2-2" }}
+              </div>
+            </div>
+            <button
+              class="download-button"
+              (click)="downloadCreditNote(creditNote, $event)"
+            >
+              <i class="material-icons">download</i>
+            </button>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Paid Credit Notes -->
-    <div class="section">
-      <div class="section-header" (click)="toggleSection('paidCreditNotes')">
-        <div class="section-title">
-          <h2>Paid Credit Notes</h2>
-          <span class="badge">{{ paidCreditNotes.length }}</span>
-        </div>
-        <button class="toggle-btn">
-          <span class="material-icons">{{
-            getSectionIcon(paidCreditNotesCollapsed)
-          }}</span>
-        </button>
-      </div>
-
-      <div class="section-content" [class.collapsed]="paidCreditNotesCollapsed">
-        <div *ngIf="isLoading" class="loading-state">
-          <span class="material-icons spin">sync</span>
-          <span>Loading credit notes...</span>
-        </div>
-
-        <div *ngIf="hasError" class="error-state">
-          <span class="material-icons">error_outline</span>
-          <span>{{ errorMessage }}</span>
-          <button class="btn secondary" (click)="loadCreditNotes()">
-            <span class="material-icons">refresh</span>
-            Retry
-          </button>
-        </div>
-
-        <div
-          *ngIf="!isLoading && !hasError && paidCreditNotes.length === 0"
-          class="empty-state"
-        >
-          <span class="material-icons">inventory</span>
-          <span>No paid credit notes found</span>
-        </div>
-
-        <div
-          *ngIf="!isLoading && !hasError && paidCreditNotes.length > 0"
-          class="table-responsive"
-        >
-          <table class="data-table credit-notes-table">
-            <thead>
-              <tr>
-                <th>Credit Note #</th>
-                <th>Date</th>
-                <th>Amount</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                *ngFor="let creditNote of paidCreditNotes"
-                (click)="viewDetails(creditNote)"
-                class="table-row"
-              >
-                <td>
-                  {{ creditNote.creditNoteNumber || creditNote.id }}
-                </td>
-                <td>{{ creditNote.date | date : "dd/MM/yyyy" }}</td>
-                <td class="amount">
-                  €{{ formatAmount(creditNote.totalAmount) }}
-                </td>
-                <td>
-                  <span class="status-badge status-success">
-                    {{ getStatusLabel(creditNote.status) }}
-                  </span>
-                </td>
-                <td class="actions">
-                  <button
-                    class="icon-btn"
-                    (click)="downloadPdf(creditNote); $event.stopPropagation()"
-                    title="Download PDF"
-                  >
-                    <span class="material-icons">file_download</span>
-                  </button>
-                  <button
-                    class="icon-btn"
-                    (click)="viewDetails(creditNote); $event.stopPropagation()"
-                    title="View Details"
-                  >
-                    <span class="material-icons">visibility</span>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Detail View -->
-  <div *ngIf="selectedItem" class="detail-view-container">
-    <div class="detail-panel">
-      <div class="detail-header">
-        <div class="detail-title">
-          <button class="back-btn" (click)="selectedItem = null">
-            <span class="material-icons">arrow_back</span>
-          </button>
-          <h2>
-            {{ activeTab === "invoices" ? "Invoice" : "Credit Note" }} Details
-          </h2>
-        </div>
-        <button class="btn primary" (click)="downloadPdf(selectedItem)">
-          <span class="material-icons">file_download</span>
-          Download PDF
-        </button>
-      </div>
-
-      <div class="detail-content">
-        <!-- Invoice Details -->
-        <div *ngIf="isInvoice(selectedItem)" class="detail-grid">
-          <div class="detail-section">
-            <h3>General Information</h3>
-            <div class="detail-rows">
-              <div class="detail-row">
-                <label>Invoice Number:</label>
-                <span>{{ selectedItem.invoiceNumber }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Status:</label>
-                <span
-                  class="status-badge"
-                  [ngClass]="{
-                    'status-success': selectedItem.status === 'paid',
-                    'status-warning': selectedItem.status === 'outstanding',
-                    'status-danger': selectedItem.status === 'overdue'
-                  }"
-                >
-                  {{ getStatusLabel(selectedItem.status) }}
-                </span>
-              </div>
-              <div class="detail-row">
-                <label>Invoice Date:</label>
-                <span>{{ selectedItem.date | date : "dd/MM/yyyy" }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Due Date:</label>
-                <span>{{ selectedItem.dueDate | date : "dd/MM/yyyy" }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Payment Term:</label>
-                <span>{{ selectedItem.paymentTerm }}</span>
-              </div>
-              <div class="detail-row highlight">
-                <label>Total Amount:</label>
-                <span class="amount"
-                  >€{{ formatAmount(selectedItem.totalAmount) }}</span
-                >
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Credit Note Details -->
-        <div *ngIf="isCreditNote(selectedItem)" class="detail-grid">
-          <div class="detail-section">
-            <h3>General Information</h3>
-            <div class="detail-rows">
-              <div class="detail-row">
-                <label>Credit Note Number:</label>
-                <span>{{ selectedItem.creditNoteNumber }}</span>
-              </div>
-              <div class="detail-row">
-                <label>Status:</label>
-                <span
-                  class="status-badge"
-                  [ngClass]="{
-                    'status-success': selectedItem.status === 'paid',
-                    'status-warning': selectedItem.status === 'outstanding'
-                  }"
-                >
-                  {{ getStatusLabel(selectedItem.status) }}
-                </span>
-              </div>
-              <div class="detail-row">
-                <label>Credit Note Date:</label>
-                <span>{{ selectedItem.date | date : "dd/MM/yyyy" }}</span>
-              </div>
-              <div class="detail-row highlight">
-                <label>Total Amount:</label>
-                <span class="amount"
-                  >€{{ formatAmount(selectedItem.totalAmount) }}</span
-                >
-              </div>
-              <div *ngIf="selectedItem.relatedInvoiceId" class="detail-row">
-                <label>Related Invoice:</label>
-                <button class="btn secondary">
-                  <span class="material-icons">description</span>
-                  View Invoice
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- Footer with Download Button -->
+    <div class="detail-footer">
+      <button
+        class="download-invoice-button"
+        (click)="downloadInvoice(selectedInvoice)"
+      >
+        <i class="material-icons">download</i>
+        Download Invoice
+      </button>
     </div>
   </div>
 </div>

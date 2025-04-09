@@ -271,3 +271,29 @@ button {
   color: var(--google-blue);
     }
   }
+
+  /* Global styles for detail view dimming */
+  body.detail-view-open {
+    /* This class is applied to the body when a detail view is open */
+    
+    /* Target navbar and other global components */
+    & > app-navbar,
+    & > app-header,
+    & > .navbar,
+    & > .app-header,
+    & > header,
+    & nav,
+    & .nav,
+    & .navigation {
+      opacity: 0.4 !important;
+      pointer-events: none !important;
+      transition: opacity 0.3s ease;
+    }
+    
+    /* Make sure detail panels aren't dimmed */
+    .detail-panel,
+    .overlay {
+      opacity: 1 !important;
+      pointer-events: auto !important;
+    }
+  }
