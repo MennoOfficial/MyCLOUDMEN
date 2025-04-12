@@ -20,7 +20,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TeamleaderInvoiceDetailDto {
+public class TeamleaderInvoiceDetailDTO {
 
     /**
      * Invoice ID in our system (MongoDB ID)
@@ -58,6 +58,11 @@ public class TeamleaderInvoiceDetailDto {
      * Currency code (e.g., "EUR")
      */
     private String currency;
+
+    /**
+     * Payment reference for the invoice (e.g., +++084/2613/66074+++)
+     */
+    private String paymentReference;
 
     /**
      * Customer ID in TeamLeader
@@ -108,7 +113,7 @@ public class TeamleaderInvoiceDetailDto {
     /**
      * Lines/items on the invoice
      */
-    private List<InvoiceLineDto> lines;
+    private List<InvoiceLineDTO> lines;
 
     /**
      * Date when the invoice was created in TeamLeader
@@ -129,7 +134,7 @@ public class TeamleaderInvoiceDetailDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public static class InvoiceLineDto {
+    public static class InvoiceLineDTO {
 
         /**
          * Line item description

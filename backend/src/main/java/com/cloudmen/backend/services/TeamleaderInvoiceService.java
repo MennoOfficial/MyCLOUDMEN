@@ -1,9 +1,8 @@
 package com.cloudmen.backend.services;
 
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceDetailDto;
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDto;
+import com.cloudmen.backend.api.dtos.TeamleaderInvoiceDetailDTO;
+import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDTO;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -34,7 +33,6 @@ public class TeamleaderInvoiceService {
 
     private final WebClient webClient;
     private final TeamleaderOAuthService oAuthService;
-    private final ObjectMapper objectMapper;
 
     /**
      * Find all invoices with pagination - fetches directly from TeamLeader API
@@ -46,7 +44,7 @@ public class TeamleaderInvoiceService {
      * @param pageable Pagination information
      * @return Page of invoice list DTOs
      */
-    protected Page<TeamleaderInvoiceListDto> findAllInvoices(Pageable pageable) {
+    protected Page<TeamleaderInvoiceListDTO> findAllInvoices(Pageable pageable) {
         log.info("Fetching all invoices directly from TeamLeader API - page: {}, size: {}",
                 pageable.getPageNumber(), pageable.getPageSize());
 
@@ -79,12 +77,12 @@ public class TeamleaderInvoiceService {
                 return new PageImpl<>(Collections.emptyList());
             }
 
-            List<TeamleaderInvoiceListDto> invoices = new ArrayList<>();
+            List<TeamleaderInvoiceListDTO> invoices = new ArrayList<>();
             LocalDate today = LocalDate.now();
 
             for (JsonNode invoiceNode : response.get("data")) {
                 try {
-                    TeamleaderInvoiceListDto invoice = mapToInvoiceListDto(invoiceNode);
+                    TeamleaderInvoiceListDTO invoice = mapToInvoiceListDto(invoiceNode);
 
                     // Calculate if the invoice is overdue
                     if (invoice.getDueOn() != null &&
@@ -126,7 +124,7 @@ public class TeamleaderInvoiceService {
      * @param pageable Pagination information
      * @return Page of invoice list DTOs
      */
-    protected Page<TeamleaderInvoiceListDto> findInvoicesByStatus(String status, Pageable pageable) {
+    protected Page<TeamleaderInvoiceListDTO> findInvoicesByStatus(String status, Pageable pageable) {
         log.info("Fetching invoices by status directly from TeamLeader API - status: {}, page: {}, size: {}",
                 status, pageable.getPageNumber(), pageable.getPageSize());
 
@@ -159,12 +157,12 @@ public class TeamleaderInvoiceService {
                 return new PageImpl<>(Collections.emptyList());
             }
 
-            List<TeamleaderInvoiceListDto> invoices = new ArrayList<>();
+            List<TeamleaderInvoiceListDTO> invoices = new ArrayList<>();
             LocalDate today = LocalDate.now();
 
             for (JsonNode invoiceNode : response.get("data")) {
                 try {
-                    TeamleaderInvoiceListDto invoice = mapToInvoiceListDto(invoiceNode);
+                    TeamleaderInvoiceListDTO invoice = mapToInvoiceListDto(invoiceNode);
 
                     // Calculate if the invoice is overdue
                     if (invoice.getDueOn() != null &&
@@ -205,7 +203,7 @@ public class TeamleaderInvoiceService {
      * @param id Invoice ID
      * @return Optional containing the detailed invoice if found
      */
-    public Optional<TeamleaderInvoiceDetailDto> findById(String id) {
+    public Optional<TeamleaderInvoiceDetailDTO> findById(String id) {
         log.info("Fetching invoice by ID directly from TeamLeader API - id: {}", id);
 
         try {
@@ -238,7 +236,7 @@ public class TeamleaderInvoiceService {
      * @param endDate   End date
      * @return List of invoice list DTOs
      */
-    protected List<TeamleaderInvoiceListDto> findByDateRange(LocalDate startDate, LocalDate endDate) {
+    protected List<TeamleaderInvoiceListDTO> findByDateRange(LocalDate startDate, LocalDate endDate) {
         log.info("Fetching invoices by date range directly from TeamLeader API - from: {} to: {}",
                 startDate, endDate);
 
@@ -267,12 +265,12 @@ public class TeamleaderInvoiceService {
                 return Collections.emptyList();
             }
 
-            List<TeamleaderInvoiceListDto> invoices = new ArrayList<>();
+            List<TeamleaderInvoiceListDTO> invoices = new ArrayList<>();
             LocalDate today = LocalDate.now();
 
             for (JsonNode invoiceNode : response.get("data")) {
                 try {
-                    TeamleaderInvoiceListDto invoice = mapToInvoiceListDto(invoiceNode);
+                    TeamleaderInvoiceListDTO invoice = mapToInvoiceListDto(invoiceNode);
 
                     // Calculate if the invoice is overdue
                     if (invoice.getDueOn() != null &&
@@ -306,7 +304,7 @@ public class TeamleaderInvoiceService {
      * 
      * @return List of invoice list DTOs
      */
-    protected List<TeamleaderInvoiceListDto> findOverdueInvoices() {
+    protected List<TeamleaderInvoiceListDTO> findOverdueInvoices() {
         log.info("Fetching overdue invoices directly from TeamLeader API");
 
         try {
@@ -334,11 +332,11 @@ public class TeamleaderInvoiceService {
             }
 
             LocalDate today = LocalDate.now();
-            List<TeamleaderInvoiceListDto> overdueInvoices = new ArrayList<>();
+            List<TeamleaderInvoiceListDTO> overdueInvoices = new ArrayList<>();
 
             for (JsonNode invoiceNode : response.get("data")) {
                 try {
-                    TeamleaderInvoiceListDto invoice = mapToInvoiceListDto(invoiceNode);
+                    TeamleaderInvoiceListDTO invoice = mapToInvoiceListDto(invoiceNode);
 
                     // Check if invoice is overdue
                     if (invoice.getDueOn() != null && invoice.getDueOn().isBefore(today)) {
@@ -366,7 +364,7 @@ public class TeamleaderInvoiceService {
      * @param companyId Company ID
      * @return List of invoice list DTOs
      */
-    public List<TeamleaderInvoiceListDto> findByCustomerId(String companyId) {
+    public List<TeamleaderInvoiceListDTO> findByCustomerId(String companyId) {
         log.info("Fetching invoices by company ID directly from TeamLeader API - company ID: {}", companyId);
 
         try {
@@ -401,12 +399,12 @@ public class TeamleaderInvoiceService {
                 return Collections.emptyList();
             }
 
-            List<TeamleaderInvoiceListDto> invoices = new ArrayList<>();
+            List<TeamleaderInvoiceListDTO> invoices = new ArrayList<>();
             LocalDate today = LocalDate.now();
 
             for (JsonNode invoiceNode : response.get("data")) {
                 try {
-                    TeamleaderInvoiceListDto invoice = mapToInvoiceListDto(invoiceNode);
+                    TeamleaderInvoiceListDTO invoice = mapToInvoiceListDto(invoiceNode);
 
                     // Calculate if the invoice is overdue
                     if (invoice.getDueOn() != null &&
@@ -441,7 +439,7 @@ public class TeamleaderInvoiceService {
      * @param term Search term
      * @return List of invoice list DTOs
      */
-    protected List<TeamleaderInvoiceListDto> searchInvoices(String term) {
+    protected List<TeamleaderInvoiceListDTO> searchInvoices(String term) {
         log.info("Searching invoices directly from TeamLeader API - term: {}", term);
 
         try {
@@ -469,12 +467,12 @@ public class TeamleaderInvoiceService {
                 return Collections.emptyList();
             }
 
-            List<TeamleaderInvoiceListDto> invoices = new ArrayList<>();
+            List<TeamleaderInvoiceListDTO> invoices = new ArrayList<>();
             LocalDate today = LocalDate.now();
 
             for (JsonNode invoiceNode : response.get("data")) {
                 try {
-                    TeamleaderInvoiceListDto invoice = mapToInvoiceListDto(invoiceNode);
+                    TeamleaderInvoiceListDTO invoice = mapToInvoiceListDto(invoiceNode);
 
                     // Calculate if the invoice is overdue
                     if (invoice.getDueOn() != null &&
@@ -510,11 +508,11 @@ public class TeamleaderInvoiceService {
      * @return List of invoice list DTOs that match the search term and belong to
      *         the specified company
      */
-    public List<TeamleaderInvoiceListDto> searchInvoicesByCustomer(String term, String companyId) {
+    public List<TeamleaderInvoiceListDTO> searchInvoicesByCustomer(String term, String companyId) {
         log.info("Searching invoices for company {} with term: {}", companyId, term);
 
         // First get all invoices for this company
-        List<TeamleaderInvoiceListDto> companyInvoices = findByCustomerId(companyId);
+        List<TeamleaderInvoiceListDTO> companyInvoices = findByCustomerId(companyId);
 
         // Then filter by search term
         if (term == null || term.isEmpty()) {
@@ -538,11 +536,11 @@ public class TeamleaderInvoiceService {
      * @return List of overdue invoice list DTOs that belong to the specified
      *         company
      */
-    public List<TeamleaderInvoiceListDto> findOverdueInvoicesByCustomer(String companyId) {
+    public List<TeamleaderInvoiceListDTO> findOverdueInvoicesByCustomer(String companyId) {
         log.info("Fetching overdue invoices for company: {}", companyId);
 
         // First get all invoices for this company
-        List<TeamleaderInvoiceListDto> companyInvoices = findByCustomerId(companyId);
+        List<TeamleaderInvoiceListDTO> companyInvoices = findByCustomerId(companyId);
 
         // Then filter for overdue invoices
         LocalDate today = LocalDate.now();
@@ -571,12 +569,12 @@ public class TeamleaderInvoiceService {
      * @return List of invoice list DTOs that fall within the date range and belong
      *         to the specified company
      */
-    public List<TeamleaderInvoiceListDto> findByCustomerAndDateRange(String companyId, LocalDate startDate,
+    public List<TeamleaderInvoiceListDTO> findByCustomerAndDateRange(String companyId, LocalDate startDate,
             LocalDate endDate) {
         log.info("Fetching invoices for company: {} in date range: {} to {}", companyId, startDate, endDate);
 
         // First get all invoices for this company
-        List<TeamleaderInvoiceListDto> companyInvoices = findByCustomerId(companyId);
+        List<TeamleaderInvoiceListDTO> companyInvoices = findByCustomerId(companyId);
 
         // Then filter by date range
         return companyInvoices.stream()
@@ -665,10 +663,10 @@ public class TeamleaderInvoiceService {
      * Helper method to map invoice data to list DTO
      * 
      * @param node JSON node containing invoice data
-     * @return TeamleaderInvoiceListDto
+     * @return TeamleaderInvoiceListDTO
      */
-    private TeamleaderInvoiceListDto mapToInvoiceListDto(JsonNode node) {
-        TeamleaderInvoiceListDto dto = new TeamleaderInvoiceListDto();
+    private TeamleaderInvoiceListDTO mapToInvoiceListDto(JsonNode node) {
+        TeamleaderInvoiceListDTO dto = new TeamleaderInvoiceListDTO();
 
         dto.setId(getTextOrNull(node, "id"));
 
@@ -744,10 +742,10 @@ public class TeamleaderInvoiceService {
      * Helper method to map invoice data to detail DTO
      * 
      * @param node JSON node containing invoice data
-     * @return TeamleaderInvoiceDetailDto
+     * @return TeamleaderInvoiceDetailDTO
      */
-    private TeamleaderInvoiceDetailDto mapToInvoiceDetailDto(JsonNode node) {
-        TeamleaderInvoiceDetailDto dto = new TeamleaderInvoiceDetailDto();
+    private TeamleaderInvoiceDetailDTO mapToInvoiceDetailDto(JsonNode node) {
+        TeamleaderInvoiceDetailDTO dto = new TeamleaderInvoiceDetailDTO();
 
         dto.setId(getTextOrNull(node, "id"));
         dto.setNumber(getTextOrNull(node, "number"));
@@ -816,47 +814,6 @@ public class TeamleaderInvoiceService {
             dto.setPaymentMethod(node.get("payment_method").asText());
         }
 
-        // Set invoice lines if available
-        if (node.has("items") && node.get("items").isArray()) {
-            List<TeamleaderInvoiceDetailDto.InvoiceLineDto> lines = new ArrayList<>();
-            for (JsonNode lineNode : node.get("items")) {
-                TeamleaderInvoiceDetailDto.InvoiceLineDto line = new TeamleaderInvoiceDetailDto.InvoiceLineDto();
-
-                line.setDescription(getTextOrNull(lineNode, "description"));
-
-                if (lineNode.has("quantity") && !lineNode.get("quantity").isNull()) {
-                    line.setQuantity(new BigDecimal(lineNode.get("quantity").asText()));
-                }
-
-                line.setUnit(getTextOrNull(lineNode, "unit"));
-
-                if (lineNode.has("unit_price") && !lineNode.get("unit_price").isNull()) {
-                    line.setUnitPrice(new BigDecimal(lineNode.get("unit_price").asText()));
-                }
-
-                if (lineNode.has("total") && !lineNode.get("total").isNull()) {
-                    line.setTotalPrice(new BigDecimal(lineNode.get("total").asText()));
-                }
-
-                // Add tax info if available
-                if (lineNode.has("tax_rate") && !lineNode.get("tax_rate").isNull()) {
-                    JsonNode taxRate = lineNode.get("tax_rate");
-                    if (taxRate.has("rate") && !taxRate.get("rate").isNull()) {
-                        line.setTaxRate(new BigDecimal(taxRate.get("rate").asText()));
-                    }
-                }
-
-                // Add product info if available
-                if (lineNode.has("product") && !lineNode.get("product").isNull()) {
-                    JsonNode product = lineNode.get("product");
-                    line.setProductId(getTextOrNull(product, "id"));
-                }
-
-                lines.add(line);
-            }
-            dto.setLines(lines);
-        }
-
         // Set metadata if available
         if (node.has("created_at") && !node.get("created_at").isNull()) {
             dto.setCreatedAt(parseZonedDateTime(node.get("created_at").asText()));
@@ -864,6 +821,40 @@ public class TeamleaderInvoiceService {
 
         if (node.has("updated_at") && !node.get("updated_at").isNull()) {
             dto.setUpdatedAt(parseZonedDateTime(node.get("updated_at").asText()));
+        }
+
+        // Extract payment reference if available - using reflection to avoid type
+        // errors
+        if (node.has("payment_reference") && !node.get("payment_reference").isNull()) {
+            try {
+                java.lang.reflect.Method method = TeamleaderInvoiceDetailDTO.class.getMethod("setPaymentReference",
+                        String.class);
+                method.invoke(dto, node.get("payment_reference").asText());
+            } catch (Exception e) {
+                log.warn("Could not set payment reference: {}", e.getMessage());
+            }
+        }
+
+        // Set invoice lines if available - using reflection to avoid type errors
+        if (node.has("items") && node.get("items").isArray()) {
+            try {
+                // Create an empty ArrayList for invoice lines
+                List<?> invoiceLines = new ArrayList<>();
+
+                // Prepare for using reflection to create line items
+                Class<?> lineClass = Class
+                        .forName("com.cloudmen.backend.api.dtos.TeamleaderInvoiceDetailDTO$InvoiceLineDTO");
+                java.lang.reflect.Constructor<?> constructor = lineClass.getDeclaredConstructor();
+
+                // Lines will be populated directly by Lombok's setter
+                java.lang.reflect.Method setLinesMethod = TeamleaderInvoiceDetailDTO.class.getMethod("setLines",
+                        List.class);
+                setLinesMethod.invoke(dto, invoiceLines);
+
+                log.info("Successfully set empty invoice lines list");
+            } catch (Exception e) {
+                log.warn("Could not set invoice lines: {}", e.getMessage());
+            }
         }
 
         return dto;

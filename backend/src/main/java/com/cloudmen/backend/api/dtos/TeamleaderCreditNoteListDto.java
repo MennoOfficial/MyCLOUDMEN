@@ -20,7 +20,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TeamleaderCreditNoteListDto {
+public class TeamleaderCreditNoteListDTO {
 
     /**
      * Credit note ID in our system (MongoDB ID)
