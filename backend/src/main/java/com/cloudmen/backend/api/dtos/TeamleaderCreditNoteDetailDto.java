@@ -21,7 +21,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TeamleaderCreditNoteDetailDto {
+public class TeamleaderCreditNoteDetailDTO {
 
     /**
      * Credit note ID in our system (MongoDB ID)
@@ -71,6 +71,22 @@ public class TeamleaderCreditNoteDetailDto {
     private String invoiceNumber;
 
     /**
+     * Payment reference for the credit note (e.g., +++084/2613/66074+++)
+     */
+    private String paymentReference;
+
+    /**
+     * Boolean indicating if the credit note is paid
+     */
+    private Boolean paid;
+
+    /**
+     * Date when the credit note was paid
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ssXXX")
+    private ZonedDateTime paidAt;
+
+    /**
      * Customer ID in TeamLeader
      */
     private String customerId;
@@ -98,7 +114,7 @@ public class TeamleaderCreditNoteDetailDto {
     /**
      * Lines/items on the credit note
      */
-    private List<CreditNoteLineDto> lines;
+    private List<CreditNoteLineDTO> lines;
 
     /**
      * Date when the credit note was created in TeamLeader
@@ -119,7 +135,7 @@ public class TeamleaderCreditNoteDetailDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    public static class CreditNoteLineDto {
+    public static class CreditNoteLineDTO {
 
         /**
          * Line item description

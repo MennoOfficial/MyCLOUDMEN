@@ -11,65 +11,54 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
- * DTO for TeamLeader invoice list view with minimal fields needed for an
- * overview display
+ * Simplified DTO for TeamLeader invoice list views
+ * Contains only essential fields for display in lists
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TeamleaderInvoiceListDto {
+public class TeamleaderInvoiceListDTO {
 
     /**
-     * Invoice ID in our system (MongoDB ID)
+     * Invoice ID
      */
     private String id;
-
+    
     /**
-     * Invoice number as displayed in TeamLeader
+     * Invoice number as shown in TeamLeader (e.g., "2023/123")
      */
-    private String number;
-
+    private String invoiceNumber;
+    
     /**
-     * Invoice date
+     * Payment reference for the invoice (e.g., +++084/2613/66074+++)
      */
-    @JsonFormat(pattern = "yyyy-MM-dd")
-    private LocalDate date;
-
+    private String paymentReference;
+    
     /**
      * Due date for payment
      */
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate dueOn;
-
+    
     /**
-     * Invoice status (e.g., "draft", "outstanding", "paid")
-     */
-    private String status;
-
-    /**
-     * Total invoice amount
+     * Total amount payable
      */
     private BigDecimal total;
-
+    
     /**
      * Currency code (e.g., "EUR")
      */
     private String currency;
-
-    /**
-     * Customer name (company or contact)
-     */
-    private String customerName;
-
+    
     /**
      * Whether the invoice has been paid
      */
     private Boolean isPaid;
-
+    
     /**
-     * Whether the invoice is overdue (calculated field)
+     * Whether the invoice is overdue (due date has passed and not paid)
      */
     private Boolean isOverdue;
-}
+} 

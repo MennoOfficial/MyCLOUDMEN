@@ -1,10 +1,9 @@
 package com.cloudmen.backend.services;
 
-import com.cloudmen.backend.api.dtos.TeamleaderCreditNoteDetailDto;
-import com.cloudmen.backend.api.dtos.TeamleaderCreditNoteListDto;
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDto;
+import com.cloudmen.backend.api.dtos.TeamleaderCreditNoteDetailDTO;
+import com.cloudmen.backend.api.dtos.TeamleaderCreditNoteListDTO;
+import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDTO;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -15,6 +14,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -36,7 +36,6 @@ public class TeamleaderCreditNoteService {
 
     private final WebClient webClient;
     private final TeamleaderOAuthService oAuthService;
-    private final ObjectMapper objectMapper;
 
     /**
      * Find all credit notes with pagination - fetches directly from TeamLeader API
@@ -49,7 +48,7 @@ public class TeamleaderCreditNoteService {
      * @param pageable Pagination information
      * @return Page of credit note list DTOs
      */
-    protected Page<TeamleaderCreditNoteListDto> findAllCreditNotes(Pageable pageable) {
+    protected Page<TeamleaderCreditNoteListDTO> findAllCreditNotes(Pageable pageable) {
         log.info("Fetching all credit notes directly from TeamLeader API - page: {}, size: {}",
                 pageable.getPageNumber(), pageable.getPageSize());
 
@@ -82,11 +81,11 @@ public class TeamleaderCreditNoteService {
                 return new PageImpl<>(Collections.emptyList());
             }
 
-            List<TeamleaderCreditNoteListDto> creditNotes = new ArrayList<>();
+            List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
 
             for (JsonNode creditNoteNode : response.get("data")) {
                 try {
-                    TeamleaderCreditNoteListDto creditNote = mapToCreditNoteListDto(creditNoteNode);
+                    TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
                     creditNotes.add(creditNote);
                 } catch (Exception e) {
                     log.error("Error parsing credit note data", e);
@@ -116,7 +115,7 @@ public class TeamleaderCreditNoteService {
      * @param id Credit note ID
      * @return Optional containing the detailed credit note if found
      */
-    public Optional<TeamleaderCreditNoteDetailDto> findById(String id) {
+    public Optional<TeamleaderCreditNoteDetailDTO> findById(String id) {
         log.info("Fetching credit note by ID directly from TeamLeader API - id: {}", id);
 
         try {
@@ -149,8 +148,13 @@ public class TeamleaderCreditNoteService {
      * @param invoiceId Invoice ID
      * @return List of credit note list DTOs
      */
-    public List<TeamleaderCreditNoteListDto> findByInvoiceId(String invoiceId) {
-        log.info("Fetching credit notes by invoice ID directly from TeamLeader API - invoice ID: {}", invoiceId);
+    public List<TeamleaderCreditNoteListDTO> findByInvoiceId(String invoiceId) {
+        if (invoiceId == null || invoiceId.isEmpty()) {
+            log.error("Cannot find credit notes: invoice ID is null or empty");
+            return Collections.emptyList();
+        }
+
+        log.info("Fetching credit notes for invoice ID: {}", invoiceId);
 
         try {
             String accessToken = oAuthService.getAccessToken();
@@ -159,9 +163,140 @@ public class TeamleaderCreditNoteService {
                 return Collections.emptyList();
             }
 
+            // According to TeamLeader API docs, use filter.invoice_id
             String requestBody = String.format(
-                    "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"invoice\":{\"id\":\"%s\"}}}",
+                    "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"invoice_id\":\"%s\"}}",
                     invoiceId);
+
+            log.debug("Attempting to fetch credit notes with request: {}", requestBody);
+
+            JsonNode response = webClient.post()
+                    .uri("/creditNotes.list")
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            // If there's an API error or no results, try alternative format
+            if (response == null || !response.has("data") || response.get("data").size() == 0) {
+                log.warn(
+                        "No credit notes found for invoice ID: {} using direct filter. Trying alternative format.",
+                        invoiceId);
+
+                // Try alternative format with invoice object
+                String alternativeRequestBody = String.format(
+                        "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"invoice\":{\"type\":\"invoice\",\"id\":\"%s\"}}}",
+                        invoiceId);
+
+                log.debug("Trying alternative request format: {}", alternativeRequestBody);
+
+                try {
+                    response = webClient.post()
+                            .uri("/creditNotes.list")
+                            .header("Authorization", "Bearer " + accessToken)
+                            .header("Content-Type", "application/json")
+                            .bodyValue(alternativeRequestBody)
+                            .retrieve()
+                            .bodyToMono(JsonNode.class)
+                            .block();
+
+                    if (response == null || !response.has("data") || response.get("data").size() == 0) {
+                        log.warn(
+                                "Still no credit notes found with alternative format. Falling back to manual filtering.");
+                        return findAllAndFilterByInvoiceId(invoiceId, accessToken);
+                    }
+                } catch (Exception altError) {
+                    log.error("Error with alternative request format: {}", altError.getMessage());
+                    return findAllAndFilterByInvoiceId(invoiceId, accessToken);
+                }
+            }
+
+            List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
+
+            for (JsonNode creditNoteNode : response.get("data")) {
+                try {
+                    // Log the raw data for debugging
+                    if (log.isDebugEnabled()) {
+                        if (creditNoteNode.has("for_invoice")) {
+                            JsonNode forInvoice = creditNoteNode.get("for_invoice");
+                            log.debug("Credit note has for_invoice field: {}", forInvoice);
+                            if (forInvoice.has("id")) {
+                                String relatedInvoiceId = forInvoice.get("id").asText();
+                                log.debug("Credit note for_invoice.id = '{}', comparing with requested invoice ID '{}'",
+                                        relatedInvoiceId, invoiceId);
+                            }
+                        } else if (creditNoteNode.has("invoice")) {
+                            // Check if the credit note has the invoice field (TeamLeader API format)
+                            JsonNode invoice = creditNoteNode.get("invoice");
+                            log.debug("Credit note has invoice field: {}", invoice);
+
+                            // Check the invoice ID in the invoice field
+                            if (invoice.has("id")) {
+                                String relatedInvoiceId = invoice.get("id").asText();
+                                log.debug("Credit note invoice.id = '{}', comparing with requested invoice ID '{}'",
+                                        relatedInvoiceId, invoiceId);
+                            } else {
+                                log.warn("Credit note invoice field doesn't have id property");
+                            }
+                        } else {
+                            log.warn("Credit note doesn't have for_invoice or invoice field: {}",
+                                    creditNoteNode.get("id"));
+                        }
+                    }
+
+                    TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
+
+                    // Log the mapped credit note object
+                    log.debug("Mapped credit note: id={}, invoiceId={}",
+                            creditNote.getId(), creditNote.getInvoiceId());
+
+                    // Check if the credit note is correctly related to this invoice
+                    boolean isValid = creditNote != null && invoiceId.equals(creditNote.getInvoiceId());
+
+                    // If no match yet, try checking the raw JSON directly
+                    if (!isValid && creditNoteNode.has("invoice") && creditNoteNode.get("invoice").has("id")) {
+                        String rawInvoiceId = creditNoteNode.get("invoice").get("id").asText();
+                        isValid = invoiceId.equals(rawInvoiceId);
+                        if (isValid) {
+                            log.debug("Credit note relationship valid via direct JSON check (invoice.id = {})",
+                                    rawInvoiceId);
+                            // Update the credit note's invoiceId if matched via raw JSON
+                            creditNote.setInvoiceId(rawInvoiceId);
+                        }
+                    }
+
+                    log.debug("Credit note relationship check: isValid={}", isValid);
+
+                    if (isValid) {
+                        creditNotes.add(creditNote);
+                        log.debug("Added valid credit note {} to invoice {}", creditNote.getId(), invoiceId);
+                    } else {
+                        log.warn("Skipped credit note {} because it's not related to invoice {}",
+                                creditNote != null ? creditNote.getId() : "null", invoiceId);
+                    }
+                } catch (Exception e) {
+                    log.error("Error parsing credit note data", e);
+                }
+            }
+
+            log.info("Returning {} actual credit notes for invoice {}", creditNotes.size(), invoiceId);
+            return creditNotes;
+        } catch (Exception e) {
+            log.error("Error fetching credit notes by invoice ID from TeamLeader API: {}", e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Helper method to find credit notes by getting all and manually filtering by
+     * invoice ID
+     */
+    private List<TeamleaderCreditNoteListDTO> findAllAndFilterByInvoiceId(String invoiceId, String accessToken) {
+        try {
+            // Get all credit notes (limited to reasonable batch)
+            String requestBody = "{\"page\":{\"size\":100,\"number\":1}}";
 
             JsonNode response = webClient.post()
                     .uri("/creditNotes.list")
@@ -173,24 +308,39 @@ public class TeamleaderCreditNoteService {
                     .block();
 
             if (response == null || !response.has("data")) {
-                log.warn("No credit notes found for invoice ID: {}", invoiceId);
+                log.warn("No credit notes found at all when searching for invoice ID: {}", invoiceId);
                 return Collections.emptyList();
             }
 
-            List<TeamleaderCreditNoteListDto> creditNotes = new ArrayList<>();
+            List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
+            log.debug("Found {} total credit notes to manually filter for invoice {}",
+                    response.get("data").size(), invoiceId);
 
             for (JsonNode creditNoteNode : response.get("data")) {
                 try {
-                    TeamleaderCreditNoteListDto creditNote = mapToCreditNoteListDto(creditNoteNode);
-                    creditNotes.add(creditNote);
+                    TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
+
+                    // Check if this credit note relates to our invoice
+                    if (creditNote != null && invoiceId.equals(creditNote.getInvoiceId())) {
+                        creditNotes.add(creditNote);
+                        log.debug("Found matching credit note {} for invoice {}", creditNote.getId(), invoiceId);
+                    } else if (creditNoteNode.has("invoice") && creditNoteNode.get("invoice").has("id") &&
+                            invoiceId.equals(creditNoteNode.get("invoice").get("id").asText())) {
+                        // Direct JSON check
+                        creditNote.setInvoiceId(invoiceId);
+                        creditNotes.add(creditNote);
+                        log.debug("Found matching credit note {} for invoice {} via direct JSON check",
+                                creditNote.getId(), invoiceId);
+                    }
                 } catch (Exception e) {
-                    log.error("Error parsing credit note data", e);
+                    log.error("Error processing credit note in manual filtering: {}", e.getMessage());
                 }
             }
 
+            log.info("Manual filtering found {} credit notes for invoice {}", creditNotes.size(), invoiceId);
             return creditNotes;
         } catch (Exception e) {
-            log.error("Error fetching credit notes by invoice ID from TeamLeader API", e);
+            log.error("Error in manual filtering of credit notes: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -206,7 +356,7 @@ public class TeamleaderCreditNoteService {
      * @param endDate   End date
      * @return List of credit note list DTOs
      */
-    protected List<TeamleaderCreditNoteListDto> findByDateRange(LocalDate startDate, LocalDate endDate) {
+    protected List<TeamleaderCreditNoteListDTO> findByDateRange(LocalDate startDate, LocalDate endDate) {
         log.info("Fetching credit notes by date range directly from TeamLeader API - from: {} to: {}",
                 startDate, endDate);
 
@@ -235,11 +385,11 @@ public class TeamleaderCreditNoteService {
                 return Collections.emptyList();
             }
 
-            List<TeamleaderCreditNoteListDto> creditNotes = new ArrayList<>();
+            List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
 
             for (JsonNode creditNoteNode : response.get("data")) {
                 try {
-                    TeamleaderCreditNoteListDto creditNote = mapToCreditNoteListDto(creditNoteNode);
+                    TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
                     creditNotes.add(creditNote);
                 } catch (Exception e) {
                     log.error("Error parsing credit note data", e);
@@ -263,7 +413,7 @@ public class TeamleaderCreditNoteService {
      * @param term Search term
      * @return List of credit note list DTOs
      */
-    protected List<TeamleaderCreditNoteListDto> searchCreditNotes(String term) {
+    protected List<TeamleaderCreditNoteListDTO> searchCreditNotes(String term) {
         log.info("Searching credit notes directly from TeamLeader API - term: {}", term);
 
         try {
@@ -291,11 +441,11 @@ public class TeamleaderCreditNoteService {
                 return Collections.emptyList();
             }
 
-            List<TeamleaderCreditNoteListDto> creditNotes = new ArrayList<>();
+            List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
 
             for (JsonNode creditNoteNode : response.get("data")) {
                 try {
-                    TeamleaderCreditNoteListDto creditNote = mapToCreditNoteListDto(creditNoteNode);
+                    TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
                     creditNotes.add(creditNote);
                 } catch (Exception e) {
                     log.error("Error parsing credit note data", e);
@@ -310,27 +460,74 @@ public class TeamleaderCreditNoteService {
     }
 
     /**
-     * Find all credit notes for a specific customer by collecting them from the
-     * customer's invoices
-     * This method is safe to expose through controllers as it filters by customer
+     * Find all credit notes for a specific company by collecting them from the
+     * company's invoices
+     * This method is safe to expose through controllers as it filters by company
      * context.
      * 
-     * @param customerId     Customer ID
-     * @param invoiceService Invoice service to fetch customer invoices
-     * @return List of credit note list DTOs for the specified customer
+     * @param companyId      Company ID
+     * @param invoiceService Invoice service to fetch company invoices
+     * @return List of credit note list DTOs for the specified company
      */
-    public List<TeamleaderCreditNoteListDto> findByCustomerId(String customerId,
+    public List<TeamleaderCreditNoteListDTO> findByCustomerId(String companyId,
             TeamleaderInvoiceService invoiceService) {
-        log.info("Fetching credit notes for customer ID: {}", customerId);
+        log.info("Fetching credit notes for company ID: {}", companyId);
 
-        // First get all invoices for this customer
-        List<TeamleaderInvoiceListDto> customerInvoices = invoiceService.findByCustomerId(customerId);
+        try {
+            String accessToken = oAuthService.getAccessToken();
+            if (accessToken == null || accessToken.isEmpty()) {
+                log.error("No valid access token available for TeamLeader API");
+                return Collections.emptyList();
+            }
+
+            // First try direct API filtering by customer ID using the proper format
+            String requestBody = String.format(
+                    "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"customer\":{\"type\":\"company\",\"id\":\"%s\"}}}",
+                    companyId);
+
+            log.debug("Attempting to fetch credit notes for company with request: {}", requestBody);
+
+            JsonNode response = webClient.post()
+                    .uri("/creditNotes.list")
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            // If successful, process directly
+            if (response != null && response.has("data") && response.get("data").size() > 0) {
+                List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
+                log.info("Found {} credit notes directly for company ID {}", response.get("data").size(), companyId);
+
+                for (JsonNode creditNoteNode : response.get("data")) {
+                    try {
+                        TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
+                        creditNotes.add(creditNote);
+                    } catch (Exception e) {
+                        log.error("Error parsing credit note data", e);
+                    }
+                }
+
+                return creditNotes;
+            }
+
+            log.warn("No credit notes found with direct company filter. Falling back to finding by invoices.");
+        } catch (Exception e) {
+            log.error("Error fetching credit notes directly by company ID: {}", e.getMessage());
+            log.info("Falling back to finding by invoices.");
+        }
+
+        // Fall back to original approach: Get credit notes via company's invoices
+        // First get all invoices for this company
+        List<TeamleaderInvoiceListDTO> companyInvoices = invoiceService.findByCustomerId(companyId);
 
         // Then collect all credit notes for these invoices
-        List<TeamleaderCreditNoteListDto> allCreditNotes = new ArrayList<>();
+        List<TeamleaderCreditNoteListDTO> allCreditNotes = new ArrayList<>();
 
-        for (TeamleaderInvoiceListDto invoice : customerInvoices) {
-            List<TeamleaderCreditNoteListDto> creditNotes = findByInvoiceId(invoice.getId());
+        for (TeamleaderInvoiceListDTO invoice : companyInvoices) {
+            List<TeamleaderCreditNoteListDTO> creditNotes = findByInvoiceId(invoice.getId());
             if (!creditNotes.isEmpty()) {
                 allCreditNotes.addAll(creditNotes);
             }
@@ -340,29 +537,29 @@ public class TeamleaderCreditNoteService {
     }
 
     /**
-     * Search credit notes for a specific customer's invoices
-     * This method is safe to expose through controllers as it filters by customer
+     * Search credit notes for a specific company's invoices
+     * This method is safe to expose through controllers as it filters by company
      * context.
      * 
      * @param term           Search term
-     * @param customerId     Customer ID
-     * @param invoiceService Invoice service to fetch customer invoices
-     * @return List of matching credit notes for the customer
+     * @param companyId      Company ID
+     * @param invoiceService Invoice service to fetch company invoices
+     * @return List of matching credit notes for the company
      */
-    public List<TeamleaderCreditNoteListDto> searchCreditNotesByCustomer(String term, String customerId,
+    public List<TeamleaderCreditNoteListDTO> searchCreditNotesByCustomer(String term, String companyId,
             TeamleaderInvoiceService invoiceService) {
-        log.info("Searching credit notes for customer {} with term: {}", customerId, term);
+        log.info("Searching credit notes for company {} with term: {}", companyId, term);
 
-        // First get all credit notes for this customer
-        List<TeamleaderCreditNoteListDto> customerCreditNotes = findByCustomerId(customerId, invoiceService);
+        // First get all credit notes for this company
+        List<TeamleaderCreditNoteListDTO> companyCreditNotes = findByCustomerId(companyId, invoiceService);
 
         // Then filter by search term
         if (term == null || term.isEmpty()) {
-            return customerCreditNotes;
+            return companyCreditNotes;
         }
 
         String searchTermLower = term.toLowerCase();
-        return customerCreditNotes.stream()
+        return companyCreditNotes.stream()
                 .filter(creditNote -> (creditNote.getNumber() != null
                         && creditNote.getNumber().toLowerCase().contains(searchTermLower)) ||
                         (creditNote.getStatus() != null
@@ -374,26 +571,26 @@ public class TeamleaderCreditNoteService {
     }
 
     /**
-     * Find credit notes for a specific customer in a date range
-     * This method is safe to expose through controllers as it filters by customer
+     * Find credit notes for a specific company in a date range
+     * This method is safe to expose through controllers as it filters by company
      * context.
      * 
-     * @param customerId     Customer ID
+     * @param companyId      Company ID
      * @param startDate      Start date
      * @param endDate        End date
-     * @param invoiceService Invoice service to fetch customer invoices
+     * @param invoiceService Invoice service to fetch company invoices
      * @return List of credit notes that fall within the date range and belong to
-     *         the customer
+     *         the company
      */
-    public List<TeamleaderCreditNoteListDto> findByCustomerAndDateRange(
-            String customerId, LocalDate startDate, LocalDate endDate, TeamleaderInvoiceService invoiceService) {
-        log.info("Fetching credit notes for customer {} in date range: {} to {}", customerId, startDate, endDate);
+    public List<TeamleaderCreditNoteListDTO> findByCustomerAndDateRange(
+            String companyId, LocalDate startDate, LocalDate endDate, TeamleaderInvoiceService invoiceService) {
+        log.info("Fetching credit notes for company {} in date range: {} to {}", companyId, startDate, endDate);
 
-        // First get all credit notes for this customer
-        List<TeamleaderCreditNoteListDto> customerCreditNotes = findByCustomerId(customerId, invoiceService);
+        // First get all credit notes for this company
+        List<TeamleaderCreditNoteListDTO> companyCreditNotes = findByCustomerId(companyId, invoiceService);
 
         // Then filter by date range
-        return customerCreditNotes.stream()
+        return companyCreditNotes.stream()
                 .filter(creditNote -> {
                     LocalDate creditNoteDate = creditNote.getDate();
                     return creditNoteDate != null &&
@@ -432,10 +629,10 @@ public class TeamleaderCreditNoteService {
      * Helper method to map credit note data to list DTO
      * 
      * @param node JSON node containing credit note data
-     * @return TeamleaderCreditNoteListDto
+     * @return TeamleaderCreditNoteListDTO
      */
-    private TeamleaderCreditNoteListDto mapToCreditNoteListDto(JsonNode node) {
-        TeamleaderCreditNoteListDto dto = new TeamleaderCreditNoteListDto();
+    private TeamleaderCreditNoteListDTO mapToCreditNoteListDto(JsonNode node) {
+        TeamleaderCreditNoteListDTO dto = new TeamleaderCreditNoteListDTO();
 
         dto.setId(getTextOrNull(node, "id"));
         dto.setNumber(getTextOrNull(node, "number"));
@@ -472,7 +669,47 @@ public class TeamleaderCreditNoteService {
         if (node.has("for_invoice")) {
             JsonNode invoice = node.get("for_invoice");
             dto.setInvoiceId(getTextOrNull(invoice, "id"));
-            dto.setInvoiceNumber(getTextOrNull(invoice, "number"));
+
+            // Enhanced extraction of invoice number
+            String invoiceNumber = getTextOrNull(invoice, "number");
+            if (invoiceNumber == null || invoiceNumber.isEmpty()) {
+                // Try alternative field
+                invoiceNumber = getTextOrNull(invoice, "invoice_number");
+                if (invoiceNumber == null || invoiceNumber.isEmpty() && dto.getInvoiceId() != null) {
+                    // Use invoice ID as a last resort
+                    invoiceNumber = dto.getInvoiceId();
+                }
+            }
+            dto.setInvoiceNumber(invoiceNumber);
+
+            // Log successful association for debugging
+            if (invoiceNumber != null && !invoiceNumber.isEmpty()) {
+                log.debug("Credit note {} associated with invoice number {}", dto.getNumber(), invoiceNumber);
+            }
+        } else if (node.has("invoice")) {
+            // Handle the case where the field is named 'invoice' instead of 'for_invoice'
+            JsonNode invoice = node.get("invoice");
+            dto.setInvoiceId(getTextOrNull(invoice, "id"));
+
+            // Enhanced extraction of invoice number
+            String invoiceNumber = getTextOrNull(invoice, "number");
+            if (invoiceNumber == null || invoiceNumber.isEmpty()) {
+                // Try alternative field
+                invoiceNumber = getTextOrNull(invoice, "invoice_number");
+                if (invoiceNumber == null || invoiceNumber.isEmpty() && dto.getInvoiceId() != null) {
+                    // Use invoice ID as a last resort
+                    invoiceNumber = dto.getInvoiceId();
+                }
+            }
+            dto.setInvoiceNumber(invoiceNumber);
+
+            // Log successful association for debugging
+            if (invoiceNumber != null && !invoiceNumber.isEmpty()) {
+                log.debug("Credit note {} associated with invoice id {}", dto.getNumber(), dto.getInvoiceId());
+            } else {
+                log.debug("Credit note {} associated with invoice id {} (no number available)", dto.getNumber(),
+                        dto.getInvoiceId());
+            }
         }
 
         return dto;
@@ -482,14 +719,17 @@ public class TeamleaderCreditNoteService {
      * Helper method to map credit note data to detail DTO
      * 
      * @param node JSON node containing credit note data
-     * @return TeamleaderCreditNoteDetailDto
+     * @return TeamleaderCreditNoteDetailDTO
      */
-    private TeamleaderCreditNoteDetailDto mapToCreditNoteDetailDto(JsonNode node) {
-        TeamleaderCreditNoteDetailDto dto = new TeamleaderCreditNoteDetailDto();
+    private TeamleaderCreditNoteDetailDTO mapToCreditNoteDetailDto(JsonNode node) {
+        // Create a new TeamleaderCreditNoteDetailDTO instance
+        TeamleaderCreditNoteDetailDTO dto = new TeamleaderCreditNoteDetailDTO();
 
+        // Map basic fields from JSON to DTO
         dto.setId(getTextOrNull(node, "id"));
         dto.setNumber(getTextOrNull(node, "number"));
 
+        // Map dates
         if (node.has("date") && !node.get("date").isNull()) {
             dto.setDate(LocalDate.parse(node.get("date").asText()));
         }
@@ -498,6 +738,7 @@ public class TeamleaderCreditNoteService {
             dto.setDueOn(LocalDate.parse(node.get("due_on").asText()));
         }
 
+        // Map status
         dto.setStatus(getTextOrNull(node, "status"));
 
         // Initialize total to zero by default
@@ -521,6 +762,30 @@ public class TeamleaderCreditNoteService {
             dto.setInvoiceNumber(getTextOrNull(invoice, "number"));
         }
 
+        // Extract payment reference if available
+        if (node.has("payment_reference") && !node.get("payment_reference").isNull()) {
+            dto.setPaymentReference(node.get("payment_reference").asText());
+        }
+
+        // Set payment details if available
+        if (node.has("paid") && !node.get("paid").isNull()) {
+            dto.setPaid(node.get("paid").asBoolean());
+        }
+
+        if (node.has("paid_at") && !node.get("paid_at").isNull()) {
+            try {
+                dto.setPaidAt(ZonedDateTime.parse(node.get("paid_at").asText()));
+            } catch (Exception e) {
+                // If parsing as ZonedDateTime fails, try as LocalDate
+                try {
+                    LocalDate paidDate = LocalDate.parse(node.get("paid_at").asText());
+                    dto.setPaidAt(paidDate.atStartOfDay(ZoneId.systemDefault()));
+                } catch (Exception ex) {
+                    log.warn("Failed to parse paid_at date: {}", node.get("paid_at").asText());
+                }
+            }
+        }
+
         // Parse customer info if available
         if (node.has("customer")) {
             JsonNode customer = node.get("customer");
@@ -538,42 +803,46 @@ public class TeamleaderCreditNoteService {
 
         // Set credit note lines if available
         if (node.has("items") && node.get("items").isArray()) {
-            List<TeamleaderCreditNoteDetailDto.CreditNoteLineDto> lines = new ArrayList<>();
-            for (JsonNode lineNode : node.get("items")) {
-                TeamleaderCreditNoteDetailDto.CreditNoteLineDto line = new TeamleaderCreditNoteDetailDto.CreditNoteLineDto();
+            List<TeamleaderCreditNoteDetailDTO.CreditNoteLineDTO> lines = new ArrayList<>();
 
-                line.setDescription(getTextOrNull(lineNode, "description"));
+            // Process each line item
+            for (JsonNode lineNode : node.get("items")) {
+                TeamleaderCreditNoteDetailDTO.CreditNoteLineDTO lineItem = new TeamleaderCreditNoteDetailDTO.CreditNoteLineDTO();
+
+                // Map line item properties
+                lineItem.setDescription(getTextOrNull(lineNode, "description"));
+                lineItem.setUnit(getTextOrNull(lineNode, "unit"));
 
                 if (lineNode.has("quantity") && !lineNode.get("quantity").isNull()) {
-                    line.setQuantity(new BigDecimal(lineNode.get("quantity").asText()));
+                    lineItem.setQuantity(new BigDecimal(lineNode.get("quantity").asText()));
                 }
 
-                line.setUnit(getTextOrNull(lineNode, "unit"));
-
                 if (lineNode.has("unit_price") && !lineNode.get("unit_price").isNull()) {
-                    line.setUnitPrice(new BigDecimal(lineNode.get("unit_price").asText()));
+                    lineItem.setUnitPrice(new BigDecimal(lineNode.get("unit_price").asText()));
                 }
 
                 if (lineNode.has("total") && !lineNode.get("total").isNull()) {
-                    line.setTotalPrice(new BigDecimal(lineNode.get("total").asText()));
+                    lineItem.setTotalPrice(new BigDecimal(lineNode.get("total").asText()));
                 }
 
                 // Add tax info if available
                 if (lineNode.has("tax_rate") && !lineNode.get("tax_rate").isNull()) {
                     JsonNode taxRate = lineNode.get("tax_rate");
                     if (taxRate.has("rate") && !taxRate.get("rate").isNull()) {
-                        line.setTaxRate(new BigDecimal(taxRate.get("rate").asText()));
+                        lineItem.setTaxRate(new BigDecimal(taxRate.get("rate").asText()));
                     }
                 }
 
                 // Add product info if available
                 if (lineNode.has("product") && !lineNode.get("product").isNull()) {
                     JsonNode product = lineNode.get("product");
-                    line.setProductId(getTextOrNull(product, "id"));
+                    lineItem.setProductId(getTextOrNull(product, "id"));
                 }
 
-                lines.add(line);
+                lines.add(lineItem);
             }
+
+            // Set the lines collection on the DTO
             dto.setLines(lines);
         }
 

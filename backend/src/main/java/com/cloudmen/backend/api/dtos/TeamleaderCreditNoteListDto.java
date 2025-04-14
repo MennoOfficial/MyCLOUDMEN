@@ -2,6 +2,7 @@ package com.cloudmen.backend.api.dtos;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,7 +20,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public class TeamleaderCreditNoteListDto {
+public class TeamleaderCreditNoteListDTO {
 
     /**
      * Credit note ID in our system (MongoDB ID)
@@ -45,7 +46,9 @@ public class TeamleaderCreditNoteListDto {
     /**
      * Total credit note amount
      */
-    private BigDecimal total;
+    @JsonProperty("total")
+    @Builder.Default
+    private BigDecimal total = BigDecimal.ZERO;
 
     /**
      * Currency code (e.g., "EUR")
