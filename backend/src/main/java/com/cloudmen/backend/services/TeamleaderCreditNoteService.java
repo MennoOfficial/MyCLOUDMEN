@@ -163,7 +163,7 @@ public class TeamleaderCreditNoteService {
                 return Collections.emptyList();
             }
 
-            // First, try explicit filter by invoice_id if the API supports it
+            // According to TeamLeader API docs, use filter.invoice_id
             String requestBody = String.format(
                     "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"invoice_id\":\"%s\"}}",
                     invoiceId);
@@ -179,51 +179,71 @@ public class TeamleaderCreditNoteService {
                     .bodyToMono(JsonNode.class)
                     .block();
 
-            // If there's an API error or no results, fall back to fetching all credit notes
-            // and filtering
+            // If there's an API error or no results, try alternative format
             if (response == null || !response.has("data") || response.get("data").size() == 0) {
                 log.warn(
-                        "No credit notes found for invoice ID: {} using direct filter. Falling back to manual filtering.",
+                        "No credit notes found for invoice ID: {} using direct filter. Trying alternative format.",
                         invoiceId);
-                return findAllAndFilterByInvoiceId(invoiceId, accessToken);
+
+                // Try alternative format with invoice object
+                String alternativeRequestBody = String.format(
+                        "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"invoice\":{\"type\":\"invoice\",\"id\":\"%s\"}}}",
+                        invoiceId);
+
+                log.debug("Trying alternative request format: {}", alternativeRequestBody);
+
+                try {
+                    response = webClient.post()
+                            .uri("/creditNotes.list")
+                            .header("Authorization", "Bearer " + accessToken)
+                            .header("Content-Type", "application/json")
+                            .bodyValue(alternativeRequestBody)
+                            .retrieve()
+                            .bodyToMono(JsonNode.class)
+                            .block();
+
+                    if (response == null || !response.has("data") || response.get("data").size() == 0) {
+                        log.warn(
+                                "Still no credit notes found with alternative format. Falling back to manual filtering.");
+                        return findAllAndFilterByInvoiceId(invoiceId, accessToken);
+                    }
+                } catch (Exception altError) {
+                    log.error("Error with alternative request format: {}", altError.getMessage());
+                    return findAllAndFilterByInvoiceId(invoiceId, accessToken);
+                }
             }
 
             List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
-            log.debug("Found {} potential credit notes in API response", response.get("data").size());
 
             for (JsonNode creditNoteNode : response.get("data")) {
                 try {
-                    // Log the raw credit note JSON before mapping
-                    log.debug("Processing credit note JSON: {}", creditNoteNode);
+                    // Log the raw data for debugging
+                    if (log.isDebugEnabled()) {
+                        if (creditNoteNode.has("for_invoice")) {
+                            JsonNode forInvoice = creditNoteNode.get("for_invoice");
+                            log.debug("Credit note has for_invoice field: {}", forInvoice);
+                            if (forInvoice.has("id")) {
+                                String relatedInvoiceId = forInvoice.get("id").asText();
+                                log.debug("Credit note for_invoice.id = '{}', comparing with requested invoice ID '{}'",
+                                        relatedInvoiceId, invoiceId);
+                            }
+                        } else if (creditNoteNode.has("invoice")) {
+                            // Check if the credit note has the invoice field (TeamLeader API format)
+                            JsonNode invoice = creditNoteNode.get("invoice");
+                            log.debug("Credit note has invoice field: {}", invoice);
 
-                    // Check if the credit note has the for_invoice field
-                    if (creditNoteNode.has("for_invoice")) {
-                        JsonNode forInvoice = creditNoteNode.get("for_invoice");
-                        log.debug("Credit note has for_invoice field: {}", forInvoice);
-
-                        // Check the invoice ID in the for_invoice field
-                        if (forInvoice.has("id")) {
-                            String relatedInvoiceId = forInvoice.get("id").asText();
-                            log.debug("Credit note for_invoice.id = '{}', comparing with requested invoice ID '{}'",
-                                    relatedInvoiceId, invoiceId);
+                            // Check the invoice ID in the invoice field
+                            if (invoice.has("id")) {
+                                String relatedInvoiceId = invoice.get("id").asText();
+                                log.debug("Credit note invoice.id = '{}', comparing with requested invoice ID '{}'",
+                                        relatedInvoiceId, invoiceId);
+                            } else {
+                                log.warn("Credit note invoice field doesn't have id property");
+                            }
                         } else {
-                            log.warn("Credit note for_invoice field doesn't have id property");
+                            log.warn("Credit note doesn't have for_invoice or invoice field: {}",
+                                    creditNoteNode.get("id"));
                         }
-                    } else if (creditNoteNode.has("invoice")) {
-                        // Check if the credit note has the invoice field (TeamLeader API format)
-                        JsonNode invoice = creditNoteNode.get("invoice");
-                        log.debug("Credit note has invoice field: {}", invoice);
-
-                        // Check the invoice ID in the invoice field
-                        if (invoice.has("id")) {
-                            String relatedInvoiceId = invoice.get("id").asText();
-                            log.debug("Credit note invoice.id = '{}', comparing with requested invoice ID '{}'",
-                                    relatedInvoiceId, invoiceId);
-                        } else {
-                            log.warn("Credit note invoice field doesn't have id property");
-                        }
-                    } else {
-                        log.warn("Credit note doesn't have for_invoice or invoice field: {}", creditNoteNode.get("id"));
                     }
 
                     TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
@@ -453,6 +473,53 @@ public class TeamleaderCreditNoteService {
             TeamleaderInvoiceService invoiceService) {
         log.info("Fetching credit notes for company ID: {}", companyId);
 
+        try {
+            String accessToken = oAuthService.getAccessToken();
+            if (accessToken == null || accessToken.isEmpty()) {
+                log.error("No valid access token available for TeamLeader API");
+                return Collections.emptyList();
+            }
+
+            // First try direct API filtering by customer ID using the proper format
+            String requestBody = String.format(
+                    "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"customer\":{\"type\":\"company\",\"id\":\"%s\"}}}",
+                    companyId);
+
+            log.debug("Attempting to fetch credit notes for company with request: {}", requestBody);
+
+            JsonNode response = webClient.post()
+                    .uri("/creditNotes.list")
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Content-Type", "application/json")
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            // If successful, process directly
+            if (response != null && response.has("data") && response.get("data").size() > 0) {
+                List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
+                log.info("Found {} credit notes directly for company ID {}", response.get("data").size(), companyId);
+
+                for (JsonNode creditNoteNode : response.get("data")) {
+                    try {
+                        TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
+                        creditNotes.add(creditNote);
+                    } catch (Exception e) {
+                        log.error("Error parsing credit note data", e);
+                    }
+                }
+
+                return creditNotes;
+            }
+
+            log.warn("No credit notes found with direct company filter. Falling back to finding by invoices.");
+        } catch (Exception e) {
+            log.error("Error fetching credit notes directly by company ID: {}", e.getMessage());
+            log.info("Falling back to finding by invoices.");
+        }
+
+        // Fall back to original approach: Get credit notes via company's invoices
         // First get all invoices for this company
         List<TeamleaderInvoiceListDTO> companyInvoices = invoiceService.findByCustomerId(companyId);
 

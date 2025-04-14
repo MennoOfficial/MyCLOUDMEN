@@ -195,11 +195,20 @@
                 class="user-row"
                 (click)="showInvoiceDetails(invoice)"
               >
-                <td>{{ invoice.invoiceNumber }}</td>
-                <td>{{ invoice.date | date : "dd/MM/yyyy" }}</td>
+                <td>{{ invoice.invoiceNumber || "Unknown" }}</td>
                 <td>
                   {{
-                    invoice.totalAmount | currency : "EUR" : "symbol" : "1.2-2"
+                    invoice.date
+                      ? (invoice.date | date : "dd/MM/yyyy")
+                      : "No date"
+                  }}
+                </td>
+                <td>
+                  {{
+                    invoice.totalAmount !== undefined
+                      ? (invoice.totalAmount
+                        | currency : "EUR" : "symbol" : "1.2-2")
+                      : "€0.00"
                   }}
                 </td>
                 <td>
@@ -315,13 +324,19 @@
         <!-- Invoice Information -->
         <div class="info-row">
           <label>Invoice Number:</label>
-          <div class="value">{{ selectedInvoice.invoiceNumber }}</div>
+          <div class="value">
+            {{ selectedInvoice.invoiceNumber || "Unknown" }}
+          </div>
         </div>
 
         <div class="info-row">
           <label>Date:</label>
           <div class="value">
-            {{ selectedInvoice.invoiceDate | date : "dd/MM/yyyy" }}
+            {{
+              selectedInvoice.invoiceDate
+                ? (selectedInvoice.invoiceDate | date : "dd/MM/yyyy")
+                : "No date available"
+            }}
           </div>
         </div>
 
@@ -329,8 +344,12 @@
           <label>Amount:</label>
           <div class="value">
             {{
-              selectedInvoice.amount?.total
-                | currency : "EUR" : "symbol" : "1.2-2"
+              selectedInvoice.amount &&
+              selectedInvoice.amount.total !== undefined
+                ? (selectedInvoice.amount.total
+                  | currency : "EUR" : "symbol" : "1.2-2")
+                : (selectedInvoice.totalAmount
+                    | currency : "EUR" : "symbol" : "1.2-2") || "€0.00"
             }}
           </div>
         </div>
@@ -345,7 +364,11 @@
               [class.overdue]="selectedInvoice.status === 'overdue'"
             >
               <span class="status-indicator"></span>
-              {{ selectedInvoice.status | titlecase }}
+              {{
+                selectedInvoice.status
+                  ? (selectedInvoice.status | titlecase)
+                  : "Unknown"
+              }}
             </span>
           </div>
         </div>
@@ -370,13 +393,26 @@
           >
             <div class="credit-note-info">
               <div class="credit-note-number">
-                {{ creditNote.number || creditNote.creditNoteNumber }}
+                {{
+                  creditNote.number ||
+                    creditNote.creditNoteNumber ||
+                    "CN-" + creditNote.id
+                }}
               </div>
               <div class="credit-note-date">
-                {{ creditNote.date | date : "dd/MM/yyyy" }}
+                {{
+                  creditNote.date
+                    ? (creditNote.date | date : "dd/MM/yyyy")
+                    : "No date available"
+                }}
               </div>
               <div class="credit-note-amount">
-                {{ creditNote.amount | currency : "EUR" : "symbol" : "1.2-2" }}
+                {{
+                  creditNote.amount
+                    ? (creditNote.amount
+                      | currency : "EUR" : "symbol" : "1.2-2")
+                    : "€0.00"
+                }}
               </div>
             </div>
             <button

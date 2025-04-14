@@ -350,8 +350,8 @@
       }
       
       &.actions-header {
-        text-align: right;
-      }
+      text-align: right;
+    }
     }
     
     td {
@@ -374,10 +374,10 @@
           border-radius: 4px;
           font-size: 0.875rem;
           font-weight: 500;
-          cursor: pointer;
+      cursor: pointer;
           transition: all 0.2s ease;
-          
-          &:hover {
+      
+      &:hover {
             background-color: var(--aqua-spring);
             color: white;
             transform: translateY(-1px);
@@ -414,7 +414,7 @@
 /* Enhanced download buttons */
 .download-btn {
   display: inline-flex;
-  align-items: center;
+    align-items: center;
   gap: var(--space-sm);
   padding: var(--space-sm) var(--space-md);
   background-color: var(--aqua-spring-soft);
@@ -467,7 +467,7 @@
       color: var(--deep-ocean);
       padding: 16px 16px 0 16px;
       margin: 0;
-      display: flex;
+        display: flex;
       justify-content: space-between;
       align-items: center;
       
@@ -487,23 +487,23 @@
         
         .info-item {
           .info-label {
-            color: var(--slate);
+          color: var(--slate);
             font-size: 0.8rem;
             font-weight: normal;
             margin-bottom: 4px;
             display: block;
-          }
-          
+        }
+        
           .info-value {
             font-weight: 600;
-            color: var(--deep-ocean);
+          color: var(--deep-ocean);
             font-size: 1rem;
-          }
         }
       }
     }
   }
-  
+}
+
   /* Enhanced status badge for mobile cards */
   .status-badge.small {
     padding: 3px 8px;
@@ -552,11 +552,11 @@
 /* Update status badges to be more distinct */
 .status-badge {
   display: inline-flex;
-  align-items: center;
+      align-items: center;
   padding: var(--space-xs) var(--space-sm);
   border-radius: 12px;
   font-size: 0.85rem;
-  font-weight: 500;
+        font-weight: 500;
   
   &.small {
     font-size: 0.75rem;
@@ -602,7 +602,7 @@
 /* Icon Button */
 .icon-button {
       display: flex;
-  align-items: center;
+      align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
@@ -623,7 +623,7 @@
 
 /* Actions column in table */
 .actions {
-  display: flex;
+          display: flex;
   justify-content: flex-end;
 }
 
@@ -651,8 +651,8 @@
   background-color: white;
   box-shadow: -5px 0 15px rgba(0, 0, 0, 0.1);
   z-index: 101;
-  display: flex;
-  flex-direction: column;
+        display: flex;
+        flex-direction: column;
   animation: slideIn 0.3s ease forwards;
   
   @keyframes slideIn {
@@ -682,7 +682,7 @@
       padding: var(--space-md);
       
       .back-button {
-        display: flex;
+      display: flex;
         align-items: center;
         background: transparent;
         border: none;
@@ -718,8 +718,8 @@
     }
       
     h3 {
-      margin: 0;
-      font-weight: 500;
+        margin: 0;
+        font-weight: 500;
       font-size: 1.25rem;
     }
     

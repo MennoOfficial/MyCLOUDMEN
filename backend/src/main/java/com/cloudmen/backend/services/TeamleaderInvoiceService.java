@@ -368,22 +368,22 @@ public class TeamleaderInvoiceService {
         log.info("Fetching invoices by company ID directly from TeamLeader API - company ID: {}", companyId);
 
         try {
+            // Validate and format the ID for Teamleader API
+            companyId = formatTeamleaderId(companyId);
+
             String accessToken = oAuthService.getAccessToken();
             if (accessToken == null || accessToken.isEmpty()) {
                 log.error("No valid access token available for TeamLeader API");
                 return Collections.emptyList();
             }
 
-            // Determine if company is a company or contact
-            String customerType = determineCustomerType(companyId, accessToken);
-            if (customerType == null) {
-                log.warn("Could not determine customer type for ID: {}", companyId);
-                return Collections.emptyList();
-            }
-
+            // Properly format request body with customer type and ID as required by
+            // Teamleader API
             String requestBody = String.format(
-                    "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"customer\":{\"type\":\"%s\",\"id\":\"%s\"}}}",
-                    customerType, companyId);
+                    "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"customer\":{\"type\":\"company\",\"id\":\"%s\"}}}",
+                    companyId);
+
+            log.debug("Making request to TeamLeader API with body: {}", requestBody);
 
             JsonNode response = webClient.post()
                     .uri("/invoices.list")
@@ -396,7 +396,32 @@ public class TeamleaderInvoiceService {
 
             if (response == null || !response.has("data")) {
                 log.warn("No invoices found for company ID: {}", companyId);
-                return Collections.emptyList();
+
+                // Try alternative approach with just the ID if the first attempt failed
+                String alternativeRequestBody = String.format(
+                        "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"customer\":{\"id\":\"%s\"}}}",
+                        companyId);
+
+                log.debug("Trying alternative request format to TeamLeader API with body: {}", alternativeRequestBody);
+
+                try {
+                    response = webClient.post()
+                            .uri("/invoices.list")
+                            .header("Authorization", "Bearer " + accessToken)
+                            .header("Content-Type", "application/json")
+                            .bodyValue(alternativeRequestBody)
+                            .retrieve()
+                            .bodyToMono(JsonNode.class)
+                            .block();
+
+                    if (response == null || !response.has("data")) {
+                        log.warn("Still no invoices found with alternative request format");
+                        return Collections.emptyList();
+                    }
+                } catch (Exception fallbackEx) {
+                    log.error("Alternative request approach also failed: {}", fallbackEx.getMessage());
+                    return Collections.emptyList();
+                }
             }
 
             List<TeamleaderInvoiceListDTO> invoices = new ArrayList<>();
@@ -422,9 +447,15 @@ public class TeamleaderInvoiceService {
                 }
             }
 
+            log.info("Successfully retrieved {} invoices for company ID: {}", invoices.size(), companyId);
             return invoices;
         } catch (Exception e) {
             log.error("Error fetching invoices by company ID from TeamLeader API", e);
+            if (e instanceof org.springframework.web.reactive.function.client.WebClientResponseException.BadRequest) {
+                log.error(
+                        "Bad Request (400) error: The Teamleader API rejected the request. This might be due to an incorrect ID format: {}",
+                        companyId);
+            }
             return Collections.emptyList();
         }
     }
@@ -891,5 +922,49 @@ public class TeamleaderInvoiceService {
             log.warn("Error parsing ZonedDateTime: {}", dateTimeStr, e);
             return null;
         }
+    }
+
+    /**
+     * Format an ID to ensure it's compatible with Teamleader API
+     * Teamleader IDs typically have a specific format with UUID-like structure
+     * containing dashes
+     * 
+     * @param id The ID to format
+     * @return A properly formatted Teamleader ID
+     */
+    private String formatTeamleaderId(String id) {
+        if (id == null || id.isEmpty()) {
+            log.warn("Empty ID provided for Teamleader API request");
+            return "";
+        }
+
+        // If ID already has dashes and is in UUID-format, it's likely a valid
+        // Teamleader ID
+        if (id.contains("-") && id.length() > 30) {
+            log.debug("Using Teamleader formatted ID: {}", id);
+            return id;
+        }
+
+        // If ID looks like a MongoDB ObjectId (24 hex chars), it's not a valid
+        // Teamleader ID
+        if (id.matches("^[0-9a-f]{24}$")) {
+            log.warn("Provided ID {} appears to be a MongoDB ID, not a valid Teamleader ID format. " +
+                    "API request will likely fail.", id);
+        }
+
+        // Try to check if this might be a Teamleader ID but missing dashes
+        if (id.length() == 32 && !id.contains("-")) {
+            // Insert dashes to make it UUID-like (this is an approximation)
+            String formattedId = id.substring(0, 8) + "-" +
+                    id.substring(8, 12) + "-" +
+                    id.substring(12, 16) + "-" +
+                    id.substring(16, 20) + "-" +
+                    id.substring(20);
+            log.info("Reformatted ID from {} to UUID-like format: {}", id, formattedId);
+            return formattedId;
+        }
+
+        // Return the original ID if we couldn't determine a better format
+        return id;
     }
 }
