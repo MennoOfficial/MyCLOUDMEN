@@ -9,20 +9,22 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { RouterModule } from '@angular/router';
 import { UiStateService } from '../../../core/services/ui-state.service';
 
+// For production build, define a simple environment object
+const environment = {
+  production: false
+};
+
 interface Invoice {
   id: string;
-  invoiceNumber: string;
-  date: string | Date;
-  dueDate: string | Date;
-  totalAmount: number;
-  status: string;
-  paymentTerm: string;
+  invoiceNumber: string;  // Mapped from id
+  dueDate: string | Date; // Mapped from dueOn
+  totalAmount: number;    // Mapped from total
+  paymentReference: string;
+  currency: string;
   isPaid: boolean;
   isOverdue: boolean;
-  type: string;
-  paymentDate?: string | Date;
-  customer?: string;
-  creditNoteCount?: number;
+  type: string;           // Always 'invoice'
+  customer?: string;      // Added in processInvoicesData
 }
 
 interface CreditNote {
@@ -35,23 +37,15 @@ interface CreditNote {
   type: string;
 }
 
-// Response format from the API
-interface FinanceResponse {
-  invoices: {
-    id: string;
-    dueOn: string;
-    status: string;
-    total: number;
-    isPaid: boolean;
-    isOverdue: boolean;
-  }[];
-  creditNotesByInvoice: {
-    [invoiceId: string]: {
-      id: string;
-      status: string;
-      total: number;
-    }[];
-  };
+// Response format from the API (simplified)
+interface TeamleaderInvoiceResponse {
+  id: string;
+  paymentReference: string;
+  dueOn: string;
+  total: number;
+  currency: string;
+  isPaid: boolean;
+  isOverdue: boolean;
 }
 
 // Company with both MongoDB ID and Teamleader ID
@@ -67,12 +61,12 @@ interface InvoiceDetails {
   id: string;
   invoiceNumber: string;
   totalAmount: number;
-  status: string;
-  paymentTerm: string;
   isPaid: boolean;
   isOverdue: boolean;
   type: string;
   customer?: string;
+  paymentReference: string;
+  currency: string;
   
   // Extended properties
   companyName?: string;
@@ -138,8 +132,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   tableView = true;
   
   // Sorting
-  sortColumn: string = 'date';
-  sortDirection: string = 'desc';
+  sortColumn: string = 'paymentReference';
+  sortDirection: string = 'asc';
   
   // Company identification
   private currentUserEmail: string = '';
@@ -149,6 +143,19 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   
   // Subscription management
   private subscriptions: Subscription[] = [];
+  
+  // Add logger property to avoid 'this.log is undefined' errors
+  private log = {
+    debug: (msg: string) => console.debug(msg),
+    info: (msg: string) => console.info(msg),
+    warn: (msg: string) => console.warn(msg),
+    error: (msg: string) => console.error(msg)
+  };
+
+  // Add missing properties used in the displayInvoiceDetails method
+  invoiceDetails: any;
+  selectedInvoiceId: string | null = null;
+  isShowingInvoiceDetails = false;
   
   constructor(
     private apiService: ApiService,
@@ -244,68 +251,90 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     }
     
     try {
-      const response = await this.apiService.get<any>(`teamleader/finance/company/${companyId}/invoices`).toPromise();
+      // Set the base endpoint
+      const baseEndpoint = `teamleader/finance/company/${companyId}/invoices`;
       
-      if (!response || (!Array.isArray(response) && !response.data)) {
+      // Determine which status filter to use based on active tab
+      const status = this.activeTab === 'paid' ? 'paid' : 'unpaid';
+      
+      console.log(`Fetching from endpoint: ${baseEndpoint}?status=${status}`);
+      const response = await this.apiService.get<TeamleaderInvoiceResponse[]>(`${baseEndpoint}?status=${status}`).toPromise();
+      
+      if (!response || !Array.isArray(response)) {
         throw new Error('Invalid response format');
       }
 
-      // Handle both array response and {data: []} response formats
-      const invoices = Array.isArray(response) ? response : response.data;
+      console.log(`Received ${response.length} invoices from API`);
       
-      if (!invoices || invoices.length === 0) {
-            this.generateTestData();
-          } else {
-        // Process the invoice data using processInvoicesData
-        this.allInvoices = this.processInvoicesData(invoices);
-        this.processLoadedInvoices();
+      // Process the invoice data using processInvoicesData
+      this.allInvoices = this.processInvoicesData(response);
+      
+      // Set invoices based on active tab
+      if (this.activeTab === 'paid') {
+        this.paidInvoices = [...this.allInvoices];
+        this.outstandingInvoices = [];
+      } else {
+        this.outstandingInvoices = [...this.allInvoices];
+        this.paidInvoices = [];
+      }
+      
+      // Update counts
+      this.outstandingCount = this.outstandingInvoices.length;
+      this.paidCount = this.paidInvoices.length;
+      
+      // Set filtered invoices based on active tab
+      this.filteredInvoices = [...this.getActiveInvoices()];
+      
+      // Generate test credit notes if needed - for real API responses
+      if (this.allInvoices.length > 0 && this.allCreditNotes.length === 0) {
+        this.generateTestCreditNotes();
       }
     } catch (error) {
       console.error('Error loading invoices:', error);
-            this.errorMessage = 'Failed to load invoices. Please try again later.';
+      this.errorMessage = 'Failed to load invoices. Please try again later.';
+      
+      // Always generate test data for now to ensure UI works
       this.generateTestData();
     } finally {
       this.loading = false;
     }
   }
 
-  private processLoadedInvoices() {
-    if (!this.allInvoices || !Array.isArray(this.allInvoices)) {
-      this.generateTestData();
-      return;
-    }
+  /**
+   * Process the loaded invoices, separating them into paid and unpaid collections
+   * @param invoices The array of invoices to process
+   */
+  private processLoadedInvoices(invoices: Invoice[]): void {
+    this.log.debug(`Processing ${invoices.length} invoices`);
+    this.allInvoices = [...invoices];
     
-    // Map Teamleader API status values to our internal status values
-    const outstandingInvoices = this.allInvoices.filter(inv => {
-      const status = (inv.status || '').toLowerCase();
-      return status === 'open' || status === 'outstanding' || status === 'overdue' || status === 'draft';
-    });
+    // Filter invoices based on isPaid property
+    this.paidInvoices = invoices.filter(inv => inv.isPaid);
+    this.outstandingInvoices = invoices.filter(inv => !inv.isPaid);
     
-    const paidInvoices = this.allInvoices.filter(inv => {
-      const status = (inv.status || '').toLowerCase();
-      return status === 'paid' || status === 'matched';
-    });
-    
-    // If we still have no invoices in either category, assume they're all outstanding
-    if (outstandingInvoices.length === 0 && paidInvoices.length === 0 && this.allInvoices.length > 0) {
-      this.outstandingInvoices = [...this.allInvoices];
-      this.paidInvoices = [];
-    } else {
-      this.outstandingInvoices = outstandingInvoices;
-      this.paidInvoices = paidInvoices;
-    }
-    
-    // Update counts
-    this.outstandingCount = this.outstandingInvoices.length;
     this.paidCount = this.paidInvoices.length;
+    this.outstandingCount = this.outstandingInvoices.length;
     
-    // Set filtered invoices based on active tab
+    this.log.debug(`Found ${this.paidCount} paid invoices and ${this.outstandingCount} outstanding invoices`);
+    
+    // Set the filtered invoices based on the active tab
     this.filteredInvoices = [...this.getActiveInvoices()];
     
-    // Generate test credit notes if needed
-    if (this.allInvoices.length > 0 && this.allCreditNotes.length === 0) {
-      this.generateTestCreditNotes();
+    // Check if we have no invoices for the active tab
+    if (this.filteredInvoices.length === 0) {
+      if (this.activeTab === 'paid') {
+        this.log.info('No paid invoices found from API');
+        this.errorMessage = 'No paid invoices found for this company.';
+      } else {
+        this.log.info('No unpaid invoices found from API');
+        this.errorMessage = 'No outstanding invoices found for this company.';
+      }
+    } else {
+      // Clear any error message if we have invoices
+      this.errorMessage = '';
     }
+    
+    this.loading = false;
   }
 
   // Helper to get the company ID to use for API calls
@@ -334,58 +363,30 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   }
 
   // Helper to process invoices from API response
-  private processInvoicesData(data: any): Invoice[] {
+  private processInvoicesData(data: TeamleaderInvoiceResponse[]): Invoice[] {
     if (!data || !Array.isArray(data)) {
       return [];
     }
 
-    return data.map((invoice: any) => {
-      // Extract invoice number
-      const invoiceNumber = invoice.number || 
-                           invoice.invoice_number || 
-                           invoice.reference || 
-                           'Unknown';
+    return data.map((invoice: TeamleaderInvoiceResponse) => {
+      // Extract reference id as invoice number
+      const invoiceNumber = invoice.id || 'Unknown';
       
-      // Extract dates
-      const invoiceDate = this.formatApiDate(invoice.date || invoice.created_at);
-      const invoiceDueDate = this.formatApiDate(invoice.due_date || invoice.due_on);
+      // Extract due date
+      const dueDate = this.formatApiDate(invoice.dueOn);
       
-      // Extract total amount
-      let totalAmount = 0;
-      if (invoice.total && typeof invoice.total === 'number') {
-        totalAmount = invoice.total;
-      } else if (invoice.total_price && invoice.total_price.amount) {
-        totalAmount = parseFloat(invoice.total_price.amount);
-      } else if (invoice.total && typeof invoice.total === 'string') {
-        totalAmount = parseFloat(invoice.total);
-      }
-      
-      // Extract status
-      const status = invoice.status || 'unknown';
-      
-      // Extract customer name
-      let customerName = 'Unknown Customer';
-      if (invoice.customer && invoice.customer.name) {
-        customerName = invoice.customer.name;
-      } else if (invoice.contact && invoice.contact.name) {
-        customerName = invoice.contact.name;
-      } else if (invoice.customer_name) {
-        customerName = invoice.customer_name;
-      }
-
       // Create and return our Invoice object
       return {
-        id: invoice.id || `unknown-${Math.random().toString(36).substring(2, 10)}`,
+        id: invoice.id,
         invoiceNumber: invoiceNumber,
-        date: invoiceDate,
-        dueDate: invoiceDueDate,
-        totalAmount: totalAmount,
-        status: this.mapInvoiceStatusToComponentStatus(status),
-        paymentTerm: invoice.payment_term || '30 days',
-        isPaid: status.toLowerCase() === 'paid' || status.toLowerCase() === 'matched',
-        isOverdue: status.toLowerCase() === 'overdue',
+        dueDate: dueDate,
+        totalAmount: invoice.total || 0,
+        paymentReference: invoice.paymentReference || '',
+        currency: invoice.currency || 'EUR',
+        isPaid: invoice.isPaid || false,
+        isOverdue: invoice.isOverdue || false,
         type: 'invoice',
-        customer: customerName
+        customer: 'Customer' // We don't have customer info in simplified DTO
       } as Invoice;
     });
   }
@@ -452,14 +453,15 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   switchTab(tab: 'outstanding' | 'paid'): void {
     this.activeTab = tab;
     this.selectedInvoice = null;
+    
     // Reset search and filter states
     this.searchText = '';
     this.statusFilter = 'all';
     this.dateRangeFilter = 'all';
     this.amountRangeFilter = 'all';
-    // Update filtered invoices based on the newly selected tab
-    this.filteredInvoices = [...this.getActiveInvoices()];
-    this.applyFilters();
+    
+    // Load invoices for the selected tab
+    this.loadInvoices();
   }
 
   // For backward compatibility
@@ -508,7 +510,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     if (this.searchText) {
       const term = this.searchText.toLowerCase();
       filteredList = filteredList.filter(invoice => 
-        invoice.invoiceNumber.toLowerCase().includes(term) ||
+        invoice.paymentReference?.toLowerCase().includes(term) ||
         (invoice.totalAmount.toString().includes(term))
       );
     }
@@ -543,8 +545,9 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       
       if (fromDate) {
         filteredList = filteredList.filter(invoice => {
-          const invoiceDate = new Date(invoice.date);
-          return invoiceDate >= fromDate!;
+          const dueDateObj = invoice.dueDate instanceof Date ? 
+            invoice.dueDate : new Date(invoice.dueDate || 0);
+          return dueDateObj >= fromDate!;
         });
       }
       
@@ -555,8 +558,9 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         toDate.setHours(23, 59, 59, 999);
         
         filteredList = filteredList.filter(invoice => {
-          const invoiceDate = new Date(invoice.date);
-          return invoiceDate <= toDate;
+          const dueDateObj = invoice.dueDate instanceof Date ? 
+            invoice.dueDate : new Date(invoice.dueDate || 0);
+          return dueDateObj <= toDate;
         });
       }
     }
@@ -624,107 +628,124 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       return;
     }
     
-    // Fetch credit notes if needed, otherwise display details immediately
-    if (this.getRelatedCreditNotes(invoice.id).length === 0) {
-      this.apiService.get<any>(`teamleader/finance/company/${this.getApiCompanyId()}/invoices/${invoice.id}/credit-notes`)
-        .pipe(
-          catchError(error => {
-            if (this.allCreditNotes.length === 0) {
-              this.generateTestCreditNotes();
-            }
-            return of([]);
-          })
-        )
-        .subscribe(creditNotes => {
-          if (creditNotes && creditNotes.length > 0) {
-            // Process and add to allCreditNotes
-            const newCreditNotes = creditNotes.map((cn: any) => ({
-              id: cn.id || '',
-              creditNoteNumber: cn.credit_note_number || cn.number || `CN-${cn.id}`,
-              date: new Date(cn.credit_note_date || cn.date || new Date()),
-              totalAmount: this.extractAmount(cn.total),
-              status: this.mapCreditNoteStatusToComponentStatus(cn.status || ''),
-              relatedInvoiceId: invoice.id,
-              type: 'creditNote'
-            }));
-            
-            this.allCreditNotes.push(...newCreditNotes);
+    // Use the real API endpoint for invoice details
+    this.apiService.get<any>(`teamleader/finance/company/${this.getApiCompanyId()}/invoices/${invoice.id}`)
+      .pipe(
+        catchError(error => {
+          console.error('Error fetching invoice details from API:', error);
+          // If API call fails, use our local data + fallbacks
+          if (this.getRelatedCreditNotes(invoice.id).length === 0) {
+            this.generateTestCreditNotes();
           }
-          
-          this.displayInvoiceDetails(invoice);
-        });
-    } else {
-      this.displayInvoiceDetails(invoice);
-    }
+          this.displayInvoiceDetails(invoice, this.getRelatedCreditNotes(invoice.id));
+          return of(null);
+        })
+      )
+      .subscribe(response => {
+        if (response) {
+          // Map API response to our internal format
+          const detailsFromApi = this.mapApiResponseToInvoiceDetails(response, invoice);
+          this.displayInvoiceDetails(detailsFromApi, this.getRelatedCreditNotes(invoice.id));
+        }
+      });
   }
 
-  // Extract amount from various formats in API responses
-  private extractAmount(total: any): number {
-    if (!total) return 0;
+  /**
+   * Display the invoice details panel
+   * @param invoice The invoice details to display
+   * @param creditNotes Any related credit notes
+   */
+  private displayInvoiceDetails(invoice: Invoice | InvoiceDetails, creditNotes: CreditNote[]): void {
+    this.selectedInvoice = invoice as InvoiceDetails;
     
-    if (typeof total === 'number') {
-      return total;
-    } else if (typeof total === 'object') {
-      // Try different possible paths in the total object
-      if (total.amount) {
-        return parseFloat(String(total.amount));
-      } else if (total.tax_exclusive && total.tax_exclusive.amount) {
-        return parseFloat(String(total.tax_exclusive.amount));
-      } else if (total.tax_inclusive && total.tax_inclusive.amount) {
-        return parseFloat(String(total.tax_inclusive.amount));
+    // If we have credit notes, attach them to the invoice details
+    if (creditNotes && creditNotes.length > 0) {
+      // Ensure the amount property exists
+      if (!this.selectedInvoice.amount) {
+        this.selectedInvoice.amount = {
+          total: this.selectedInvoice.totalAmount,
+          tax: Math.round(this.selectedInvoice.totalAmount * 0.21 * 100) / 100,
+          subtotal: Math.round(this.selectedInvoice.totalAmount / 1.21 * 100) / 100
+        };
       }
-    } else if (typeof total === 'string') {
-      return parseFloat(total);
+      
+      // Map credit notes to the format expected in the details view
+      this.selectedInvoice.creditNotes = creditNotes.map(note => ({
+        id: note.id,
+        number: note.creditNoteNumber,
+        creditNoteNumber: note.creditNoteNumber,
+        amount: note.totalAmount,
+        date: note.date instanceof Date ? note.date : new Date(note.date),
+        downloadUrl: `${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${this.getApiCompanyId()}/credit-note/${note.id}/pdf`
+      }));
     }
     
-    return 0;
+    this.isDetailViewVisible = true;
+    this.uiStateService.setDetailViewOpen(true);
+    this.selectedInvoiceId = invoice.id;
+    this.isShowingInvoiceDetails = true;
   }
 
-  // Display invoice details with proper handling of different data formats
-  private displayInvoiceDetails(invoice: Invoice): void {
-    if (!invoice || !invoice.id) {
-      return;
-    }
-
-    // Get related credit notes for this invoice
-    const creditNotes = this.getRelatedCreditNotes(invoice.id);
-    
-    // Convert Invoice to InvoiceDetails
-    const invoiceDetails: InvoiceDetails = {
-      ...invoice,
-      // Convert dates ensuring they are Date objects
-      invoiceDate: invoice.date instanceof Date ? invoice.date : new Date(invoice.date),
-      issueDate: invoice.date instanceof Date ? invoice.date : new Date(invoice.date),
-      dueDate: invoice.dueDate instanceof Date ? invoice.dueDate : new Date(invoice.dueDate),
-      paymentDate: invoice.paymentDate ? 
-        (invoice.paymentDate instanceof Date ? invoice.paymentDate : new Date(invoice.paymentDate)) : 
-        undefined,
-      // Add amount details
+  // Map API response to our internal format
+  private mapApiResponseToInvoiceDetails(response: any, originalInvoice: Invoice): InvoiceDetails {
+    // Start with original invoice data as fallback
+    const details: InvoiceDetails = {
+      id: originalInvoice.id,
+      invoiceNumber: originalInvoice.invoiceNumber || '',
+      totalAmount: originalInvoice.totalAmount || 0,
+      isPaid: originalInvoice.isPaid,
+      isOverdue: originalInvoice.isOverdue,
+      type: originalInvoice.type || 'invoice',
+      paymentReference: originalInvoice.paymentReference || '',
+      currency: originalInvoice.currency || 'EUR',
+      customer: originalInvoice.customer || 'Unknown Customer',
+      dueDate: originalInvoice.dueDate instanceof Date ? 
+        originalInvoice.dueDate : new Date(originalInvoice.dueDate || new Date()),
+      
+      // Initialize amount object properly to avoid type errors
       amount: {
-        total: invoice.totalAmount,
-        tax: invoice.totalAmount * 0.21, // Example calculation
-        subtotal: invoice.totalAmount / 1.21 // Example calculation
+        total: originalInvoice.totalAmount || 0,
+        tax: Math.round((originalInvoice.totalAmount || 0) * 0.21 * 100) / 100,
+        subtotal: Math.round((originalInvoice.totalAmount || 0) / 1.21 * 100) / 100
       },
-      // Add customer info
-      companyName: invoice.customer || 'Unknown Company',
-      description: `Invoice ${invoice.invoiceNumber}`,
-      // Map credit notes with proper formatting
-      creditNotes: creditNotes.map(cn => ({
-        id: cn.id,
-        number: cn.creditNoteNumber,
-        creditNoteNumber: cn.creditNoteNumber,
-        amount: cn.totalAmount,
-        date: cn.date instanceof Date ? cn.date : new Date(cn.date),
-        downloadUrl: `credit-notes/${cn.id}`
-      }))
+      companyName: originalInvoice.customer || 'Unknown Customer',
+      description: `Invoice ${originalInvoice.paymentReference || originalInvoice.id}`
     };
     
-    // Set the current invoice and show detail view
-    this.selectedInvoice = invoiceDetails;
-    this.isDetailViewVisible = true;
+    // Override with API data if available
+    if (response) {
+      if (response.number) details.invoiceNumber = response.number;
+      if (response.due_on) details.dueDate = new Date(response.due_on);
+      if (response.invoice_date) details.invoiceDate = new Date(response.invoice_date);
+      if (response.paid_at) details.paymentDate = new Date(response.paid_at);
+      if (response.status) details.isPaid = response.status === 'paid' || response.status === 'matched';
+      
+      // Handle total amounts with proper initialization and type safety
+      if (response.total && details.amount) {
+        // Ensure amount object exists and is initialized
+        const amount = details.amount;
+        
+        if (response.total.tax_inclusive && response.total.tax_inclusive.amount) {
+          amount.total = parseFloat(response.total.tax_inclusive.amount);
+        }
+        
+        if (response.total.tax_exclusive && response.total.tax_exclusive.amount) {
+          amount.subtotal = parseFloat(response.total.tax_exclusive.amount);
+        }
+        
+        // Calculate tax amount with null checks
+        if (amount && amount.total && amount.subtotal) {
+          amount.tax = amount.total - amount.subtotal;
+        }
+        
+        // Update total amount from the amount object
+        if (amount && amount.total) {
+          details.totalAmount = amount.total;
+        }
+      }
+    }
     
-    // Add a global dimming class to the body via the UI service
-    this.uiStateService.setDetailViewOpen(true);
+    return details;
   }
 
   // Download invoice
@@ -759,12 +780,24 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   // Sort invoices based on current sort field and direction
   private sortInvoices(): void {
     const sortFn = (a: Invoice, b: Invoice) => {
-      let valA: any = a[this.sortColumn as keyof Invoice];
-      let valB: any = b[this.sortColumn as keyof Invoice];
+      let valA: any, valB: any;
+      
+      // Special case for amount sorting
+      if (this.sortColumn === 'amount') {
+        valA = a.totalAmount;
+        valB = b.totalAmount;
+      } else if (this.sortColumn === 'dueDate') {
+        valA = a.dueDate instanceof Date ? a.dueDate : new Date(a.dueDate || 0);
+        valB = b.dueDate instanceof Date ? b.dueDate : new Date(b.dueDate || 0);
+      } else {
+        valA = a[this.sortColumn as keyof Invoice];
+        valB = b[this.sortColumn as keyof Invoice];
+      }
       
       // Convert dates to timestamps for comparison
       if (valA instanceof Date) valA = valA.getTime();
       if (valB instanceof Date) valB = valB.getTime();
+      
       if (typeof valA === 'string' && typeof valB === 'string') {
         // For string comparisons, use localeCompare
         return this.sortDirection === 'asc' ? 
@@ -783,60 +816,95 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     this.paidInvoices.sort(sortFn);
   }
 
-  // Helper method to generate test data when API is not available
+  /**
+   * Generates test data for invoices when none are found
+   * @returns An array of mock invoices
+   */
   private generateTestData(): void {
-    // Generate 6 test invoices with various statuses
-    this.allInvoices = Array(6).fill(0).map((_, i) => {
-      const id = (i + 1).toString();
-      const isPaid = i < 3; // First 3 are paid
-      const isOverdue = !isPaid && i % 2 === 0; // Some unpaid ones are overdue
-      
-      return {
-        id,
-        invoiceNumber: `INV-00${id}`,
-        date: new Date(2023, i, 15), // Different months
-        dueDate: new Date(2023, i + 1, 15),
-        totalAmount: 1000 + (i * 500),
-        status: isPaid ? 'paid' : (isOverdue ? 'overdue' : 'outstanding'),
-        paymentTerm: '30 days',
-        isPaid,
-        isOverdue,
-        type: 'invoice',
-        paymentDate: isPaid ? new Date(2023, i, 22) : undefined,
-        customer: 'Test Company'
-      };
-    });
+    console.log('API request failed - Generating test data as fallback');
+    const testInvoices = this.createTestInvoices();
     
-    // Generate credit notes for approximately 30% of invoices
-    this.allCreditNotes = [];
-    const invoicesWithCreditNotes = [1, 2, 5]; // Only specific invoices get credit notes
+    this.allInvoices = testInvoices;
+    this.paidInvoices = testInvoices.filter(inv => inv.isPaid);
+    this.outstandingInvoices = testInvoices.filter(inv => !inv.isPaid);
     
-    invoicesWithCreditNotes.forEach((invoiceId, i) => {
-      // Add 1-2 credit notes per invoice
-      const noteCount = invoiceId <= 2 ? 2 : 1;
-      
-      for (let j = 0; j < noteCount; j++) {
-        const id = `${100 + this.allCreditNotes.length + 1}`;
-        this.allCreditNotes.push({
-          id,
-          creditNoteNumber: `CN-${id}`,
-          date: new Date(),
-          totalAmount: this.allInvoices[invoiceId-1].totalAmount * (0.2 + (j * 0.1)),
-          status: this.allInvoices[invoiceId-1].isPaid ? 'paid' : 'outstanding',
-          relatedInvoiceId: invoiceId.toString(),
-        type: 'creditNote'
-        });
-      }
-    });
-    
-    // Process the test data
-    this.outstandingInvoices = this.allInvoices.filter(invoice => !invoice.isPaid);
-    this.paidInvoices = this.allInvoices.filter(invoice => invoice.isPaid);
     this.outstandingCount = this.outstandingInvoices.length;
     this.paidCount = this.paidInvoices.length;
-    this.filteredInvoices = [...this.getActiveInvoices()];
     
+    this.filteredInvoices = [...this.getActiveInvoices()];
     this.loading = false;
+    
+    // Generate test credit notes
+    this.generateTestCreditNotes();
+  }
+  
+  // New helper method to create test invoices
+  private createTestInvoices(): Invoice[] {
+    this.log.warn('Creating test invoice data');
+    const testInvoices: Invoice[] = [];
+    
+    const now = new Date();
+    const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+    const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, now.getDate());
+    const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+    
+    // Paid invoice
+    testInvoices.push({
+      id: 'test-invoice-1',
+      invoiceNumber: 'INV-001',
+      dueDate: oneMonthAgo,
+      totalAmount: 1250.50,
+      currency: 'EUR',
+      paymentReference: 'REF001',
+      isPaid: true,
+      isOverdue: false,
+      type: 'invoice',
+      customer: 'Test Customer 1'
+    });
+    
+    // Outstanding invoice
+    testInvoices.push({
+      id: 'test-invoice-2',
+      invoiceNumber: 'INV-002',
+      dueDate: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 15), // Due in 15 days
+      totalAmount: 780.25,
+      currency: 'EUR',
+      paymentReference: 'REF002',
+      isPaid: false,
+      isOverdue: false,
+      type: 'invoice',
+      customer: 'Test Customer 1'
+    });
+    
+    // Overdue invoice
+    testInvoices.push({
+      id: 'test-invoice-3',
+      invoiceNumber: 'INV-003',
+      dueDate: twoMonthsAgo,
+      totalAmount: 450.00,
+      currency: 'EUR',
+      paymentReference: 'REF003',
+      isPaid: false,
+      isOverdue: true,
+      type: 'invoice',
+      customer: 'Test Customer 1'
+    });
+    
+    // Another paid invoice
+    testInvoices.push({
+      id: 'test-invoice-4',
+      invoiceNumber: 'INV-004',
+      dueDate: threeMonthsAgo,
+      totalAmount: 1875.75,
+      currency: 'EUR',
+      paymentReference: 'REF004',
+      isPaid: true,
+      isOverdue: false,
+      type: 'invoice',
+      customer: 'Test Customer 2'
+    });
+    
+    return testInvoices;
   }
 
   // Helper to safely format amounts with 2 decimal places
@@ -849,12 +917,9 @@ export class InvoicesComponent implements OnInit, OnDestroy {
 
   // Get status class for styling
   getStatusClass(invoice: any) {
-    switch (invoice.status) {
-      case 'paid': return 'active';
-      case 'overdue': return 'pending';
-      case 'outstanding': return 'inactive';
-      default: return '';
-    }
+    if (invoice.isPaid) return 'active';
+    if (invoice.isOverdue) return 'pending';
+    return 'inactive'; // outstanding
   }
 
   // Check if any filters are active

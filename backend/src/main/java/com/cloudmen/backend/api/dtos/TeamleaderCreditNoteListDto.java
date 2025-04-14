@@ -47,6 +47,7 @@ public class TeamleaderCreditNoteListDTO {
      * Total credit note amount
      */
     @JsonProperty("total")
+    @Builder.Default
     private BigDecimal total = BigDecimal.ZERO;
 
     /**
