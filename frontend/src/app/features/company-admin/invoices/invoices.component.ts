@@ -80,6 +80,9 @@ interface InvoiceDetails {
     subtotal: number;
   };
   description?: string;
+  customerId?: string; // Customer ID property 
+  purchaseOrderNumber?: string; // Purchase order number
+  sent?: boolean; // Whether the invoice has been sent
   creditNotes?: Array<{
     id: string;
     number: string;
@@ -709,7 +712,10 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         subtotal: Math.round((originalInvoice.totalAmount || 0) / 1.21 * 100) / 100
       },
       companyName: originalInvoice.customer || 'Unknown Customer',
-      description: `Invoice ${originalInvoice.paymentReference || originalInvoice.id}`
+      description: `Invoice ${originalInvoice.paymentReference || originalInvoice.id}`,
+      customerId: originalInvoice.customer,
+      purchaseOrderNumber: originalInvoice.paymentReference,
+      sent: originalInvoice.isPaid
     };
     
     // Override with API data if available
