@@ -4,14 +4,13 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { AuthService } from '../auth.service';
 
 @Component({
-  selector: 'app-account-deactivated',
+  selector: 'app-pending-account',
   standalone: true,
   imports: [CommonModule, RouterModule],
-  templateUrl: './account-deactivated.component.html',
-  styleUrls: ['./account-deactivated.component.scss']
+  templateUrl: './pending-account.component.html',
+  styleUrls: ['./pending-account.component.scss']
 })
-export class AccountDeactivatedComponent implements OnInit {
-  userStatus: string = 'INACTIVE';
+export class PendingAccountComponent implements OnInit {
   
   constructor(
     private router: Router,
@@ -20,14 +19,10 @@ export class AccountDeactivatedComponent implements OnInit {
   ) {}
   
   ngOnInit(): void {
-    this.route.queryParams.subscribe(params => {
-      if (params['status']) {
-        this.userStatus = params['status'];
-      }
-    });
+    // Nothing specific needed on init for pending accounts
   }
   
-  contactSupport(): void {
+  contactAdmin(): void {
     // Open email client without subject or body
     window.location.href = 'mailto:help@cloudmen.com';
   }

@@ -1,4 +1,4 @@
-// Deactivated Account Component Styles
+// Pending Account Component Styles
 // Using variables from styles.scss
 
 html, body {
@@ -8,7 +8,7 @@ html, body {
   overflow: hidden;
 }
 
-.deactivated-container {
+.pending-container {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -80,7 +80,7 @@ html, body {
   width: 80px;
   height: 80px;
   margin: 0 auto 20px;
-  background-color: var(--fire-red-soft);
+  background-color: var(--deep-ocean-soft);
   border-radius: var(--radius-circle);
   display: flex;
   align-items: center;
@@ -97,11 +97,10 @@ html, body {
   
   i {
     font-size: 40px;
-    color: var(--fire-red);
+    color: var(--deep-ocean);
     
     @media (max-width: 480px) {
       font-size: 32px;
-      color: var(--deep-ocean);
     }
   }
 }
@@ -117,14 +116,44 @@ h1 {
   }
 }
 
-p {
-  color: var(--slate);
-  font-size: 16px;
-  line-height: 1.6;
-  margin-bottom: 20px;
+.message-container {
+  margin-bottom: var(--space-xl);
   
-  @media (max-width: 480px) {
-    font-size: 14px;
+  p {
+    color: var(--slate);
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+    
+    @media (max-width: 480px) {
+      font-size: 14px;
+    }
+  }
+  
+  .welcome-message {
+    font-weight: 500;
+    color: var(--deep-ocean);
+    font-size: 18px;
+    
+    @media (max-width: 480px) {
+      font-size: 16px;
+    }
+  }
+  
+  .info-message {
+    color: var(--slate);
+    max-width: 400px;
+    margin: 0 auto 1rem;
+    
+    @media (max-width: 480px) {
+      max-width: none;
+    }
+  }
+  
+  .action-message {
+    font-style: italic;
+    color: var(--aqua-spring);
+    font-weight: 500;
   }
 }
 
@@ -132,7 +161,6 @@ p {
   display: flex;
   gap: var(--space-md);
   justify-content: center;
-  margin-top: var(--space-lg);
   
   @media (max-width: 480px) {
     flex-direction: column;
@@ -183,12 +211,13 @@ p {
 }
 
 .btn-secondary {
-  background-color: var(--fire-red-soft);
-  color: var(--fire-red);
-  border-color: var(--fire-red);
+  background-color: var(--aqua-spring-soft);
+  color: var(--aqua-spring);
+  border-color: var(--aqua-spring);
   
   &:hover {
-    background-color: var(--fire-red);
+    background-color: var(--aqua-spring);
     color: white;
   }
-} 
+}
+
