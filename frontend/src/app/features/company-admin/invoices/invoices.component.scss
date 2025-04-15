@@ -669,7 +669,7 @@
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 85vh;
+    height: 100%;
     border-radius: 16px 16px 0 0;
     box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.15);
     animation: slideUp 0.3s ease forwards;
@@ -686,13 +686,17 @@
       .back-button {
         display: flex;
         align-items: center;
-        background: transparent;
+        background: rgba(255, 255, 255, 0.1);
         border: none;
         color: white;
+        border-radius: 4px;
+        padding: 8px 12px;
         cursor: pointer;
+        font-weight: 500;
         
         i {
           margin-right: var(--space-xs);
+          font-size: 1.1rem;
         }
       }
     }
@@ -716,7 +720,25 @@
     align-items: center;
     
     .back-button {
-      display: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      
+      &:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      
+      i {
+        margin-right: var(--space-xs);
+      }
     }
       
     h3 {
@@ -928,6 +950,10 @@
   .detail-footer {
     padding: var(--space-md) var(--space-lg);
     border-top: 1px solid var(--silver-lining);
+    position: sticky;
+    bottom: 0;
+    background: white;
+    z-index: 2;
     
     .download-invoice-button {
       width: 100%;
@@ -1206,7 +1232,7 @@
 
 /* Adjusted detail panel for mobile */
 .detail-panel {
-  height: 90vh;
+  height: 100vh;
   
   .detail-header {
     padding: 16px;

@@ -401,7 +401,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       .filter((_, index) => index % 3 === 0)
       .slice(0, Math.max(1, Math.floor(this.allInvoices.length * 0.3)));
     
-    // Create 1-2 credit notes for the selected invoices
+    // Create 1-2 credit notes for the selected invoic
     invoicesWithCreditNotes.forEach((invoice, index) => {
       // First two invoices get 2 credit notes, others get 1
       const numNotesForThisInvoice = index < 2 ? 2 : 1;
@@ -757,14 +757,6 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   // Download invoice
   downloadInvoice(invoice: Invoice | InvoiceDetails): void {
     window.open(`${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${this.getApiCompanyId()}/invoice/${invoice.id}/pdf`, '_blank');
-  }
-
-  // Download credit note
-  downloadCreditNote(creditNote: any, event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-    window.open(`${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${this.getApiCompanyId()}/credit-note/${creditNote.id}/pdf`, '_blank');
   }
 
   // Helper to get active invoices based on current tab

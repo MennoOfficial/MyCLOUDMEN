@@ -4,12 +4,13 @@ import { MainLayoutComponent } from './layouts/main-layout/main-layout.component
 import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
 import { authGuard } from './core/auth/auth.guard';
 import { roleGuard } from './core/auth/role.guard';
+import { statusGuard } from './core/auth/status.guard';
 
 export const routes: Routes = [
   {
     path: '',
     component: MainLayoutComponent,
-    canActivate: [authGuard],
+    canActivate: [authGuard, statusGuard],
     children: [
       {
         path: '',
@@ -74,6 +75,10 @@ export const routes: Routes = [
       {
         path: 'error',
         loadComponent: () => import('./core/auth/error/error.component').then(c => c.ErrorComponent)
+      },
+      {
+        path: 'account-deactivated',
+        loadComponent: () => import('./core/auth/account-deactivated/account-deactivated.component').then(c => c.AccountDeactivatedComponent)
       }
     ]
   },

@@ -16,5 +16,6 @@ export interface UserResponseDTO {
   id: string;
   email: string;
   roles: string[];
+  status: string;
   auth0Id: string;
 } 
