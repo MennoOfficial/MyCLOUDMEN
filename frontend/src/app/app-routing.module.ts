@@ -75,12 +75,17 @@ export const routes: Routes = [
       {
         path: 'error',
         loadComponent: () => import('./core/auth/error/error.component').then(c => c.ErrorComponent)
-      },
-      {
-        path: 'account-deactivated',
-        loadComponent: () => import('./core/auth/account-deactivated/account-deactivated.component').then(c => c.AccountDeactivatedComponent)
       }
     ]
+  },
+  // Standalone routes outside of any layout
+  {
+    path: 'pending-account',
+    loadComponent: () => import('./core/auth/pending-account/pending-account.component').then(c => c.PendingAccountComponent)
+  },
+  {
+    path: 'account-deactivated',
+    loadComponent: () => import('./core/auth/account-deactivated/account-deactivated.component').then(c => c.AccountDeactivatedComponent)
   },
   {
     path: '**',

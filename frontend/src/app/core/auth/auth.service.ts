@@ -8,6 +8,7 @@ import { EnvironmentService } from '../services/environment.service';
 import { DOCUMENT } from '@angular/common';
 
 export type UserRole = 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER';
+export type UserStatus = 'ACTIVATED' | 'DEACTIVATED' | 'PENDING' | 'REJECTED';
 
 export interface User {
   id?: string;
@@ -18,6 +19,7 @@ export interface User {
   lastName?: string;
   picture?: string;
   roles: UserRole[];
+  status?: UserStatus;
 }
 
 @Injectable({
@@ -284,14 +286,24 @@ export class AuthService {
               this.userSubject.next(user);
               this.saveUserToStorage(user);
               
-              // Only redirect if this is the initial login
-              if (this.router.url === '/' || this.router.url === '/callback') {
-                this.redirectBasedOnRoles(user.roles);
-              }
-              
               // Log successful authentication
               if (auth0User.email) {
                 this.logSuccessfulAuthentication(auth0User.email);
+              }
+              
+              // Check user status before redirecting
+              if (user.status === 'PENDING') {
+                console.log('User status is PENDING, redirecting to pending page');
+                this.router.navigate(['/pending-account']);
+              } else if (user.status === 'DEACTIVATED') {
+                console.log('User status is DEACTIVATED, redirecting to deactivated page');
+                this.router.navigate(['/account-deactivated'], {
+                  queryParams: { status: user.status }
+                });
+              }
+              // Only redirect based on role if this is the initial login and user is ACTIVATED
+              else if ((this.router.url === '/' || this.router.url === '/callback') && user.status === 'ACTIVATED') {
+                this.redirectBasedOnRoles(user.roles);
               }
             }, 100);
           }
@@ -301,6 +313,9 @@ export class AuthService {
           const defaultUser = this.createDefaultUser(auth0User);
           this.userSubject.next(defaultUser);
           this.saveUserToStorage(defaultUser);
+          
+          // Redirect new users to pending page
+          this.router.navigate(['/pending-account']);
         }
       });
   }
@@ -312,6 +327,7 @@ export class AuthService {
       name: auth0User.name,
       picture: auth0User.picture,
       roles: ['COMPANY_USER'] as UserRole[], // Default to COMPANY_USER instead of COMPANY_ADMIN
+      status: 'PENDING' as UserStatus, // Default status for new users
       provider: auth0User.sub.split('|')[0]
     };
     
@@ -331,7 +347,8 @@ export class AuthService {
       email: auth0User.email,
       name: auth0User.name,
       picture: auth0User.picture,
-      roles
+      roles,
+      status: 'PENDING' // Default status
     };
   }
 

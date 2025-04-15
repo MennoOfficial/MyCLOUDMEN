@@ -57,7 +57,7 @@ export class StatusCheckerService implements OnDestroy {
           console.log('Periodic status check result:', user.status);
           if (user.status !== 'ACTIVATED') {
             console.log(`User status is ${user.status}, redirecting to deactivated page`);
-            this.router.navigate(['/auth/account-deactivated'], { 
+            this.router.navigate(['/account-deactivated'], { 
               queryParams: { status: user.status } 
             });
           }
