@@ -3,6 +3,7 @@ package com.cloudmen.backend.services;
 import com.cloudmen.backend.api.dtos.TeamleaderInvoiceDetailDTO;
 import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDTO;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,8 +15,11 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Arrays;
 
 /**
  * Service for interacting with TeamLeader API for invoice operations
@@ -31,18 +35,18 @@ public class TeamleaderInvoiceService {
     /**
      * Find invoices for a specific company with optional filters
      * 
-     * @param companyId Company ID in TeamLeader format
-     * @param isPaid    Optional filter for paid status
-     * @param isOverdue Optional filter for overdue status
+     * @param companyId  Company ID in TeamLeader format
+     * @param isPaid     Optional filter for paid status
+     * @param isOverdue  Optional filter for overdue status
      * @param searchTerm Optional search term
      * @return List of invoice list DTOs
      */
     public List<TeamleaderInvoiceListDTO> findInvoicesByCompany(
-            String companyId, 
+            String companyId,
             Boolean isPaid,
-            Boolean isOverdue, 
+            Boolean isOverdue,
             String searchTerm) {
-        
+
         log.info("Fetching invoices for company ID: {} with filters", companyId);
 
         try {
@@ -52,38 +56,57 @@ public class TeamleaderInvoiceService {
                 return Collections.emptyList();
             }
 
-            // Build the API request filter
-            StringBuilder filterJson = new StringBuilder();
-            filterJson.append("{\"page\":{\"size\":100,\"number\":1},\"filter\":{");
-            filterJson.append("\"customer\":{\"type\":\"company\",\"id\":\"").append(companyId).append("\"}");
-            
+            // Create request as a proper JSON structure using ObjectMapper
+            ObjectMapper objectMapper = new ObjectMapper();
+
+            // Create the main request object
+            Map<String, Object> requestBody = new HashMap<>();
+
+            // Add pagination
+            Map<String, Object> page = new HashMap<>();
+            page.put("size", 100);
+            page.put("number", 1);
+            requestBody.put("page", page);
+
+            // Create filter object
+            Map<String, Object> filter = new HashMap<>();
+
+            // Add company filter
+            Map<String, Object> customer = new HashMap<>();
+            customer.put("type", "company");
+            customer.put("id", companyId.trim()); // Ensure ID is trimmed
+            filter.put("customer", customer);
+
             // Add status filter if isPaid is specified
             if (isPaid != null) {
-                String[] statuses = isPaid ? 
-                    new String[]{"paid", "matched"} : 
-                    new String[]{"draft", "outstanding", "overdue"};
-                
-                filterJson.append(",\"status\":[");
-                for (int i = 0; i < statuses.length; i++) {
-                    if (i > 0) filterJson.append(",");
-                    filterJson.append("\"").append(statuses[i]).append("\"");
+                // Always use an array for status, even for a single value
+                List<String> statuses = new ArrayList<>();
+                if (isPaid) {
+                    statuses.add("matched"); // "matched" is used for paid invoices in Teamleader API
+                } else {
+                    statuses.add("outstanding");
                 }
-                filterJson.append("]");
+                filter.put("status", statuses);
             }
-            
+
             // Add search term if provided
             if (searchTerm != null && !searchTerm.isEmpty()) {
-                filterJson.append(",\"term\":\"").append(searchTerm).append("\"");
+                filter.put("term", searchTerm);
             }
-            
-            filterJson.append("}}");
-            
+
+            // Add filter to request
+            requestBody.put("filter", filter);
+
+            // Convert to JSON string
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
+            log.debug("Sending request to Teamleader API: {}", jsonBody);
+
             // Call the API
             JsonNode response = webClient.post()
                     .uri("/invoices.list")
                     .header("Authorization", "Bearer " + accessToken)
                     .header("Content-Type", "application/json")
-                    .bodyValue(filterJson.toString())
+                    .bodyValue(jsonBody)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
@@ -99,14 +122,14 @@ public class TeamleaderInvoiceService {
             for (JsonNode invoiceNode : response.get("data")) {
                 try {
                     TeamleaderInvoiceListDTO invoice = mapToInvoiceListDto(invoiceNode);
-                    
+
                     // Mark overdue if not paid and past due date
-                    if (!Boolean.TRUE.equals(invoice.getIsPaid()) && 
-                        invoice.getDueOn() != null && 
-                        invoice.getDueOn().isBefore(today)) {
+                    if (!Boolean.TRUE.equals(invoice.getIsPaid()) &&
+                            invoice.getDueOn() != null &&
+                            invoice.getDueOn().isBefore(today)) {
                         invoice.setIsOverdue(true);
                     }
-                    
+
                     // Add to results if matches overdue filter or if no filter
                     if (isOverdue == null || isOverdue.equals(invoice.getIsOverdue())) {
                         invoices.add(invoice);
@@ -132,7 +155,7 @@ public class TeamleaderInvoiceService {
     public List<TeamleaderInvoiceListDTO> findByCustomerId(String companyId) {
         return findInvoicesByCompany(companyId, null, null, null);
     }
-    
+
     /**
      * Find invoice by ID
      * 
@@ -148,22 +171,30 @@ public class TeamleaderInvoiceService {
                 return Optional.empty();
             }
 
+            // Create request as proper JSON using ObjectMapper
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("id", id.trim()); // Ensure ID is trimmed
+
+            // Convert to JSON string
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
+            log.debug("Sending request to Teamleader API: {}", jsonBody);
+
             // Call the API directly
-            String requestBody = String.format("{\"id\":\"%s\"}", id);
             JsonNode response = webClient.post()
                     .uri("/invoices.info")
                     .header("Authorization", "Bearer " + accessToken)
                     .header("Content-Type", "application/json")
-                    .bodyValue(requestBody)
+                    .bodyValue(jsonBody)
                     .retrieve()
                     .bodyToMono(JsonNode.class)
                     .block();
-            
+
             // Return empty if no valid response
             if (response == null || !response.has("data")) {
                 return Optional.empty();
             }
-            
+
             // Map and return the details
             TeamleaderInvoiceDetailDTO detailDTO = mapToInvoiceDetailDto(response);
             return Optional.of(detailDTO);
@@ -186,22 +217,22 @@ public class TeamleaderInvoiceService {
         }
 
         TeamleaderInvoiceListDTO dto = new TeamleaderInvoiceListDTO();
-        
+
         // Map basic properties
         dto.setId(getTextOrNull(invoice, "id"));
         dto.setInvoiceNumber(getTextOrNull(invoice, "number"));
         dto.setPaymentReference(getTextOrNull(invoice, "payment_reference"));
-        
+
         // Parse dates
         if (invoice.has("due_on") && !invoice.get("due_on").isNull()) {
             dto.setDueOn(LocalDate.parse(invoice.get("due_on").asText()));
         }
-        
+
         // Set default values
         dto.setTotal(BigDecimal.ZERO);
         dto.setIsPaid(false);
         dto.setIsOverdue(false);
-        
+
         // Parse total and currency
         if (invoice.has("total")) {
             JsonNode total = invoice.get("total");
@@ -212,7 +243,7 @@ public class TeamleaderInvoiceService {
                 }
             }
         }
-        
+
         // Check paid status
         if (invoice.has("paid") && !invoice.get("paid").isNull()) {
             dto.setIsPaid(invoice.get("paid").asBoolean());
@@ -220,7 +251,7 @@ public class TeamleaderInvoiceService {
             String status = invoice.get("status").asText().toLowerCase();
             dto.setIsPaid(status.equals("paid") || status.equals("matched"));
         }
-        
+
         return dto;
     }
 
@@ -235,7 +266,7 @@ public class TeamleaderInvoiceService {
         if (node.has("data")) {
             node = node.get("data");
         }
-        
+
         TeamleaderInvoiceDetailDTO dto = new TeamleaderInvoiceDetailDTO();
 
         // Map basic properties
@@ -244,7 +275,7 @@ public class TeamleaderInvoiceService {
         dto.setStatus(getTextOrNull(node, "status"));
         dto.setPaymentReference(getTextOrNull(node, "payment_reference"));
         dto.setPurchaseOrderNumber(getTextOrNull(node, "purchase_order_number"));
-        
+
         // Parse dates
         if (node.has("date") && !node.get("date").isNull()) {
             dto.setDate(LocalDate.parse(node.get("date").asText()));
@@ -255,7 +286,7 @@ public class TeamleaderInvoiceService {
         if (node.has("paid_at") && !node.get("paid_at").isNull()) {
             dto.setPaidAt(LocalDate.parse(node.get("paid_at").asText()));
         }
-        
+
         // Parse boolean values
         if (node.has("sent") && !node.get("sent").isNull()) {
             dto.setSent(node.get("sent").asBoolean());
@@ -278,17 +309,17 @@ public class TeamleaderInvoiceService {
                     dto.setCurrency(total.get("tax_exclusive").get("currency").asText());
                 }
             }
-            
+
             if (total.has("tax_inclusive") && total.get("tax_inclusive").has("amount")) {
                 dto.setTotal(new BigDecimal(total.get("tax_inclusive").get("amount").asText()));
                 if (total.get("tax_inclusive").has("currency")) {
                     dto.setCurrency(total.get("tax_inclusive").get("currency").asText());
                 }
             }
-            
+
             // Calculate tax amount
-            if (dto.getTotal().compareTo(BigDecimal.ZERO) > 0 && 
-                dto.getSubtotal().compareTo(BigDecimal.ZERO) > 0) {
+            if (dto.getTotal().compareTo(BigDecimal.ZERO) > 0 &&
+                    dto.getSubtotal().compareTo(BigDecimal.ZERO) > 0) {
                 dto.setTaxAmount(dto.getTotal().subtract(dto.getSubtotal()));
             }
         }
@@ -300,17 +331,17 @@ public class TeamleaderInvoiceService {
             dto.setCustomerType(getTextOrNull(customer, "type"));
             dto.setCustomerName(getTextOrNull(customer, "name"));
         }
-        
+
         // Parse invoice lines
         if (node.has("items") && node.get("items").isArray()) {
             List<TeamleaderInvoiceDetailDTO.InvoiceLineDTO> lines = new ArrayList<>();
-            
+
             for (JsonNode lineNode : node.get("items")) {
                 TeamleaderInvoiceDetailDTO.InvoiceLineDTO line = new TeamleaderInvoiceDetailDTO.InvoiceLineDTO();
-                
+
                 line.setDescription(getTextOrNull(lineNode, "description"));
                 line.setUnit(getTextOrNull(lineNode, "unit"));
-                
+
                 if (lineNode.has("quantity") && !lineNode.get("quantity").isNull()) {
                     line.setQuantity(new BigDecimal(lineNode.get("quantity").asText()));
                 }
@@ -323,16 +354,16 @@ public class TeamleaderInvoiceService {
                 if (lineNode.has("tax_rate") && !lineNode.get("tax_rate").isNull()) {
                     line.setTaxRate(new BigDecimal(lineNode.get("tax_rate").asText()));
                 }
-                
+
                 lines.add(line);
             }
-            
+
             dto.setLines(lines);
         }
-        
+
         return dto;
     }
-    
+
     /**
      * Helper method to safely extract text from a JsonNode
      * 
