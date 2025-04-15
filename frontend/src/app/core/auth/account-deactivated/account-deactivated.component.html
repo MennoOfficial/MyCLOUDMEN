@@ -1,0 +1,35 @@
+<div class="deactivated-container">
+  <div class="logo-container">
+    <img
+      src="https://images.squarespace-cdn.com/content/v1/5ccbf1d3af468332420ae5e1/29cace80-077c-4a83-b165-c29a38b583d8/embleem_transp_white_1700.png"
+      alt="Company Logo"
+      class="logo"
+    />
+  </div>
+
+  <div class="content-card">
+    <div class="icon-container">
+      <i class="material-icons">account_circle</i>
+    </div>
+
+    <h1>
+      Account {{ userStatus === "INACTIVE" ? "Inactive" : "Deactivated" }}
+    </h1>
+
+    <p *ngIf="userStatus === 'INACTIVE'">
+      Your account is currently inactive. Please contact your administrator to
+      activate your account.
+    </p>
+    <p *ngIf="userStatus !== 'INACTIVE'">
+      Your account has been deactivated. Please contact your administrator for
+      assistance.
+    </p>
+
+    <div class="button-group">
+      <button class="btn btn-secondary" (click)="contactSupport()">
+        Contact Support
+      </button>
+      <button class="btn btn-primary" (click)="logout()">Logout</button>
+    </div>
+  </div>
+</div>

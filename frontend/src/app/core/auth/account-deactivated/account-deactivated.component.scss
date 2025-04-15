@@ -1,0 +1,145 @@
+// Define color variables
+$deep-blue: #1a2b47;
+$deep-blue-light: #273c5f;
+$white: #ffffff;
+$light-gray: #f5f7fa;
+$medium-gray: #e1e5eb;
+$warning-amber: #ffc107;
+$text-dark: #2e3a4b;
+$text-light: #617083;
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.deactivated-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  background: $deep-blue;
+  font-family: 'Roboto', sans-serif;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+.logo-container {
+  margin-bottom: 2rem;
+  
+  .logo {
+    max-width: 150px;
+    height: auto;
+  }
+}
+
+.content-card {
+  background-color: $white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 30px;
+  max-width: 450px;
+  width: 90%;
+  text-align: center;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.icon-container {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  background-color: $light-gray;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  i {
+    font-size: 40px;
+    color: $deep-blue;
+  }
+}
+
+h1 {
+  color: $text-dark;
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+p {
+  color: $text-light;
+  font-size: 16px;
+  line-height: 1.5;
+  margin-bottom: 24px;
+}
+
+.button-group {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  
+  @media (max-width: 480px) {
+    flex-direction: column;
+  }
+}
+
+.btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 15px;
+  transition: all 0.3s;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.btn-primary {
+  background-color: $deep-blue;
+  color: $white;
+  
+  &:hover {
+    background-color: $deep-blue-light;
+  }
+}
+
+.btn-secondary {
+  background-color: $white;
+  color: $deep-blue;
+  border: 2px solid $deep-blue;
+  
+  &:hover {
+    background-color: $light-gray;
+  }
+} 
