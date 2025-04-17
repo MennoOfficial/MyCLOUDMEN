@@ -496,4 +496,20 @@ public class UserController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    /**
+     * Get a user by their email address
+     * This endpoint is used during status checks to retrieve user details
+     * 
+     * @param email The email address of the user
+     * @return ResponseEntity containing the user if found, 404 Not Found otherwise
+     */
+    @GetMapping("/email/{email}")
+    public ResponseEntity<User> getUserByEmail(@PathVariable String email) {
+        return userService.getAllUsers().stream()
+                .filter(user -> email.equals(user.getEmail()))
+                .findFirst()
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
 }
