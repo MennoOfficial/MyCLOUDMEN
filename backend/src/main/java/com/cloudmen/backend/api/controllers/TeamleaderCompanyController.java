@@ -12,9 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -132,10 +129,7 @@ public class TeamleaderCompanyController {
         logger.info("Fetching companies from local database, page: {}, size: {}", page, size);
 
         try {
-            Sort.Direction sortDirection = direction.equalsIgnoreCase("desc") ? Sort.Direction.DESC
-                    : Sort.Direction.ASC;
 
-            Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
             List<TeamleaderCompany> companies = companyService.getAllCompanies();
 
             // Convert entities to DTOs

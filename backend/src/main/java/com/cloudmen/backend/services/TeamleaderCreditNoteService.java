@@ -168,8 +168,6 @@ public class TeamleaderCreditNoteService {
                     "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"invoice_id\":\"%s\"}}",
                     invoiceId);
 
-            log.debug("Attempting to fetch credit notes with request: {}", requestBody);
-
             JsonNode response = webClient.post()
                     .uri("/creditNotes.list")
                     .header("Authorization", "Bearer " + accessToken)
@@ -189,8 +187,6 @@ public class TeamleaderCreditNoteService {
                 String alternativeRequestBody = String.format(
                         "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"invoice\":{\"type\":\"invoice\",\"id\":\"%s\"}}}",
                         invoiceId);
-
-                log.debug("Trying alternative request format: {}", alternativeRequestBody);
 
                 try {
                     response = webClient.post()
@@ -217,40 +213,8 @@ public class TeamleaderCreditNoteService {
 
             for (JsonNode creditNoteNode : response.get("data")) {
                 try {
-                    // Log the raw data for debugging
-                    if (log.isDebugEnabled()) {
-                        if (creditNoteNode.has("for_invoice")) {
-                            JsonNode forInvoice = creditNoteNode.get("for_invoice");
-                            log.debug("Credit note has for_invoice field: {}", forInvoice);
-                            if (forInvoice.has("id")) {
-                                String relatedInvoiceId = forInvoice.get("id").asText();
-                                log.debug("Credit note for_invoice.id = '{}', comparing with requested invoice ID '{}'",
-                                        relatedInvoiceId, invoiceId);
-                            }
-                        } else if (creditNoteNode.has("invoice")) {
-                            // Check if the credit note has the invoice field (TeamLeader API format)
-                            JsonNode invoice = creditNoteNode.get("invoice");
-                            log.debug("Credit note has invoice field: {}", invoice);
-
-                            // Check the invoice ID in the invoice field
-                            if (invoice.has("id")) {
-                                String relatedInvoiceId = invoice.get("id").asText();
-                                log.debug("Credit note invoice.id = '{}', comparing with requested invoice ID '{}'",
-                                        relatedInvoiceId, invoiceId);
-                            } else {
-                                log.warn("Credit note invoice field doesn't have id property");
-                            }
-                        } else {
-                            log.warn("Credit note doesn't have for_invoice or invoice field: {}",
-                                    creditNoteNode.get("id"));
-                        }
-                    }
 
                     TeamleaderCreditNoteListDTO creditNote = mapToCreditNoteListDto(creditNoteNode);
-
-                    // Log the mapped credit note object
-                    log.debug("Mapped credit note: id={}, invoiceId={}",
-                            creditNote.getId(), creditNote.getInvoiceId());
 
                     // Check if the credit note is correctly related to this invoice
                     boolean isValid = creditNote != null && invoiceId.equals(creditNote.getInvoiceId());
@@ -260,18 +224,13 @@ public class TeamleaderCreditNoteService {
                         String rawInvoiceId = creditNoteNode.get("invoice").get("id").asText();
                         isValid = invoiceId.equals(rawInvoiceId);
                         if (isValid) {
-                            log.debug("Credit note relationship valid via direct JSON check (invoice.id = {})",
-                                    rawInvoiceId);
                             // Update the credit note's invoiceId if matched via raw JSON
                             creditNote.setInvoiceId(rawInvoiceId);
                         }
                     }
 
-                    log.debug("Credit note relationship check: isValid={}", isValid);
-
                     if (isValid) {
                         creditNotes.add(creditNote);
-                        log.debug("Added valid credit note {} to invoice {}", creditNote.getId(), invoiceId);
                     } else {
                         log.warn("Skipped credit note {} because it's not related to invoice {}",
                                 creditNote != null ? creditNote.getId() : "null", invoiceId);
@@ -313,8 +272,6 @@ public class TeamleaderCreditNoteService {
             }
 
             List<TeamleaderCreditNoteListDTO> creditNotes = new ArrayList<>();
-            log.debug("Found {} total credit notes to manually filter for invoice {}",
-                    response.get("data").size(), invoiceId);
 
             for (JsonNode creditNoteNode : response.get("data")) {
                 try {
@@ -323,14 +280,12 @@ public class TeamleaderCreditNoteService {
                     // Check if this credit note relates to our invoice
                     if (creditNote != null && invoiceId.equals(creditNote.getInvoiceId())) {
                         creditNotes.add(creditNote);
-                        log.debug("Found matching credit note {} for invoice {}", creditNote.getId(), invoiceId);
                     } else if (creditNoteNode.has("invoice") && creditNoteNode.get("invoice").has("id") &&
                             invoiceId.equals(creditNoteNode.get("invoice").get("id").asText())) {
                         // Direct JSON check
                         creditNote.setInvoiceId(invoiceId);
                         creditNotes.add(creditNote);
-                        log.debug("Found matching credit note {} for invoice {} via direct JSON check",
-                                creditNote.getId(), invoiceId);
+
                     }
                 } catch (Exception e) {
                     log.error("Error processing credit note in manual filtering: {}", e.getMessage());
@@ -484,8 +439,6 @@ public class TeamleaderCreditNoteService {
             String requestBody = String.format(
                     "{\"page\":{\"size\":100,\"number\":1},\"filter\":{\"customer\":{\"type\":\"company\",\"id\":\"%s\"}}}",
                     companyId);
-
-            log.debug("Attempting to fetch credit notes for company with request: {}", requestBody);
 
             JsonNode response = webClient.post()
                     .uri("/creditNotes.list")
@@ -681,11 +634,6 @@ public class TeamleaderCreditNoteService {
                 }
             }
             dto.setInvoiceNumber(invoiceNumber);
-
-            // Log successful association for debugging
-            if (invoiceNumber != null && !invoiceNumber.isEmpty()) {
-                log.debug("Credit note {} associated with invoice number {}", dto.getNumber(), invoiceNumber);
-            }
         } else if (node.has("invoice")) {
             // Handle the case where the field is named 'invoice' instead of 'for_invoice'
             JsonNode invoice = node.get("invoice");
@@ -702,14 +650,6 @@ public class TeamleaderCreditNoteService {
                 }
             }
             dto.setInvoiceNumber(invoiceNumber);
-
-            // Log successful association for debugging
-            if (invoiceNumber != null && !invoiceNumber.isEmpty()) {
-                log.debug("Credit note {} associated with invoice id {}", dto.getNumber(), dto.getInvoiceId());
-            } else {
-                log.debug("Credit note {} associated with invoice id {} (no number available)", dto.getNumber(),
-                        dto.getInvoiceId());
-            }
         }
 
         return dto;

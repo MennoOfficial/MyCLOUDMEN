@@ -17,7 +17,7 @@ import java.util.Map;
  * and synchronizing user data with Auth0.
  */
 @RestController
-@RequestMapping({ "/api/auth0", "/auth0" })
+@RequestMapping({ "/api/auth0" })
 public class Auth0Controller {
 
     private static final Logger logger = LoggerFactory.getLogger(Auth0Controller.class);
