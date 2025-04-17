@@ -11,9 +11,12 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.BodyInserters;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.util.UriComponentsBuilder;
+import reactor.util.retry.Retry;
 
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
@@ -29,22 +32,25 @@ public class TeamleaderOAuthService {
     private static final String PROVIDER_NAME = "teamleader";
 
     private final TeamleaderApiConfig config;
-    private final RestTemplate restTemplate;
+    private final WebClient webClient;
     private final OAuthTokenRepository tokenRepository;
     private final ObjectMapper objectMapper;
+    private final Retry webClientRetrySpec;
 
     // Lock to prevent multiple token refresh operations at the same time
     private final ReentrantLock tokenRefreshLock = new ReentrantLock();
 
     public TeamleaderOAuthService(
             TeamleaderApiConfig config,
-            RestTemplate restTemplate,
+            WebClient webClient,
             OAuthTokenRepository tokenRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            Retry webClientRetrySpec) {
         this.config = config;
-        this.restTemplate = restTemplate;
+        this.webClient = webClient;
         this.tokenRepository = tokenRepository;
         this.objectMapper = objectMapper;
+        this.webClientRetrySpec = webClientRetrySpec;
         logger.info("TeamleaderOAuthService initialized with baseUrl: {}", config.getBaseUrl());
     }
 
@@ -76,32 +82,35 @@ public class TeamleaderOAuthService {
         try {
             logger.info("Exchanging authorization code for access token");
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+            formData.add("client_id", config.getClientId());
+            formData.add("client_secret", config.getClientSecret());
+            formData.add("code", code);
+            formData.add("grant_type", "authorization_code");
+            formData.add("redirect_uri", config.getRedirectUri());
 
-            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-            body.add("client_id", config.getClientId());
-            body.add("client_secret", config.getClientSecret());
-            body.add("code", code);
-            body.add("grant_type", "authorization_code");
-            body.add("redirect_uri", config.getRedirectUri());
+            String responseBody = webClient.post()
+                    .uri(config.getTokenUrl())
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(BodyInserters.fromFormData(formData))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .retryWhen(getDefaultRetry())
+                    .doOnError(e -> logger.error("Error exchanging authorization code: {}", e.getMessage()))
+                    .onErrorReturn("")
+                    .block();
 
-            HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(body, headers);
-
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    config.getTokenUrl(),
-                    requestEntity,
-                    String.class);
-
-            if (response.getStatusCode() == HttpStatus.OK) {
-                JsonNode jsonResponse = objectMapper.readTree(response.getBody());
-                saveTokenResponse(jsonResponse);
-                logger.info("Successfully exchanged authorization code for tokens");
-                return true;
-            } else {
-                logger.error("Failed to exchange authorization code: {}", response.getBody());
-                return false;
+            if (responseBody != null && !responseBody.isEmpty()) {
+                JsonNode jsonResponse = objectMapper.readTree(responseBody);
+                if (jsonResponse.has("access_token")) {
+                    saveTokenResponse(jsonResponse);
+                    logger.info("Successfully exchanged authorization code for tokens");
+                    return true;
+                }
             }
+
+            logger.error("Failed to exchange authorization code");
+            return false;
         } catch (Exception e) {
             logger.error("Error exchanging authorization code", e);
             return false;
@@ -166,38 +175,52 @@ public class TeamleaderOAuthService {
 
             logger.info("Refreshing access token using refresh token");
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+            formData.add("client_id", config.getClientId());
+            formData.add("client_secret", config.getClientSecret());
+            formData.add("refresh_token", token.getRefreshToken());
+            formData.add("grant_type", "refresh_token");
 
-            MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
-            body.add("client_id", config.getClientId());
-            body.add("client_secret", config.getClientSecret());
-            body.add("refresh_token", token.getRefreshToken());
-            body.add("grant_type", "refresh_token");
+            String responseBody = webClient.post()
+                    .uri(config.getTokenUrl())
+                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                    .body(BodyInserters.fromFormData(formData))
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .retryWhen(getDefaultRetry())
+                    .doOnError(e -> logger.error("Error refreshing access token: {}", e.getMessage()))
+                    .onErrorReturn("")
+                    .block();
 
-            HttpEntity<MultiValueMap<String, String>> requestEntity = new HttpEntity<>(body, headers);
-
-            ResponseEntity<String> response = restTemplate.postForEntity(
-                    config.getTokenUrl(),
-                    requestEntity,
-                    String.class);
-
-            if (response.getStatusCode() == HttpStatus.OK) {
-                JsonNode jsonResponse = objectMapper.readTree(response.getBody());
-                updateTokenFromResponse(token, jsonResponse);
-                tokenRepository.save(token);
-                logger.info("Successfully refreshed access token");
-                return true;
-            } else {
-                logger.error("Failed to refresh token: {}", response.getBody());
-                return false;
+            if (responseBody != null && !responseBody.isEmpty()) {
+                JsonNode jsonResponse = objectMapper.readTree(responseBody);
+                if (jsonResponse.has("access_token")) {
+                    updateTokenFromResponse(token, jsonResponse);
+                    tokenRepository.save(token);
+                    logger.info("Successfully refreshed access token");
+                    return true;
+                }
             }
+
+            logger.error("Failed to refresh token");
+            return false;
         } catch (Exception e) {
             logger.error("Error refreshing access token", e);
             return false;
         } finally {
             tokenRefreshLock.unlock();
         }
+    }
+
+    /**
+     * Get default retry configuration for token operations
+     */
+    private Retry getDefaultRetry() {
+        if (webClientRetrySpec != null) {
+            return webClientRetrySpec;
+        }
+        return Retry.backoff(2, Duration.ofSeconds(1))
+                .filter(throwable -> !(throwable instanceof org.springframework.web.reactive.function.client.WebClientResponseException.BadRequest));
     }
 
     /**
@@ -248,15 +271,13 @@ public class TeamleaderOAuthService {
     }
 
     /**
-     * Revoke the current token (logout)
-     * 
-     * @return true if successful, false otherwise
+     * Revoke the current token
      */
     public boolean revokeToken() {
         Optional<OAuthToken> tokenOpt = tokenRepository.findByProvider(PROVIDER_NAME);
         if (tokenOpt.isPresent()) {
             tokenRepository.delete(tokenOpt.get());
-            logger.info("OAuth token for Teamleader has been revoked");
+            logger.info("Successfully revoked token for Teamleader");
             return true;
         }
         return false;

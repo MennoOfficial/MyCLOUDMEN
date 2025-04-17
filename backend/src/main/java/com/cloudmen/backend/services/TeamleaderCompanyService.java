@@ -9,11 +9,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -26,36 +31,46 @@ import java.util.concurrent.CompletableFuture;
 public class TeamleaderCompanyService {
 
     private static final Logger logger = LoggerFactory.getLogger(TeamleaderCompanyService.class);
-    private final RestTemplate restTemplate;
     private final TeamleaderOAuthService oAuthService;
     private final TeamleaderApiConfig apiConfig;
     private final ObjectMapper objectMapper;
     private final TeamleaderCompanyRepository companyRepository;
     private final TeamleaderConfig teamleaderConfig;
 
+    // WebClient for API requests
+    private final WebClient webClient;
+    private final Retry webClientRetrySpec;
+
     public TeamleaderCompanyService(
-            RestTemplate restTemplate,
             TeamleaderOAuthService oAuthService,
             TeamleaderApiConfig apiConfig,
             ObjectMapper objectMapper,
             TeamleaderCompanyRepository companyRepository,
-            TeamleaderConfig teamleaderConfig) {
-        this.restTemplate = restTemplate;
+            TeamleaderConfig teamleaderConfig,
+            @Autowired(required = false) WebClient webClient,
+            @Autowired(required = false) @Qualifier("webClientRetrySpec") Retry webClientRetrySpec) {
         this.oAuthService = oAuthService;
         this.apiConfig = apiConfig;
         this.objectMapper = objectMapper;
         this.companyRepository = companyRepository;
         this.teamleaderConfig = teamleaderConfig;
+        this.webClient = webClient;
+        this.webClientRetrySpec = webClientRetrySpec;
     }
 
     /**
-     * Get a list of companies from Teamleader
+     * Get a list of companies from Teamleader using WebClient
      * 
      * @param page     Page number (1-based)
      * @param pageSize Number of items per page
      * @return List of companies
      */
     public JsonNode getCompanies(int page, int pageSize) {
+        if (webClient == null) {
+            logger.error("WebClient not available");
+            return createErrorResponse("WebClient not available");
+        }
+
         if (!oAuthService.hasValidToken()) {
             logger.error("No valid access token available for Teamleader API");
             return createErrorResponse("No valid access token available");
@@ -63,38 +78,41 @@ public class TeamleaderCompanyService {
 
         try {
             String accessToken = oAuthService.getAccessToken();
-            HttpHeaders headers = createHeaders(accessToken);
 
-            // Create request body with pagination parameters in the format expected by
-            // Teamleader
+            // Create request body with pagination
             ObjectNode requestBody = objectMapper.createObjectNode();
-
-            // According to Teamleader API docs, pagination should be formatted as:
-            // { "page": { "size": 20, "number": 1 } }
             ObjectNode paginationNode = objectMapper.createObjectNode();
             paginationNode.put("size", pageSize);
             paginationNode.put("number", page);
             requestBody.set("page", paginationNode);
 
-            HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(requestBody), headers);
+            logger.info("Sending WebClient request to: {}/companies.list", apiConfig.getBaseUrl());
 
-            String url = apiConfig.getBaseUrl() + "/companies.list";
-            logger.info("Sending request to: {}", url);
+            // Make the API call with WebClient
+            JsonNode response = webClient.post()
+                    .uri("/companies.list")
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .retryWhen(webClientRetrySpec == null ? Retry.fixedDelay(1, java.time.Duration.ofSeconds(2))
+                            .filter(ex -> !(ex instanceof org.springframework.web.reactive.function.client.WebClientResponseException.BadRequest))
+                            : webClientRetrySpec)
+                    .doOnError(e -> logger.error("WebClient error fetching companies: {}", e.getMessage()))
+                    .onErrorResume(e -> {
+                        ObjectNode errorNode = objectMapper.createObjectNode();
+                        errorNode.put("error", true);
+                        errorNode.put("message", e.getMessage());
+                        return Mono.just(errorNode);
+                    })
+                    .block();
 
-            ResponseEntity<JsonNode> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.POST,
-                    entity,
-                    JsonNode.class);
-
-            logger.info("Successfully retrieved companies from Teamleader API");
-            return response.getBody();
-        } catch (HttpClientErrorException e) {
-            logger.error("Error fetching companies from Teamleader API: {}", e.getMessage());
-            return handleApiError(e);
+            logger.info("Successfully retrieved companies with WebClient");
+            return response;
         } catch (Exception e) {
-            logger.error("Unexpected error fetching companies from Teamleader API", e);
-            return createErrorResponse("Unexpected error: " + e.getMessage());
+            logger.error("Unexpected error using WebClient: {}", e.getMessage());
+            return createErrorResponse("WebClient error: " + e.getMessage());
         }
     }
 
@@ -105,6 +123,11 @@ public class TeamleaderCompanyService {
      * @return Company details
      */
     public JsonNode getCompanyDetails(String companyId) {
+        if (webClient == null) {
+            logger.error("WebClient not available");
+            return createErrorResponse("WebClient not available");
+        }
+
         if (!oAuthService.hasValidToken()) {
             logger.error("No valid access token available for Teamleader API");
             return createErrorResponse("No valid access token available");
@@ -112,33 +135,39 @@ public class TeamleaderCompanyService {
 
         try {
             String accessToken = oAuthService.getAccessToken();
-            HttpHeaders headers = createHeaders(accessToken);
 
             // Create request body
             ObjectNode requestBody = objectMapper.createObjectNode();
             requestBody.put("id", companyId);
 
-            logger.debug("Request body for companies.info: {}", requestBody);
+            logger.debug("WebClient request body for companies.info: {}", requestBody);
+            logger.info("Sending WebClient request to fetch company details for ID: {}", companyId);
 
-            HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(requestBody), headers);
+            // Make the API call with WebClient
+            JsonNode response = webClient.post()
+                    .uri("/companies.info")
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .retryWhen(webClientRetrySpec == null ? Retry.fixedDelay(1, java.time.Duration.ofSeconds(2))
+                            .filter(ex -> !(ex instanceof org.springframework.web.reactive.function.client.WebClientResponseException.BadRequest))
+                            : webClientRetrySpec)
+                    .doOnError(e -> logger.error("WebClient error fetching company details: {}", e.getMessage()))
+                    .onErrorResume(e -> {
+                        ObjectNode errorNode = objectMapper.createObjectNode();
+                        errorNode.put("error", true);
+                        errorNode.put("message", e.getMessage());
+                        return Mono.just(errorNode);
+                    })
+                    .block();
 
-            String url = apiConfig.getBaseUrl() + "/companies.info";
-            ResponseEntity<JsonNode> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.POST,
-                    entity,
-                    JsonNode.class);
-
-            logger.info("Successfully retrieved company details for ID: {}", companyId);
-            logger.debug("Response body: {}", response.getBody());
-            return response.getBody();
-        } catch (HttpClientErrorException e) {
-            logger.error("Error fetching company details from Teamleader API: {}", e.getMessage());
-            logger.debug("Error response body: {}", e.getResponseBodyAsString());
-            return handleApiError(e);
+            logger.info("Successfully retrieved company details with WebClient for ID: {}", companyId);
+            return response;
         } catch (Exception e) {
-            logger.error("Unexpected error fetching company details from Teamleader API", e);
-            return createErrorResponse("Unexpected error: " + e.getMessage());
+            logger.error("Unexpected error using WebClient for company details: {}", e.getMessage());
+            return createErrorResponse("WebClient error: " + e.getMessage());
         }
     }
 
@@ -237,6 +266,11 @@ public class TeamleaderCompanyService {
      * @return A response indicating the connection status
      */
     public JsonNode testApiConnection() {
+        if (webClient == null) {
+            logger.error("WebClient not available");
+            return createErrorResponse("WebClient not available");
+        }
+
         if (!oAuthService.hasValidToken()) {
             logger.error("No valid access token available for Teamleader API");
             return createErrorResponse("No valid access token available");
@@ -244,36 +278,42 @@ public class TeamleaderCompanyService {
 
         try {
             String accessToken = oAuthService.getAccessToken();
-            HttpHeaders headers = createHeaders(accessToken);
 
             // Create a simple request to get the current user
             ObjectNode requestBody = objectMapper.createObjectNode();
 
-            HttpEntity<String> entity = new HttpEntity<>(objectMapper.writeValueAsString(requestBody), headers);
+            logger.info("Testing API connection with WebClient to: {}/users.me", apiConfig.getBaseUrl());
 
-            String url = apiConfig.getBaseUrl() + "/users.me";
-            logger.info("Testing API connection to: {}", url);
+            // Make the API call with WebClient
+            JsonNode userData = webClient.post()
+                    .uri("/users.me")
+                    .headers(headers -> headers.setBearerAuth(accessToken))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .retryWhen(webClientRetrySpec == null ? Retry.fixedDelay(1, java.time.Duration.ofSeconds(2))
+                            .filter(ex -> !(ex instanceof org.springframework.web.reactive.function.client.WebClientResponseException.BadRequest))
+                            : webClientRetrySpec)
+                    .doOnError(e -> logger.error("WebClient API connection test failed: {}", e.getMessage()))
+                    .onErrorResume(e -> {
+                        ObjectNode errorNode = objectMapper.createObjectNode();
+                        errorNode.put("error", true);
+                        errorNode.put("message", e.getMessage());
+                        return Mono.just(errorNode);
+                    })
+                    .block();
 
-            ResponseEntity<JsonNode> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.POST,
-                    entity,
-                    JsonNode.class);
-
-            logger.info("API connection test successful. Status: {}", response.getStatusCode());
+            logger.info("API connection test with WebClient successful");
 
             ObjectNode result = objectMapper.createObjectNode();
             result.put("status", "success");
-            result.put("message", "Successfully connected to Teamleader API");
-            result.set("data", response.getBody());
+            result.put("message", "Successfully connected to Teamleader API using WebClient");
+            result.set("data", userData);
             return result;
-        } catch (HttpClientErrorException e) {
-            logger.error("API connection test failed: {}", e.getMessage());
-            logger.debug("Error response body: {}", e.getResponseBodyAsString());
-            return handleApiError(e);
         } catch (Exception e) {
-            logger.error("Unexpected error testing API connection", e);
-            return createErrorResponse("Unexpected error: " + e.getMessage());
+            logger.error("Unexpected error testing API connection with WebClient", e);
+            return createErrorResponse("WebClient error: " + e.getMessage());
         }
     }
 }
