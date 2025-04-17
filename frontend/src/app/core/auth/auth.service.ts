@@ -269,10 +269,10 @@ export class AuthService {
     if (!domain) return;
     
     console.log(`Fetching companies to find domain match: ${domain}`);
-    console.log(`API URL: ${this.environmentService.apiUrl}/teamleader/companies`);
+    console.log(`API URL: ${this.environmentService.apiUrl}/teamleader/companies/remote`);
     
-    // Use the correct API endpoint - teamleader/companies instead of just companies
-    this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies`)
+    // Use the correct API endpoint - teamleader/companies/remote instead of just companies
+    this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies/remote`)
       .pipe(
         catchError(error => {
           console.error('Error fetching companies:', error);

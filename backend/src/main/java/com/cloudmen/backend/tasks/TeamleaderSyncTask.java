@@ -1,6 +1,6 @@
 package com.cloudmen.backend.tasks;
 
-import com.cloudmen.backend.services.TeamleaderCompanyService;
+import com.cloudmen.backend.services.CompanySyncService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,7 +25,7 @@ public class TeamleaderSyncTask {
     private static final Logger logger = LoggerFactory.getLogger(TeamleaderSyncTask.class);
 
     private final TeamleaderOAuthService oAuthService;
-    private final TeamleaderCompanyService companyService;
+    private final CompanySyncService companySyncService;
 
     @Value("${teamleader.sync.enabled:false}")
     private boolean syncEnabled;
@@ -34,9 +34,9 @@ public class TeamleaderSyncTask {
 
     public TeamleaderSyncTask(
             TeamleaderOAuthService oAuthService,
-            TeamleaderCompanyService companyService) {
+            CompanySyncService companySyncService) {
         this.oAuthService = oAuthService;
-        this.companyService = companyService;
+        this.companySyncService = companySyncService;
     }
 
     /**
@@ -57,7 +57,7 @@ public class TeamleaderSyncTask {
 
         logger.info("Starting scheduled synchronization of companies from Teamleader");
 
-        CompletableFuture<Map<String, Object>> syncFuture = companyService.syncAllCompanies();
+        CompletableFuture<Map<String, Object>> syncFuture = companySyncService.syncAllCompanies();
 
         syncFuture.thenAccept(status -> {
             lastSyncStatus = status;

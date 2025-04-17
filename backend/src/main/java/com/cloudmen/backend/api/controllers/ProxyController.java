@@ -17,7 +17,6 @@ public class ProxyController {
 
     private final RestTemplate restTemplate;
 
-    @Autowired
     public ProxyController(RestTemplate restTemplate) {
         this.restTemplate = restTemplate;
     }

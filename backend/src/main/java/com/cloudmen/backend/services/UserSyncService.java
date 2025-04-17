@@ -157,49 +157,42 @@ public class UserSyncService {
         // Set Auth0 ID (sub is the unique identifier in Auth0)
         if (auth0Data.containsKey("sub")) {
             newUser.setAuth0Id((String) auth0Data.get("sub"));
-            logger.debug("Set Auth0 ID: {}", auth0Data.get("sub"));
         }
 
         // Set name fields
         if (auth0Data.containsKey("name")) {
             String name = (String) auth0Data.get("name");
             newUser.setName(name);
-            logger.debug("Set name: {}", name);
         }
 
         // Set first name (given_name in Auth0)
         if (auth0Data.containsKey("given_name")) {
             String firstName = (String) auth0Data.get("given_name");
             newUser.setFirstName(firstName);
-            logger.debug("Set first name: {}", firstName);
         }
 
         // Set last name (family_name in Auth0)
         if (auth0Data.containsKey("family_name")) {
             String lastName = (String) auth0Data.get("family_name");
             newUser.setLastName(lastName);
-            logger.debug("Set last name: {}", lastName);
         }
 
         // If name is not set but we have first and last name, combine them
         if (newUser.getName() == null && newUser.getFirstName() != null && newUser.getLastName() != null) {
             String fullName = newUser.getFirstName() + " " + newUser.getLastName();
             newUser.setName(fullName);
-            logger.debug("Set combined name: {}", fullName);
         }
 
         // Set picture URL
         if (auth0Data.containsKey("picture")) {
             String picture = (String) auth0Data.get("picture");
             newUser.setPicture(picture);
-            logger.debug("Set picture URL: {}", picture);
         }
 
         // Extract and set domain from email
         String domain = extractDomainFromEmail(email);
         if (domain != null) {
             newUser.setPrimaryDomain(domain);
-            logger.debug("Set primary domain: {}", domain);
         }
 
         // Handle provider-specific data
@@ -208,7 +201,6 @@ public class UserSyncService {
             if (sub.startsWith("google-oauth2|")) {
                 String googleId = sub.substring("google-oauth2|".length());
                 newUser.setCustomerGoogleId(googleId);
-                logger.debug("Set Google ID: {}", googleId);
             }
         }
 
@@ -274,17 +266,11 @@ public class UserSyncService {
      */
     private boolean hasMyCloudmenAccess(TeamleaderCompany company) {
         if (company == null || company.getCustomFields() == null) {
-            logger.debug("Company {} has no custom fields", company != null ? company.getName() : "null");
             return false;
         }
 
         String fieldId = teamleaderConfig.getMyCloudmenAccessFieldId();
         boolean hasAccess = CustomFieldUtils.isCustomFieldTrue(company.getCustomFields(), fieldId);
-
-        if (!hasAccess) {
-            logger.debug("Company {} does not have MyCLOUDMEN access (custom field {} is not true)",
-                    company.getName(), fieldId);
-        }
 
         return hasAccess;
     }
@@ -352,67 +338,6 @@ public class UserSyncService {
         }
 
         return null;
-    }
-
-    /**
-     * Get the TeamleaderCompany for a given email
-     * 
-     * @param email Email to check
-     * @return TeamleaderCompany if found and has access, null otherwise
-     */
-    private TeamleaderCompany getCompanyForEmail(String email) {
-        List<TeamleaderCompany> companies = teamleaderCompanyService.getAllCompanies();
-
-        for (TeamleaderCompany company : companies) {
-            // Skip companies without MyCLOUDMEN access
-            if (!hasMyCloudmenAccess(company)) {
-                continue;
-            }
-
-            List<TeamleaderCompany.ContactInfo> contactInfoList = company.getContactInfo();
-            if (contactInfoList != null) {
-                for (TeamleaderCompany.ContactInfo contactInfo : contactInfoList) {
-                    if ("email-primary".equals(contactInfo.getType()) && email.equals(contactInfo.getValue())) {
-                        return company;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Extract domain from website URL
-     * 
-     * @param website Website URL
-     * @return Domain part of the website
-     */
-    private String extractDomainFromWebsite(String website) {
-        if (website == null || website.isEmpty()) {
-            return null;
-        }
-
-        // Remove protocol (http://, https://)
-        String domain = website.toLowerCase();
-        if (domain.startsWith("http://")) {
-            domain = domain.substring(7);
-        } else if (domain.startsWith("https://")) {
-            domain = domain.substring(8);
-        }
-
-        // Remove www. prefix if present
-        if (domain.startsWith("www.")) {
-            domain = domain.substring(4);
-        }
-
-        // Remove path and query parameters
-        int pathIndex = domain.indexOf('/');
-        if (pathIndex > 0) {
-            domain = domain.substring(0, pathIndex);
-        }
-
-        return domain;
     }
 
     /**

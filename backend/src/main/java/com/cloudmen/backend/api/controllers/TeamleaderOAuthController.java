@@ -4,7 +4,6 @@ import com.cloudmen.backend.domain.models.OAuthToken;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.view.RedirectView;
@@ -23,7 +22,6 @@ public class TeamleaderOAuthController {
     private static final Logger logger = LoggerFactory.getLogger(TeamleaderOAuthController.class);
     private final TeamleaderOAuthService oAuthService;
 
-    @Autowired
     public TeamleaderOAuthController(TeamleaderOAuthService oAuthService) {
         this.oAuthService = oAuthService;
     }

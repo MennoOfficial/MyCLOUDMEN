@@ -56,7 +56,7 @@ public class TeamleaderCompanyController {
      * @param pageSize Number of items per page
      * @return List of companies
      */
-    @GetMapping("/api")
+    @GetMapping("/remote")
     public ResponseEntity<JsonNode> getCompaniesFromApi(
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
@@ -98,7 +98,7 @@ public class TeamleaderCompanyController {
      * @param id The Teamleader company ID
      * @return Company details
      */
-    @GetMapping("/api/{id}")
+    @GetMapping("/remote/{id}")
     public ResponseEntity<JsonNode> getCompanyDetailsFromApi(@PathVariable("id") String id) {
         logger.info("Fetching company details from Teamleader API for ID: {}", id);
 
@@ -335,19 +335,6 @@ public class TeamleaderCompanyController {
             response.put("message", "Error updating company status: " + e.getMessage());
             return ResponseEntity.internalServerError().body(response);
         }
-    }
-
-    /**
-     * Test endpoint to verify the status path routing works
-     */
-    @GetMapping("/{id}/status/test")
-    public ResponseEntity<Object> testStatusEndpoint(@PathVariable("id") String id) {
-        logger.info("Test status endpoint reached for ID: {}", id);
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Status endpoint test successful");
-        response.put("id", id);
-        return ResponseEntity.ok(response);
     }
 
     /**

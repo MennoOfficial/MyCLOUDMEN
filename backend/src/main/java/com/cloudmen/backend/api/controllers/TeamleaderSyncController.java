@@ -1,5 +1,6 @@
 package com.cloudmen.backend.api.controllers;
 
+import com.cloudmen.backend.services.CompanySyncService;
 import com.cloudmen.backend.services.TeamleaderCompanyService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
 import com.cloudmen.backend.services.UserSyncService;
@@ -27,6 +28,7 @@ public class TeamleaderSyncController {
     private static final Logger logger = LoggerFactory.getLogger(TeamleaderSyncController.class);
     private final TeamleaderOAuthService oAuthService;
     private final TeamleaderCompanyService companyService;
+    private final CompanySyncService companySyncService;
     private final UserSyncService userSyncService;
     private final ObjectMapper objectMapper;
 
@@ -36,46 +38,14 @@ public class TeamleaderSyncController {
     public TeamleaderSyncController(
             TeamleaderOAuthService oAuthService,
             TeamleaderCompanyService companyService,
+            CompanySyncService companySyncService,
             UserSyncService userSyncService,
             ObjectMapper objectMapper) {
         this.oAuthService = oAuthService;
         this.companyService = companyService;
+        this.companySyncService = companySyncService;
         this.userSyncService = userSyncService;
         this.objectMapper = objectMapper;
-    }
-
-    /**
-     * Test endpoint to check if Teamleader integration is working
-     * 
-     * @return Status of the Teamleader integration
-     */
-    @GetMapping("/test")
-    public ResponseEntity<JsonNode> testIntegration() {
-        logger.info("Testing Teamleader integration");
-
-        ObjectNode response = objectMapper.createObjectNode();
-
-        if (oAuthService.hasValidToken()) {
-            response.put("status", "success");
-            response.put("message", "Teamleader integration is working correctly");
-            response.put("authorized", true);
-
-            // Add links to other endpoints
-            ObjectNode links = response.putObject("links");
-            links.put("companies", "/api/teamleader/companies");
-            links.put("status", "/api/teamleader/oauth/status");
-        } else {
-            response.put("status", "error");
-            response.put("message", "Teamleader integration is not authorized");
-            response.put("authorized", false);
-
-            // Add links for authorization
-            ObjectNode links = response.putObject("links");
-            links.put("authorize", "/api/teamleader/oauth/authorize");
-            links.put("status", "/api/teamleader/oauth/status");
-        }
-
-        return ResponseEntity.ok(response);
     }
 
     /**
@@ -116,8 +86,9 @@ public class TeamleaderSyncController {
 
         logger.info("API connection test successful, starting synchronization");
 
-        // Start the synchronization process asynchronously
-        CompletableFuture<Map<String, Object>> syncFuture = companyService.syncAllCompanies();
+        // Start the synchronization process asynchronously using the new
+        // CompanySyncService
+        CompletableFuture<Map<String, Object>> syncFuture = companySyncService.syncAllCompanies();
 
         // Set up a callback to update the last sync status when complete
         syncFuture.thenAccept(status -> {
@@ -162,73 +133,17 @@ public class TeamleaderSyncController {
     }
 
     /**
-     * Webhook endpoint for Teamleader events
-     * This allows Teamleader to notify your application when data changes
-     * 
-     * @param event The event data from Teamleader
-     * @return Acknowledgment of the webhook
-     */
-    @PostMapping("/webhook")
-    public ResponseEntity<Map<String, String>> webhook(@RequestBody JsonNode event) {
-        logger.info("Received webhook from Teamleader: {}", event);
-
-        Map<String, String> response = new HashMap<>();
-        response.put("status", "received");
-
-        // Process the webhook event
-        if (event.has("type")) {
-            String eventType = event.get("type").asText();
-
-            // Handle different event types
-            switch (eventType) {
-                case "company.created":
-                case "company.updated":
-                    handleCompanyEvent(event);
-                    break;
-                default:
-                    logger.info("Unhandled event type: {}", eventType);
-                    break;
-            }
-        }
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * Handle company-related events from Teamleader
-     * 
-     * @param event The event data
-     */
-    private void handleCompanyEvent(JsonNode event) {
-        if (event.has("subject") && event.get("subject").has("id")) {
-            String companyId = event.get("subject").get("id").asText();
-            logger.info("Processing company event for ID: {}", companyId);
-
-            // Fetch the latest company data and update our database
-            JsonNode companyDetails = companyService.getCompanyDetails(companyId);
-
-            if (companyDetails != null && !companyDetails.has("error") && companyDetails.has("data")) {
-                // Update the company in our database
-                // This is handled by the companyService
-                logger.info("Successfully processed company event for ID: {}", companyId);
-            } else {
-                logger.error("Failed to process company event for ID: {}", companyId);
-            }
-        }
-    }
-
-    /**
      * Refresh custom fields and update user roles
      * 
      * @return Response with status of the refresh
      */
-    @PostMapping("/refresh-custom-fields-and-roles")
-    public ResponseEntity<Map<String, Object>> refreshCustomFieldsAndRoles() {
+    @PostMapping("/refresh-custom-fields")
+    public ResponseEntity<Map<String, Object>> refreshCustomFields() {
         logger.info("Received request to refresh custom fields and update user roles");
 
         try {
-            // First refresh custom fields
-            CompletableFuture<Map<String, Object>> customFieldsFuture = companyService.refreshCustomFields();
+            // First refresh custom fields using the new CompanySyncService
+            CompletableFuture<Map<String, Object>> customFieldsFuture = companySyncService.refreshCustomFields();
 
             // When that's done, update user roles
             customFieldsFuture.thenAccept(result -> {
@@ -255,37 +170,6 @@ public class TeamleaderSyncController {
             Map<String, Object> response = new HashMap<>();
             response.put("status", "error");
             response.put("message", "Failed to start refresh: " + e.getMessage());
-            response.put("timestamp", LocalDateTime.now().toString());
-
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
-        }
-    }
-
-    /**
-     * Refresh custom fields for all companies
-     * 
-     * @return Response with status of the refresh
-     */
-    @PostMapping("/refresh-custom-fields")
-    public ResponseEntity<Map<String, Object>> refreshCustomFields() {
-        logger.info("Received request to refresh custom fields");
-
-        try {
-            CompletableFuture<Map<String, Object>> future = companyService.refreshCustomFields();
-
-            // Return immediate acknowledgment
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "processing");
-            response.put("message", "Custom fields refresh started");
-            response.put("timestamp", LocalDateTime.now().toString());
-
-            return ResponseEntity.accepted().body(response);
-        } catch (Exception e) {
-            logger.error("Error starting custom fields refresh", e);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "Failed to start custom fields refresh: " + e.getMessage());
             response.put("timestamp", LocalDateTime.now().toString());
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
