@@ -4,13 +4,13 @@ import { MainLayoutComponent } from './layouts/main-layout/main-layout.component
 import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component';
 import { authGuard } from './core/auth/auth.guard';
 import { roleGuard } from './core/auth/role.guard';
-import { statusGuard } from './core/auth/status.guard';
+import { StatusGuard } from './core/auth/status.guard';
 
 export const routes: Routes = [
   {
     path: '',
     component: MainLayoutComponent,
-    canActivate: [authGuard, statusGuard],
+    canActivate: [authGuard, StatusGuard],
     children: [
       {
         path: '',
@@ -67,6 +67,7 @@ export const routes: Routes = [
   {
     path: 'auth',
     component: AuthLayoutComponent,
+    canActivate: [],
     children: [
       {
         path: 'callback',
@@ -86,6 +87,10 @@ export const routes: Routes = [
   {
     path: 'account-deactivated',
     loadComponent: () => import('./core/auth/account-deactivated/account-deactivated.component').then(c => c.AccountDeactivatedComponent)
+  },
+  {
+    path: 'company-inactive',
+    loadComponent: () => import('./core/auth/company-inactive/company-inactive.component').then(c => c.CompanyInactiveComponent)
   },
   {
     path: '**',

@@ -1,0 +1,232 @@
+// Company Inactive Component Styles
+// Using variables from styles.scss
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.pending-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background-color: var(--deep-ocean);
+  position: relative;
+}
+
+.logo-container {
+  position: absolute;
+  top: 2rem;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1;
+  
+  .logo {
+    max-width: 150px;
+    height: auto;
+    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.2));
+    
+    @media (max-width: 480px) {
+      max-width: 120px;
+    }
+  }
+}
+
+.content-card {
+  background-color: white;
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 2rem;
+  max-width: 500px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  margin-top: 3rem;
+  animation: fadeIn 0.4s ease-out;
+  
+  @media (max-width: 768px) {
+    padding: 2rem 1.5rem;
+    width: 85%;
+  }
+  
+  @media (max-width: 480px) {
+    padding: 1.5rem 1rem 2rem;
+    width: 100%;
+    margin-top: 7rem;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    max-width: none;
+    position: absolute;
+    bottom: 0;
+    top: auto;
+    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.15);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.icon-container {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 20px;
+  background-color: var(--deep-ocean-soft);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  
+  @media (max-width: 480px) {
+    width: 70px;
+    height: 70px;
+    margin-top: -45px;
+    margin-bottom: 15px;
+    background-color: white;
+    border: 8px solid var(--deep-ocean);
+  }
+  
+  i {
+    font-size: 36px;
+    color: var(--deep-ocean);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    
+    @media (max-width: 480px) {
+      font-size: 28px;
+    }
+  }
+}
+
+.centered-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  height: 100% !important;
+  width: 100% !important;
+  padding-top: 4px !important;
+  box-sizing: border-box !important;
+}
+
+h1 {
+  color: var(--deep-ocean);
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: var(--space-md);
+  
+  @media (max-width: 480px) {
+    font-size: 20px;
+  }
+}
+
+.message-container {
+  margin-bottom: var(--space-xl);
+  
+  p {
+    color: var(--slate);
+    font-size: 16px;
+    line-height: 1.6;
+    margin-bottom: 16px;
+    
+    @media (max-width: 480px) {
+      font-size: 14px;
+    }
+  }
+  
+  .info-message {
+    color: var(--slate);
+    max-width: 400px;
+    margin: 0 auto 1rem;
+    
+    @media (max-width: 480px) {
+      max-width: none;
+    }
+  }
+  
+  .action-message {
+    font-style: italic;
+    color: var(--aqua-spring);
+    font-weight: 500;
+  }
+}
+
+.button-group {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  
+  @media (max-width: 480px) {
+    flex-direction: column;
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.7rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 500;
+  font-size: 15px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid transparent;
+  
+  i {
+    font-size: 18px;
+  }
+  
+  @media (max-width: 480px) {
+    width: 100%;
+    margin-bottom: 0.5rem;
+    padding: 0.8rem 1rem;
+  }
+  
+  &:hover {
+    transform: none;
+  }
+}
+
+.btn-primary {
+  background-color: var(--deep-ocean-soft);
+  color: var(--deep-ocean);
+  border-color: var(--deep-ocean);
+  
+  &:hover {
+    background-color: var(--deep-ocean);
+    color: white;
+  }
+}
+
+.btn-secondary {
+  background-color: var(--aqua-spring-soft);
+  color: var(--aqua-spring);
+  border-color: var(--aqua-spring);
+  
+  &:hover {
+    background-color: var(--aqua-spring);
+    color: white;
+  }
+} 

@@ -5,6 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
 import { CompanyDetail } from '../../../../core/models/company.model';
 import { EnvironmentService } from '../../../../core/services/environment.service';
+import { CompanyStatusType } from '../../../../core/models/company.model';
 
 interface User {
   id: string;
@@ -46,8 +47,15 @@ export class CompanyDetailComponent implements OnInit {
   
   // Status toggle popup
   showStatusPopup = false;
-  newStatus: 'Active' | 'Inactive' = 'Active';
-  updatingStatus = false; // Add loading state tracking
+  newStatus: CompanyStatusType = CompanyStatusType.ACTIVE;
+  updatingStatus = false;
+  
+  // Available status types for dropdown
+  statusTypes: CompanyStatusType[] = [
+    CompanyStatusType.ACTIVE, 
+    CompanyStatusType.DEACTIVATED, 
+    CompanyStatusType.SUSPENDED
+  ];
   
   // Company users
   companyUsers: User[] = [];
@@ -133,15 +141,22 @@ export class CompanyDetailComponent implements OnInit {
         next: (response) => {
           this.company = response;
           
+          // Convert legacy status values if needed
+          if (this.company.status === 'Active') {
+            this.company.status = 'ACTIVE';
+          } else if (this.company.status === 'Inactive') {
+            this.company.status = 'DEACTIVATED';
+          }
+          
           // Ensure status has a default value if it's empty
           if (!this.company.status) {
-            this.company.status = 'Active';
+            this.company.status = 'ACTIVE';
           }
           
           this.loading = false;
           
           // Set initial value for status toggle
-          this.newStatus = this.company.status as 'Active' | 'Inactive';
+          this.newStatus = this.company.status as CompanyStatusType;
           
           // After loading company, fetch users with the same domain
           this.fetchCompanyUsers();
@@ -228,7 +243,7 @@ export class CompanyDetailComponent implements OnInit {
   }
 
   toggleStatus(): void {
-    this.newStatus = this.company?.status === 'Active' ? 'Inactive' : 'Active';
+    // Don't preselect a status, let the user choose from dropdown
     this.showStatusPopup = true;
   }
 
@@ -288,6 +303,7 @@ export class CompanyDetailComponent implements OnInit {
           
           this.showStatusPopup = false;
           this.updatingStatus = false;
+          this.showToastNotification(`Company status updated to ${this.getStatusDisplayName(newStatus)}`, 'success');
         },
         error: (err) => {
           let errorMessage = '';
@@ -309,9 +325,8 @@ export class CompanyDetailComponent implements OnInit {
           }
           
           // Show an error notification with more details
-          alert(`Failed to update company status (${err.status || 'unknown status'}).\n
-Please check the browser console (F12) for more details.\n
-Error: ${errorMessage}`);
+          this.showToastNotification(`Failed to update company status: ${errorMessage}`, 'error');
+          console.error(`Status update failed (${err.status || 'unknown status'})`, err);
           this.updatingStatus = false;
         }
       });
@@ -928,5 +943,42 @@ Error: ${errorMessage}`);
     // Remove the CSS custom properties
     document.documentElement.style.removeProperty('--scrollbar-width');
     document.documentElement.style.removeProperty('--scroll-position');
+  }
+
+  // Helper method to get readable status names
+  getStatusDisplayName(status: string): string {
+    switch(status) {
+      case 'ACTIVE': return 'Active';
+      case 'DEACTIVATED': return 'Deactivated';
+      case 'SUSPENDED': return 'Suspended';
+      default: return status;
+    }
+  }
+
+  // Helper method to get status description
+  getStatusDescription(status: string): string {
+    switch(status) {
+      case 'ACTIVE': 
+        return 'Active companies have full access to all features and appear in regular searches.';
+      case 'DEACTIVATED': 
+        return 'Deactivated companies have no access to the platform and won\'t appear in searches.';
+      case 'SUSPENDED': 
+        return 'Suspended companies have temporary limited access to the platform and reduced visibility.';
+      default: 
+        return '';
+    }
+  }
+
+  // Helper to get status CSS class
+  getStatusClass(status: string): string {
+    switch(status) {
+      case 'ACTIVE': return 'status-active';
+      case 'DEACTIVATED': return 'status-inactive';
+      case 'SUSPENDED': return 'status-suspended';
+      // Handle legacy status values
+      case 'Active': return 'status-active';
+      case 'Inactive': return 'status-inactive';
+      default: return '';
+    }
   }
 } 
