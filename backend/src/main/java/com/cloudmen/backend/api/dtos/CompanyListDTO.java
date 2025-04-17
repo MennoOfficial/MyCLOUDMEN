@@ -1,5 +1,6 @@
 package com.cloudmen.backend.api.dtos;
 
+import com.cloudmen.backend.domain.enums.CompanyStatusType;
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
@@ -81,19 +82,21 @@ public class CompanyListDTO {
             }
         }
 
-        // Determine status from custom fields (if applicable)
-        if (company.getCustomFields() != null && !company.getCustomFields().isEmpty()) {
-            // Get the status from customFields
-            Object statusValue = company.getCustomFields().get("status");
-            if (statusValue != null) {
-                dto.setStatus(statusValue.toString());
-            } else {
-                // Default status if no status field is present
-                dto.setStatus("Active");
-            }
+        // Get the status from the company entity
+        if (company.getStatus() != null) {
+            dto.setStatus(company.getStatus().name());
         } else {
-            // Default status if no custom fields are present
-            dto.setStatus("Active");
+            // For backward compatibility - check customFields if status field is not set
+            if (company.getCustomFields() != null && !company.getCustomFields().isEmpty()) {
+                Object statusValue = company.getCustomFields().get("status");
+                if (statusValue != null) {
+                    dto.setStatus(statusValue.toString());
+                } else {
+                    dto.setStatus(CompanyStatusType.ACTIVE.name());
+                }
+            } else {
+                dto.setStatus(CompanyStatusType.ACTIVE.name());
+            }
         }
 
         return dto;

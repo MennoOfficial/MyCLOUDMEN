@@ -100,13 +100,10 @@
             <div class="info-value status-container">
               <span
                 class="status-badge"
-                [ngClass]="{
-                  'status-active': company.status === 'Active',
-                  'status-inactive': company.status === 'Inactive'
-                }"
+                [ngClass]="getStatusClass(company?.status || 'ACTIVE')"
               >
                 <span class="status-indicator"></span>
-                {{ company.status || "Unknown" }}
+                {{ getStatusDisplayName(company?.status || "ACTIVE") }}
               </span>
               <button class="status-toggle-btn" (click)="toggleStatus()">
                 <span class="material-icons">swap_horiz</span>
@@ -363,59 +360,67 @@
     <div class="status-popup" (click)="$event.stopPropagation()">
       <div class="popup-header">
         <span class="material-icons warning-icon">warning</span>
-        <h3 id="status-popup-title">Confirm Status Change</h3>
+        <h3 id="status-popup-title">Change Company Status</h3>
       </div>
 
       <div class="popup-content">
         <p>
-          Are you sure you want to change the status of
-          <strong>{{ company?.name }}</strong> from
-          <strong>{{ company?.status }}</strong> to
-          <strong>{{ newStatus }}</strong
-          >?
+          Select a new status for <strong>{{ company?.name }}</strong
+          >:
         </p>
+
+        <!-- Status dropdown -->
+        <div class="status-select-container">
+          <label for="statusSelect">New Status:</label>
+          <select
+            id="statusSelect"
+            [(ngModel)]="newStatus"
+            class="status-select"
+          >
+            <option *ngFor="let status of statusTypes" [value]="status">
+              {{ getStatusDisplayName(status) }}
+            </option>
+          </select>
+        </div>
 
         <div class="status-change-preview">
           <div class="status-from" data-label="Current">
             <span
               class="status-badge"
-              [ngClass]="{
-                'status-active': company?.status === 'Active',
-                'status-inactive': company?.status === 'Inactive'
-              }"
+              [ngClass]="getStatusClass(company?.status || 'ACTIVE')"
             >
               <span class="status-indicator"></span>
-              {{ company?.status }}
+              {{ getStatusDisplayName(company?.status || "ACTIVE") }}
             </span>
           </div>
           <span class="material-icons">arrow_forward</span>
           <div class="status-to" data-label="New">
-            <span
-              class="status-badge"
-              [ngClass]="{
-                'status-active': newStatus === 'Active',
-                'status-inactive': newStatus === 'Inactive'
-              }"
-            >
+            <span class="status-badge" [ngClass]="getStatusClass(newStatus)">
               <span class="status-indicator"></span>
-              {{ newStatus }}
+              {{ getStatusDisplayName(newStatus) }}
             </span>
           </div>
         </div>
 
-        <div *ngIf="newStatus === 'Inactive'" class="status-info warning-text">
-          <span class="material-icons">info</span>
-          <span
-            >Inactive companies won't appear in regular searches and may have
-            limited functionality.</span
-          >
-        </div>
-        <div *ngIf="newStatus === 'Active'" class="status-info success-text">
-          <span class="material-icons">check_circle</span>
-          <span
-            >Active companies have full access to all features and appear in
-            regular searches.</span
-          >
+        <!-- Status description based on selected status -->
+        <div
+          class="status-info"
+          [ngClass]="{
+            'success-text': newStatus === 'ACTIVE',
+            'warning-text': newStatus === 'SUSPENDED',
+            'error-text': newStatus === 'DEACTIVATED'
+          }"
+        >
+          <span class="material-icons">
+            {{
+              newStatus === "ACTIVE"
+                ? "check_circle"
+                : newStatus === "SUSPENDED"
+                ? "warning"
+                : "error"
+            }}
+          </span>
+          <span>{{ getStatusDescription(newStatus) }}</span>
         </div>
       </div>
 
@@ -429,10 +434,7 @@
         </button>
         <button
           class="confirm-btn"
-          [ngClass]="{
-            'confirm-inactive': newStatus === 'Inactive',
-            'confirm-active': newStatus === 'Active'
-          }"
+          [ngClass]="'confirm-' + newStatus.toLowerCase()"
           [disabled]="updatingStatus"
           (click)="confirmStatusChange()"
         >

@@ -2,6 +2,7 @@ package com.cloudmen.backend.api.controllers;
 
 import com.cloudmen.backend.api.dtos.CompanyDetailDTO;
 import com.cloudmen.backend.api.dtos.CompanyListDTO;
+import com.cloudmen.backend.domain.enums.CompanyStatusType;
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
 import com.cloudmen.backend.repositories.TeamleaderCompanyRepository;
 import com.cloudmen.backend.services.TeamleaderCompanyService;
@@ -251,8 +252,8 @@ public class TeamleaderCompanyController {
         logger.info("ID from path: {}", id);
         logger.info("Request body: {}", statusUpdate);
 
-        String newStatus = statusUpdate.get("status");
-        if (newStatus == null) {
+        String newStatusStr = statusUpdate.get("status");
+        if (newStatusStr == null) {
             logger.warn("Status field is missing in the request body");
             Map<String, Object> response = new HashMap<>();
             response.put("error", true);
@@ -260,12 +261,19 @@ public class TeamleaderCompanyController {
             return ResponseEntity.badRequest().body(response);
         }
 
-        // Validate status value
-        if (!newStatus.equals("Active") && !newStatus.equals("Inactive")) {
-            logger.warn("Invalid status value: {}", newStatus);
+        CompanyStatusType newStatus;
+        try {
+            // Try to parse the status string to enum
+            newStatus = CompanyStatusType.valueOf(newStatusStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid status value: {}", newStatusStr);
             Map<String, Object> response = new HashMap<>();
             response.put("error", true);
-            response.put("message", "Status must be either 'Active' or 'Inactive'");
+            response.put("message", "Invalid status value. Allowed values: "
+                    + String.join(", ",
+                            java.util.Arrays.stream(CompanyStatusType.values())
+                                    .map(Enum::name)
+                                    .collect(Collectors.toList())));
             return ResponseEntity.badRequest().body(response);
         }
 
@@ -303,22 +311,20 @@ public class TeamleaderCompanyController {
             }
 
             logger.info("Found company: {}, current status: {}", company.getName(),
-                    company.getCustomFields() != null && company.getCustomFields().containsKey("status")
-                            ? company.getCustomFields().get("status")
-                            : "undefined");
+                    company.getStatus() != null ? company.getStatus() : "undefined");
 
-            // Update the company's status
+            // Update the company's status directly in the entity
+            company.setStatus(newStatus);
+
+            // Also maintain status in customFields for backward compatibility
             Map<String, Object> customFields = company.getCustomFields();
             if (customFields == null) {
                 logger.info("Creating new customFields map for company");
                 customFields = new HashMap<>();
                 company.setCustomFields(customFields);
             }
-
-            // Store status in customFields - this is how the status is managed in this
-            // application
-            customFields.put("status", newStatus);
-            logger.info("Updated customFields with new status");
+            customFields.put("status", newStatus.name());
+            logger.info("Updated status to: {}", newStatus);
 
             // Save the updated company
             company = companyService.saveCompany(company);
@@ -348,6 +354,56 @@ public class TeamleaderCompanyController {
         response.put("message", "Status endpoint test successful");
         response.put("id", id);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Get companies by status
+     * 
+     * @param status The status to filter by
+     * @return List of companies with the specified status
+     */
+    @GetMapping("/status/{status}")
+    public ResponseEntity<Object> getCompaniesByStatus(@PathVariable("status") String status) {
+        logger.info("Retrieving companies with status: {}", status);
+
+        CompanyStatusType statusType;
+        try {
+            statusType = CompanyStatusType.valueOf(status.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid status value: {}", status);
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", true);
+            response.put("message", "Invalid status value. Allowed values: "
+                    + String.join(", ",
+                            java.util.Arrays.stream(CompanyStatusType.values())
+                                    .map(Enum::name)
+                                    .collect(Collectors.toList())));
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        try {
+            List<TeamleaderCompany> companies = companyRepository.findAll();
+
+            // Filter companies by status
+            List<TeamleaderCompany> filteredCompanies = companies.stream()
+                    .filter(company -> company.getStatus() == statusType)
+                    .collect(Collectors.toList());
+
+            List<CompanyListDTO> companyDtos = CompanyListDTO.fromEntities(filteredCompanies);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("companies", companyDtos);
+            response.put("count", companyDtos.size());
+            response.put("status", statusType.name());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error retrieving companies by status", e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", true);
+            response.put("message", "Error retrieving companies: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
     }
 
     /**

@@ -188,7 +188,18 @@ export class NavbarComponent implements OnInit, OnDestroy {
   
   switchRole(role: string): void {
     this._userRole$.next(role as 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER');
-    this.authService.updateUserRole(role as any);
+    // Store the selected role in session storage for persistence
+    const currentUser = this.authService.getCurrentUser();
+    if (currentUser) {
+      const updatedUser = { 
+        ...currentUser, 
+        roles: [role as 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER'] 
+      };
+      sessionStorage.setItem('user_profile', JSON.stringify(updatedUser));
+      
+      // Force refresh to apply the new role
+      window.location.reload();
+    }
   }
   
   handleImageError(event: any): void {

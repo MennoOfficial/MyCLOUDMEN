@@ -1,4 +1,13 @@
 /**
+ * Company status types matching backend enum
+ */
+export enum CompanyStatusType {
+  ACTIVE = 'ACTIVE',
+  DEACTIVATED = 'DEACTIVATED',
+  SUSPENDED = 'SUSPENDED'
+}
+
+/**
  * Base interface for companies in list view
  */
 export interface CompanyListItem {
@@ -8,7 +17,7 @@ export interface CompanyListItem {
   email: string;
   phoneNumber: string;
   vatNumber: string;
-  status: string;
+  status: string; // Using string to accommodate both old and new status values
   syncedAt: string;
 }
 

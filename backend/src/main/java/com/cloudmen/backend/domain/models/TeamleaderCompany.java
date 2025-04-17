@@ -1,5 +1,6 @@
 package com.cloudmen.backend.domain.models;
 
+import com.cloudmen.backend.domain.enums.CompanyStatusType;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -25,6 +26,7 @@ public class TeamleaderCompany {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime syncedAt;
+    private CompanyStatusType status = CompanyStatusType.ACTIVE; // Default status is ACTIVE
 
     private Address primaryAddress;
     private List<ContactInfo> contactInfo = new ArrayList<>();
@@ -38,6 +40,7 @@ public class TeamleaderCompany {
         this.teamleaderId = teamleaderId;
         this.name = name;
         this.syncedAt = LocalDateTime.now();
+        this.status = CompanyStatusType.ACTIVE;
     }
 
     // Getters and Setters
@@ -135,6 +138,14 @@ public class TeamleaderCompany {
 
     public void setCustomFields(Map<String, Object> customFields) {
         this.customFields = customFields;
+    }
+
+    public CompanyStatusType getStatus() {
+        return status;
+    }
+
+    public void setStatus(CompanyStatusType status) {
+        this.status = status;
     }
 
     /**
