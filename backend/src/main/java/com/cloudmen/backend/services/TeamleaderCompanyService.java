@@ -1,7 +1,6 @@
 package com.cloudmen.backend.services;
 
 import com.cloudmen.backend.config.TeamleaderApiConfig;
-import com.cloudmen.backend.config.TeamleaderConfig;
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
 import com.cloudmen.backend.repositories.TeamleaderCompanyRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -9,20 +8,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
 
-import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Service for interacting with Teamleader API to fetch company data
@@ -35,7 +28,6 @@ public class TeamleaderCompanyService {
     private final TeamleaderApiConfig apiConfig;
     private final ObjectMapper objectMapper;
     private final TeamleaderCompanyRepository companyRepository;
-    private final TeamleaderConfig teamleaderConfig;
 
     // WebClient for API requests
     private final WebClient webClient;
@@ -46,14 +38,12 @@ public class TeamleaderCompanyService {
             TeamleaderApiConfig apiConfig,
             ObjectMapper objectMapper,
             TeamleaderCompanyRepository companyRepository,
-            TeamleaderConfig teamleaderConfig,
-            @Autowired(required = false) WebClient webClient,
-            @Autowired(required = false) @Qualifier("webClientRetrySpec") Retry webClientRetrySpec) {
+            WebClient webClient,
+            @Qualifier("webClientRetrySpec") Retry webClientRetrySpec) {
         this.oAuthService = oAuthService;
         this.apiConfig = apiConfig;
         this.objectMapper = objectMapper;
         this.companyRepository = companyRepository;
-        this.teamleaderConfig = teamleaderConfig;
         this.webClient = webClient;
         this.webClientRetrySpec = webClientRetrySpec;
     }
@@ -208,43 +198,6 @@ public class TeamleaderCompanyService {
      */
     public TeamleaderCompany saveCompany(TeamleaderCompany company) {
         return companyRepository.save(company);
-    }
-
-    /**
-     * Create headers for Teamleader API requests
-     * 
-     * @param accessToken Access token
-     * @return HTTP headers
-     */
-    private HttpHeaders createHeaders(String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(accessToken);
-        return headers;
-    }
-
-    /**
-     * Handle API errors from Teamleader
-     * 
-     * @param e The exception
-     * @return Error response as JsonNode
-     */
-    private JsonNode handleApiError(HttpClientErrorException e) {
-        ObjectNode errorNode = objectMapper.createObjectNode();
-        errorNode.put("error", true);
-        errorNode.put("status", e.getStatusCode().value());
-        errorNode.put("message", e.getMessage());
-
-        try {
-            // Try to parse the response body
-            JsonNode responseBody = objectMapper.readTree(e.getResponseBodyAsString());
-            errorNode.set("details", responseBody);
-        } catch (Exception ex) {
-            // If parsing fails, just include the raw response
-            errorNode.put("responseBody", e.getResponseBodyAsString());
-        }
-
-        return errorNode;
     }
 
     /**

@@ -8,13 +8,30 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+/**
+ * Service for managing authentication logs in the system.
+ * Provides methods for creating, retrieving, and managing log entries.
+ */
 @Service
 public class AuthenticationLogService {
+
+    // Constants for log messages
+    private static final String LOG_SUCCESS_AUTH = "Logging successful authentication for email: {}, IP: {}";
+    private static final String LOG_FAILED_AUTH = "Logging failed authentication for email: {}, IP: {}, Reason: {}";
+    private static final String LOG_ERROR_SUCCESS_AUTH = "Error logging successful authentication";
+    private static final String LOG_ERROR_FAILED_AUTH = "Error logging failed authentication";
+    private static final String LOG_FILTERED_QUERY = "Getting filtered logs - Email: {}, Domain: {}, Successful: {}, StartDate: {}, EndDate: {}";
+    private static final String LOG_SERVICE_INIT = "AuthenticationLogService initialized";
+    private static final String LOG_DELETE_OLD = "Deleting logs older than: {}";
+    private static final String LOG_USER_FOUND = "User found: {}, ID: {}";
+    private static final String LOG_NO_USER = "No user found for email: {}. Creating basic log entry.";
+    private static final String LOG_SAVE_SUCCESS = "Successfully saved authentication log with ID: {}";
 
     private static final Logger logger = LoggerFactory.getLogger(AuthenticationLogService.class);
     private final AuthenticationLogRepository authenticationLogRepository;
@@ -23,7 +40,7 @@ public class AuthenticationLogService {
     public AuthenticationLogService(AuthenticationLogRepository authenticationLogRepository, UserService userService) {
         this.authenticationLogRepository = authenticationLogRepository;
         this.userService = userService;
-        logger.info("AuthenticationLogService initialized");
+        logger.info(LOG_SERVICE_INIT);
     }
 
     /**
@@ -34,15 +51,16 @@ public class AuthenticationLogService {
      * @param userAgent The user agent string
      * @return The created AuthenticationLog
      */
+    @Transactional
     public AuthenticationLog logSuccessfulAuthentication(String email, String ipAddress, String userAgent) {
-        logger.info("Logging successful authentication for email: {}, IP: {}", email, ipAddress);
+        logger.info(LOG_SUCCESS_AUTH, email, ipAddress);
 
         try {
             Optional<User> userOpt = userService.getUserByEmail(email);
 
             if (userOpt.isPresent()) {
                 User user = userOpt.get();
-                logger.info("User found: {}, ID: {}", user.getEmail(), user.getId());
+                logger.info(LOG_USER_FOUND, user.getEmail(), user.getId());
 
                 AuthenticationLog log = new AuthenticationLog(
                         email,
@@ -53,12 +71,10 @@ public class AuthenticationLogService {
                         userAgent);
 
                 AuthenticationLog savedLog = authenticationLogRepository.save(log);
-                logger.info("Successfully saved authentication log with ID: {}", savedLog.getId());
+                logger.info(LOG_SAVE_SUCCESS, savedLog.getId());
                 return savedLog;
             } else {
-                // This is a special case where we have a successful auth but no user record yet
-                // This could happen during the first login before user creation
-                logger.info("No user found for email: {}. Creating basic log entry.", email);
+                logger.info(LOG_NO_USER, email);
 
                 AuthenticationLog log = new AuthenticationLog();
                 log.setEmail(email);
@@ -68,12 +84,12 @@ public class AuthenticationLogService {
                 log.setTimestamp(LocalDateTime.now());
 
                 AuthenticationLog savedLog = authenticationLogRepository.save(log);
-                logger.info("Successfully saved basic authentication log with ID: {}", savedLog.getId());
+                logger.info(LOG_SAVE_SUCCESS, savedLog.getId());
                 return savedLog;
             }
         } catch (Exception e) {
-            logger.error("Error logging successful authentication", e);
-            throw e;
+            logger.error(LOG_ERROR_SUCCESS_AUTH, e);
+            throw new RuntimeException("Failed to log successful authentication", e);
         }
     }
 
@@ -86,19 +102,19 @@ public class AuthenticationLogService {
      * @param failureReason The reason for the authentication failure
      * @return The created AuthenticationLog
      */
+    @Transactional
     public AuthenticationLog logFailedAuthentication(String email, String ipAddress, String userAgent,
             String failureReason) {
-        logger.info("Logging failed authentication for email: {}, IP: {}, Reason: {}",
-                email, ipAddress, failureReason);
+        logger.info(LOG_FAILED_AUTH, email, ipAddress, failureReason);
 
         try {
             AuthenticationLog log = new AuthenticationLog(email, ipAddress, userAgent, failureReason);
             AuthenticationLog savedLog = authenticationLogRepository.save(log);
-            logger.info("Successfully saved failed authentication log with ID: {}", savedLog.getId());
+            logger.info(LOG_SAVE_SUCCESS, savedLog.getId());
             return savedLog;
         } catch (Exception e) {
-            logger.error("Error logging failed authentication", e);
-            throw e;
+            logger.error(LOG_ERROR_FAILED_AUTH, e);
+            throw new RuntimeException("Failed to log failed authentication", e);
         }
     }
 
@@ -113,13 +129,37 @@ public class AuthenticationLogService {
     }
 
     /**
+     * Generic method to handle paginated and non-paginated queries
+     * 
+     * @param <T>      The return type (List or Page)
+     * @param queryFn  Function to execute the query
+     * @param errorMsg Error message in case of failure
+     * @return Query results
+     */
+    private <T> T executeQuery(QueryFunction<T> queryFn, String errorMsg) {
+        try {
+            return queryFn.execute();
+        } catch (Exception e) {
+            logger.error(errorMsg, e);
+            throw new RuntimeException(errorMsg, e);
+        }
+    }
+
+    // Functional interface for query execution
+    @FunctionalInterface
+    private interface QueryFunction<T> {
+        T execute();
+    }
+
+    /**
      * Get logs by user ID
      * 
      * @param userId The user ID
      * @return List of authentication logs for the user
      */
     public List<AuthenticationLog> getLogsByUserId(String userId) {
-        return authenticationLogRepository.findByUserId(userId);
+        return executeQuery(() -> authenticationLogRepository.findByUserId(userId),
+                "Error fetching logs by user ID: " + userId);
     }
 
     /**
@@ -130,7 +170,8 @@ public class AuthenticationLogService {
      * @return Page of authentication logs for the user
      */
     public Page<AuthenticationLog> getLogsByUserIdPaginated(String userId, Pageable pageable) {
-        return authenticationLogRepository.findByUserId(userId, pageable);
+        return executeQuery(() -> authenticationLogRepository.findByUserId(userId, pageable),
+                "Error fetching paginated logs by user ID: " + userId);
     }
 
     /**
@@ -140,7 +181,8 @@ public class AuthenticationLogService {
      * @return List of authentication logs for the email
      */
     public List<AuthenticationLog> getLogsByEmail(String email) {
-        return authenticationLogRepository.findByEmail(email);
+        return executeQuery(() -> authenticationLogRepository.findByEmail(email),
+                "Error fetching logs by email: " + email);
     }
 
     /**
@@ -151,7 +193,8 @@ public class AuthenticationLogService {
      * @return Page of authentication logs for the email
      */
     public Page<AuthenticationLog> getLogsByEmailPaginated(String email, Pageable pageable) {
-        return authenticationLogRepository.findByEmail(email, pageable);
+        return executeQuery(() -> authenticationLogRepository.findByEmail(email, pageable),
+                "Error fetching paginated logs by email: " + email);
     }
 
     /**
@@ -161,7 +204,8 @@ public class AuthenticationLogService {
      * @return List of authentication logs for the domain
      */
     public List<AuthenticationLog> getLogsByDomain(String domain) {
-        return authenticationLogRepository.findByPrimaryDomain(domain);
+        return executeQuery(() -> authenticationLogRepository.findByPrimaryDomain(domain),
+                "Error fetching logs by domain: " + domain);
     }
 
     /**
@@ -172,7 +216,8 @@ public class AuthenticationLogService {
      * @return Page of authentication logs for the domain
      */
     public Page<AuthenticationLog> getLogsByDomainPaginated(String domain, Pageable pageable) {
-        return authenticationLogRepository.findByPrimaryDomain(domain, pageable);
+        return executeQuery(() -> authenticationLogRepository.findByPrimaryDomain(domain, pageable),
+                "Error fetching paginated logs by domain: " + domain);
     }
 
     /**
@@ -182,7 +227,8 @@ public class AuthenticationLogService {
      * @return List of authentication logs with the specified success status
      */
     public List<AuthenticationLog> getLogsBySuccessStatus(boolean successful) {
-        return authenticationLogRepository.findBySuccessful(successful);
+        return executeQuery(() -> authenticationLogRepository.findBySuccessful(successful),
+                "Error fetching logs by success status: " + successful);
     }
 
     /**
@@ -193,7 +239,8 @@ public class AuthenticationLogService {
      * @return Page of authentication logs with the specified success status
      */
     public Page<AuthenticationLog> getLogsBySuccessStatusPaginated(boolean successful, Pageable pageable) {
-        return authenticationLogRepository.findBySuccessful(successful, pageable);
+        return executeQuery(() -> authenticationLogRepository.findBySuccessful(successful, pageable),
+                "Error fetching paginated logs by success status: " + successful);
     }
 
     /**
@@ -203,7 +250,8 @@ public class AuthenticationLogService {
      * @return List of authentication logs from the specified IP address
      */
     public List<AuthenticationLog> getLogsByIpAddress(String ipAddress) {
-        return authenticationLogRepository.findByIpAddress(ipAddress);
+        return executeQuery(() -> authenticationLogRepository.findByIpAddress(ipAddress),
+                "Error fetching logs by IP address: " + ipAddress);
     }
 
     /**
@@ -214,7 +262,8 @@ public class AuthenticationLogService {
      * @return Page of authentication logs from the specified IP address
      */
     public Page<AuthenticationLog> getLogsByIpAddressPaginated(String ipAddress, Pageable pageable) {
-        return authenticationLogRepository.findByIpAddress(ipAddress, pageable);
+        return executeQuery(() -> authenticationLogRepository.findByIpAddress(ipAddress, pageable),
+                "Error fetching paginated logs by IP address: " + ipAddress);
     }
 
     /**
@@ -225,7 +274,8 @@ public class AuthenticationLogService {
      * @return List of authentication logs within the time range
      */
     public List<AuthenticationLog> getLogsByTimeRange(LocalDateTime start, LocalDateTime end) {
-        return authenticationLogRepository.findByTimestampBetween(start, end);
+        return executeQuery(() -> authenticationLogRepository.findByTimestampBetween(start, end),
+                "Error fetching logs by time range");
     }
 
     /**
@@ -238,7 +288,8 @@ public class AuthenticationLogService {
      */
     public Page<AuthenticationLog> getLogsByTimeRangePaginated(LocalDateTime start, LocalDateTime end,
             Pageable pageable) {
-        return authenticationLogRepository.findByTimestampBetween(start, end, pageable);
+        return executeQuery(() -> authenticationLogRepository.findByTimestampBetween(start, end, pageable),
+                "Error fetching paginated logs by time range");
     }
 
     /**
@@ -246,10 +297,19 @@ public class AuthenticationLogService {
      * 
      * @param cutoffDate The cutoff date
      */
+    @Transactional
     public void deleteLogsOlderThan(LocalDateTime cutoffDate) {
-        List<AuthenticationLog> oldLogs = authenticationLogRepository.findByTimestampBetween(
-                LocalDateTime.MIN, cutoffDate);
-        authenticationLogRepository.deleteAll(oldLogs);
+        logger.info(LOG_DELETE_OLD, cutoffDate);
+        try {
+            // More efficient to use bulk delete than loading all logs into memory
+            List<AuthenticationLog> oldLogs = authenticationLogRepository.findByTimestampBetween(
+                    LocalDateTime.MIN, cutoffDate);
+            authenticationLogRepository.deleteAll(oldLogs);
+            logger.info("Deleted {} logs older than {}", oldLogs.size(), cutoffDate);
+        } catch (Exception e) {
+            logger.error("Error deleting logs older than " + cutoffDate, e);
+            throw new RuntimeException("Failed to delete old logs", e);
+        }
     }
 
     /**
@@ -271,38 +331,42 @@ public class AuthenticationLogService {
             LocalDateTime endDate,
             Pageable pageable) {
 
-        logger.info("Getting filtered logs - Email: {}, Domain: {}, Successful: {}, StartDate: {}, EndDate: {}",
-                email, domain, successful, startDate, endDate);
+        logger.info(LOG_FILTERED_QUERY, email, domain, successful, startDate, endDate);
 
-        // Handle all possible combinations of filters
-        if (email != null && domain != null && successful != null && startDate != null && endDate != null) {
-            return authenticationLogRepository.findByEmailAndPrimaryDomainAndSuccessfulAndTimestampBetween(
-                    email, domain, successful, startDate, endDate, pageable);
-        } else if (email != null && domain != null && successful != null) {
-            return authenticationLogRepository.findByEmailAndPrimaryDomainAndSuccessful(
-                    email, domain, successful, pageable);
-        } else if (email != null && successful != null && startDate != null && endDate != null) {
-            return authenticationLogRepository.findByEmailAndSuccessfulAndTimestampBetween(
-                    email, successful, startDate, endDate, pageable);
-        } else if (domain != null && successful != null && startDate != null && endDate != null) {
-            return authenticationLogRepository.findByPrimaryDomainAndSuccessfulAndTimestampBetween(
-                    domain, successful, startDate, endDate, pageable);
-        } else if (email != null && domain != null) {
-            return authenticationLogRepository.findByEmailAndPrimaryDomain(email, domain, pageable);
-        } else if (email != null && successful != null) {
-            return authenticationLogRepository.findByEmailAndSuccessful(email, successful, pageable);
-        } else if (domain != null && successful != null) {
-            return authenticationLogRepository.findByPrimaryDomainAndSuccessful(domain, successful, pageable);
-        } else if (startDate != null && endDate != null) {
-            return authenticationLogRepository.findByTimestampBetween(startDate, endDate, pageable);
-        } else if (email != null) {
-            return authenticationLogRepository.findByEmail(email, pageable);
-        } else if (domain != null) {
-            return authenticationLogRepository.findByPrimaryDomain(domain, pageable);
-        } else if (successful != null) {
-            return authenticationLogRepository.findBySuccessful(successful, pageable);
-        } else {
-            return authenticationLogRepository.findAll(pageable);
+        try {
+            // Handle all possible combinations of filters
+            if (email != null && domain != null && successful != null && startDate != null && endDate != null) {
+                return authenticationLogRepository.findByEmailAndPrimaryDomainAndSuccessfulAndTimestampBetween(
+                        email, domain, successful, startDate, endDate, pageable);
+            } else if (email != null && domain != null && successful != null) {
+                return authenticationLogRepository.findByEmailAndPrimaryDomainAndSuccessful(
+                        email, domain, successful, pageable);
+            } else if (email != null && successful != null && startDate != null && endDate != null) {
+                return authenticationLogRepository.findByEmailAndSuccessfulAndTimestampBetween(
+                        email, successful, startDate, endDate, pageable);
+            } else if (domain != null && successful != null && startDate != null && endDate != null) {
+                return authenticationLogRepository.findByPrimaryDomainAndSuccessfulAndTimestampBetween(
+                        domain, successful, startDate, endDate, pageable);
+            } else if (email != null && domain != null) {
+                return authenticationLogRepository.findByEmailAndPrimaryDomain(email, domain, pageable);
+            } else if (email != null && successful != null) {
+                return authenticationLogRepository.findByEmailAndSuccessful(email, successful, pageable);
+            } else if (domain != null && successful != null) {
+                return authenticationLogRepository.findByPrimaryDomainAndSuccessful(domain, successful, pageable);
+            } else if (startDate != null && endDate != null) {
+                return authenticationLogRepository.findByTimestampBetween(startDate, endDate, pageable);
+            } else if (email != null) {
+                return authenticationLogRepository.findByEmail(email, pageable);
+            } else if (domain != null) {
+                return authenticationLogRepository.findByPrimaryDomain(domain, pageable);
+            } else if (successful != null) {
+                return authenticationLogRepository.findBySuccessful(successful, pageable);
+            } else {
+                return authenticationLogRepository.findAll(pageable);
+            }
+        } catch (Exception e) {
+            logger.error("Error executing filtered logs query", e);
+            throw new RuntimeException("Failed to retrieve filtered logs", e);
         }
     }
 
@@ -313,8 +377,14 @@ public class AuthenticationLogService {
      * @return The timestamp of the last successful login, or null if none exists
      */
     public LocalDateTime getLastSuccessfulLoginByUserId(String userId) {
-        AuthenticationLog lastLogin = authenticationLogRepository.findTopByUserIdAndSuccessfulOrderByTimestampDesc(userId, true);
-        return lastLogin != null ? lastLogin.getTimestamp() : null;
+        try {
+            AuthenticationLog lastLogin = authenticationLogRepository
+                    .findTopByUserIdAndSuccessfulOrderByTimestampDesc(userId, true);
+            return lastLogin != null ? lastLogin.getTimestamp() : null;
+        } catch (Exception e) {
+            logger.error("Error fetching last successful login for user ID: " + userId, e);
+            throw new RuntimeException("Failed to retrieve last login for user", e);
+        }
     }
 
     /**
@@ -324,7 +394,13 @@ public class AuthenticationLogService {
      * @return The timestamp of the last successful login, or null if none exists
      */
     public LocalDateTime getLastSuccessfulLoginByEmail(String email) {
-        AuthenticationLog lastLogin = authenticationLogRepository.findTopByEmailAndSuccessfulOrderByTimestampDesc(email, true);
-        return lastLogin != null ? lastLogin.getTimestamp() : null;
+        try {
+            AuthenticationLog lastLogin = authenticationLogRepository
+                    .findTopByEmailAndSuccessfulOrderByTimestampDesc(email, true);
+            return lastLogin != null ? lastLogin.getTimestamp() : null;
+        } catch (Exception e) {
+            logger.error("Error fetching last successful login for email: " + email, e);
+            throw new RuntimeException("Failed to retrieve last login for email", e);
+        }
     }
 }
