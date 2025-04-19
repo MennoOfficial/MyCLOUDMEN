@@ -1,10 +1,10 @@
 package com.cloudmen.backend.config;
 
 import com.cloudmen.backend.services.TeamleaderCompanyService;
+import com.cloudmen.backend.services.CompanySyncService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
@@ -25,6 +25,7 @@ public class TeamleaderInitializer implements ApplicationListener<ApplicationRea
 
     private final TeamleaderOAuthService oAuthService;
     private final TeamleaderCompanyService companyService;
+    private final CompanySyncService companySyncService;
 
     @Value("${teamleader.sync.on-startup:true}")
     private boolean syncOnStartup;
@@ -32,12 +33,13 @@ public class TeamleaderInitializer implements ApplicationListener<ApplicationRea
     @Value("${teamleader.sync.startup-delay-ms:5000}")
     private long startupDelayMs;
 
-    @Autowired
     public TeamleaderInitializer(
             TeamleaderOAuthService oAuthService,
-            TeamleaderCompanyService companyService) {
+            TeamleaderCompanyService companyService,
+            CompanySyncService companySyncService) {
         this.oAuthService = oAuthService;
         this.companyService = companyService;
+        this.companySyncService = companySyncService;
     }
 
     @Override
@@ -69,7 +71,7 @@ public class TeamleaderInitializer implements ApplicationListener<ApplicationRea
 
         logger.info("Starting Teamleader data synchronization on application startup");
 
-        CompletableFuture<Map<String, Object>> syncFuture = companyService.syncAllCompanies();
+        CompletableFuture<Map<String, Object>> syncFuture = companySyncService.syncAllCompanies();
 
         syncFuture.thenAccept(result -> {
             if (result.containsKey("success") && (boolean) result.get("success")) {

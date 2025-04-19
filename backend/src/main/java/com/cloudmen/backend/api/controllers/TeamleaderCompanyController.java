@@ -12,9 +12,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -59,7 +56,7 @@ public class TeamleaderCompanyController {
      * @param pageSize Number of items per page
      * @return List of companies
      */
-    @GetMapping("/api")
+    @GetMapping("/remote")
     public ResponseEntity<JsonNode> getCompaniesFromApi(
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
@@ -101,7 +98,7 @@ public class TeamleaderCompanyController {
      * @param id The Teamleader company ID
      * @return Company details
      */
-    @GetMapping("/api/{id}")
+    @GetMapping("/remote/{id}")
     public ResponseEntity<JsonNode> getCompanyDetailsFromApi(@PathVariable("id") String id) {
         logger.info("Fetching company details from Teamleader API for ID: {}", id);
 
@@ -132,10 +129,7 @@ public class TeamleaderCompanyController {
         logger.info("Fetching companies from local database, page: {}, size: {}", page, size);
 
         try {
-            Sort.Direction sortDirection = direction.equalsIgnoreCase("desc") ? Sort.Direction.DESC
-                    : Sort.Direction.ASC;
 
-            Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortBy));
             List<TeamleaderCompany> companies = companyService.getAllCompanies();
 
             // Convert entities to DTOs
@@ -341,19 +335,6 @@ public class TeamleaderCompanyController {
             response.put("message", "Error updating company status: " + e.getMessage());
             return ResponseEntity.internalServerError().body(response);
         }
-    }
-
-    /**
-     * Test endpoint to verify the status path routing works
-     */
-    @GetMapping("/{id}/status/test")
-    public ResponseEntity<Object> testStatusEndpoint(@PathVariable("id") String id) {
-        logger.info("Test status endpoint reached for ID: {}", id);
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Status endpoint test successful");
-        response.put("id", id);
-        return ResponseEntity.ok(response);
     }
 
     /**

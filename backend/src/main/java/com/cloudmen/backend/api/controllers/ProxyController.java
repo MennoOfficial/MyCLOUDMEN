@@ -1,11 +1,11 @@
 package com.cloudmen.backend.api.controllers;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -15,11 +15,10 @@ import java.net.URISyntaxException;
 @CrossOrigin(origins = "*")
 public class ProxyController {
 
-    private final RestTemplate restTemplate;
+    private final WebClient webClient;
 
-    @Autowired
-    public ProxyController(RestTemplate restTemplate) {
-        this.restTemplate = restTemplate;
+    public ProxyController(WebClient webClient) {
+        this.webClient = webClient;
     }
 
     @GetMapping(value = "/image", produces = MediaType.IMAGE_JPEG_VALUE)
@@ -28,13 +27,26 @@ public class ProxyController {
             // Validate URL
             URI uri = new URI(imageUrl);
 
-            // Get image bytes from remote server
-            ResponseEntity<byte[]> response = restTemplate.getForEntity(uri, byte[].class);
+            // Get image bytes from remote server using WebClient
+            byte[] imageData = webClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .bodyToMono(byte[].class)
+                    .doOnError(e -> {
+                        if (e instanceof WebClientResponseException) {
+                            WebClientResponseException ex = (WebClientResponseException) e;
+                            System.err.println("Error status: " + ex.getStatusCode());
+                        }
+                    })
+                    .block();
 
-            // Return the image data with appropriate content type
-            return ResponseEntity.ok()
-                    .contentType(response.getHeaders().getContentType())
-                    .body(response.getBody());
+            if (imageData != null) {
+                return ResponseEntity.ok()
+                        .contentType(MediaType.IMAGE_JPEG)
+                        .body(imageData);
+            } else {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+            }
         } catch (URISyntaxException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         } catch (Exception e) {

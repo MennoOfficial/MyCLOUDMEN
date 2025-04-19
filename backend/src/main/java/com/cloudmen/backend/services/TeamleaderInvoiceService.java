@@ -99,7 +99,6 @@ public class TeamleaderInvoiceService {
 
             // Convert to JSON string
             String jsonBody = objectMapper.writeValueAsString(requestBody);
-            log.debug("Sending request to Teamleader API: {}", jsonBody);
 
             // Call the API
             JsonNode response = webClient.post()
@@ -178,7 +177,6 @@ public class TeamleaderInvoiceService {
 
             // Convert to JSON string
             String jsonBody = objectMapper.writeValueAsString(requestBody);
-            log.debug("Sending request to Teamleader API: {}", jsonBody);
 
             // Call the API directly
             JsonNode response = webClient.post()
