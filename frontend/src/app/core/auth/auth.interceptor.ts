@@ -21,11 +21,8 @@ export class AuthInterceptor implements HttpInterceptor {
       return next.handle(req);
     }
     
-    console.log('Intercepting API request:', req.url);
-    
     return from(this.authService.getAccessToken()).pipe(
       mergeMap(token => {
-        console.log('Got token for API request:', token ? 'Yes (length: ' + token.length + ')' : 'No token');
         
         // Always add these headers for API requests
         let headers = req.headers
@@ -49,7 +46,6 @@ export class AuthInterceptor implements HttpInterceptor {
           catchError((error: HttpErrorResponse) => {
             console.error(`Error in API request to ${req.url}:`, error);
             if (error.status === 401) {
-              console.log('Authentication error, refreshing token...');
               // Could try to refresh token here
             }
             return throwError(() => error);

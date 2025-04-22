@@ -21,7 +21,6 @@ export class SessionTimeoutModalComponent implements OnInit, OnDestroy {
     // Subscribe to modal visibility changes
     this.subscriptions.push(
       this.sessionTimeoutService.showTimeoutModal$.subscribe(show => {
-        console.log('Modal visibility changed:', show);
         this.showModal = show;
       })
     );

@@ -23,8 +23,6 @@ export class StatusCheckerService implements OnDestroy {
     // Cancel any existing subscription
     this.stopPeriodicStatusCheck();
     
-    console.log('Starting periodic status checks');
-    
     // Create a new subscription
     this.checkSubscription = interval(this.statusCheckInterval).subscribe(() => {
       this.checkUserStatus();
@@ -45,21 +43,17 @@ export class StatusCheckerService implements OnDestroy {
     const currentUser = JSON.parse(sessionStorage.getItem('user_profile') || '{}');
     
     if (!currentUser || !currentUser.email) {
-      console.log('No user profile in session storage, skipping status check');
       return;
     }
     
-    console.log('Performing periodic status check for:', currentUser.email);
     
     // Try to find user by email first
     this.http.get<UserDTO>(`${this.environmentService.apiUrl}/users/email/${encodeURIComponent(currentUser.email)}`)
       .subscribe({
         next: (user) => {
-          console.log('Periodic status check result:', user.status);
           
           // Check user status
           if (user.status !== 'ACTIVATED') {
-            console.log(`User status is ${user.status}, redirecting to deactivated page`);
             this.router.navigate(['/account-deactivated'], { 
               queryParams: { status: user.status } 
             });
@@ -81,11 +75,9 @@ export class StatusCheckerService implements OnDestroy {
     
     // Skip if no domain found
     if (!emailDomain) {
-      console.log('Unable to extract domain from email, skipping company status check');
       return;
     }
     
-    console.log('Checking company status for domain:', emailDomain);
     
     // Fetch all companies and check for domain match
     this.http.get<any>(`${this.environmentService.apiUrl}/companies`)
@@ -100,17 +92,13 @@ export class StatusCheckerService implements OnDestroy {
         const companies = Array.isArray(response) ? response : response?.companies;
         
         if (!companies || companies.length === 0) {
-          console.log('No companies found to check for domain match');
           return;
         }
-        
-        console.log(`Retrieved ${companies.length} companies, searching for domain: ${emailDomain}`);
-        
+                
         // Look for a company with matching domain
         const matchingCompany = this.findCompanyByDomain(companies, emailDomain);
         
         if (matchingCompany) {
-          console.log('Found company with matching domain:', matchingCompany.name);
           
           // Get company status - either direct or from customFields
           const status = matchingCompany.status || 
@@ -118,13 +106,9 @@ export class StatusCheckerService implements OnDestroy {
           
           // Redirect if company is not active
           if (status === 'DEACTIVATED' || status === 'SUSPENDED') {
-            console.log(`Company ${matchingCompany.name} has status ${status}, redirecting to company-inactive`);
             this.handleCompanyStatus(status, matchingCompany.name || 'Your company');
-          } else {
-            console.log(`Company ${matchingCompany.name} is active with status: ${status || 'unknown'}`);
           }
-        } else {
-          console.log(`No company found with domain: ${emailDomain}`);
+          
         }
       });
   }
@@ -154,7 +138,7 @@ export class StatusCheckerService implements OnDestroy {
       });
     });
   }
-  
+    
   private getEmailDomain(email: string): string | null {
     if (!email || !email.includes('@')) {
       return null;
@@ -169,10 +153,7 @@ export class StatusCheckerService implements OnDestroy {
   }
   
   private handleCompanyStatus(status: string, companyName: string): void {
-    console.log(`Company status check result: ${status} for ${companyName}`);
-    
     if (status === 'DEACTIVATED' || status === 'SUSPENDED') {
-      console.log(`Company ${companyName} is ${status}, redirecting to company-inactive page`);
       this.router.navigate(['/company-inactive'], {
         queryParams: {
           status: status,

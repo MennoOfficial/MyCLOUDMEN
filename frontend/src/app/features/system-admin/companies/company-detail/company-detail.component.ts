@@ -196,7 +196,6 @@ export class CompanyDetailComponent implements OnInit {
                    user.status,
             lastLogin: user.lastLogin || null
           }));
-          console.log('Mapped company users:', this.companyUsers);
           this.loadingUsers = false;
         },
         error: (err) => {
@@ -210,18 +209,15 @@ export class CompanyDetailComponent implements OnInit {
   fetchPendingUsers(): void {
     if (!this.company || !this.company.email) return;
     
-    console.log('Company email:', this.company.email);
     
     // Extract primary domain from company email
     const companyEmailParts = this.company.email.split('@');
     const companyDomain = companyEmailParts[1];
 
-    console.log('Searching for pending users with domain:', companyDomain);
     // Use the new direct endpoint to get pending users by domain
     this.apiService.get<PendingUser[]>(`users?domain=${companyDomain}&status=PENDING`)
       .subscribe({
         next: (pendingUsers) => {
-          console.log('Pending users from API:', pendingUsers);
           this.pendingUsers = pendingUsers;
           this.pendingCount = this.pendingUsers.length;
           this.hasPendingUsers = this.pendingCount > 0;
@@ -248,7 +244,6 @@ export class CompanyDetailComponent implements OnInit {
   }
 
   confirmStatusChange(): void {
-    console.log('⚠️ Please check the Network tab in your browser console (F12) to monitor the API request');
     
     if (!this.company || !this.company.id) {
       console.error('Cannot update status: Company or company ID is missing');
@@ -262,38 +257,29 @@ export class CompanyDetailComponent implements OnInit {
     // Store the new status temporarily
     const newStatus = this.newStatus;
     
-    console.log(`Updating company ${this.company.id} status from ${previousStatus} to ${newStatus}`);
-    console.log('Company object:', this.company);
     
     // Set loading indicator
     this.updatingStatus = true;
     
     // Try using teamleaderId if it exists
     const idToUse = this.company.teamleaderId || this.company.id;
-    console.log(`Using ID for status update: ${idToUse}, Type: ${this.company.teamleaderId ? 'teamleaderId' : 'MongoDB id'}`);
     
     // Log the API URL for debugging
     const apiUrl = `teamleader/companies/${idToUse}/status`;
-    const fullUrl = `${this.environmentService.apiUrl}/${apiUrl}`;
-    console.log('Endpoint path:', apiUrl);
-    console.log('Full API URL being called:', fullUrl);
-    
+    const fullUrl = `${this.environmentService.apiUrl}/${apiUrl}`;    
     // Call the API to update the status
     this.apiService.put(apiUrl, { status: newStatus })
       .subscribe({
         next: (response: any) => {  // Type as 'any' to handle the flexible response structure
-          console.log('Status update successful. API response:', response);
           
           // Update the company status with the returned value if possible
           if (this.company) { // Check for null
             if (response && typeof response === 'object') {
               if ('status' in response && typeof response.status === 'string') {
                 this.company.status = response.status;
-                console.log(`Updated company status to ${response.status} based on API response`);
               } else {
                 // If response doesn't contain status field directly, default to the new status
                 this.company.status = newStatus;
-                console.log(`Updated company status to ${newStatus} (no status field in API response)`);
               }
             } else {
               // If response is not as expected, use new status
@@ -562,12 +548,10 @@ export class CompanyDetailComponent implements OnInit {
     if (!this.company || !this.company.id) return;
     
     const testUrl = `teamleader/companies/${this.company.id}/status/test`;
-    console.log('Testing status endpoint accessibility at:', testUrl);
     
     this.apiService.get<any>(testUrl)
       .subscribe({
         next: (response) => {
-          console.log('Status endpoint test successful:', response);
         },
         error: (err) => {
           console.error('Status endpoint test failed:', err);
@@ -609,9 +593,7 @@ export class CompanyDetailComponent implements OnInit {
       next: (lastLoginTime) => {
         if (lastLoginTime && this.selectedUser) {
           this.selectedUser.lastLogin = lastLoginTime;
-          console.log(`Retrieved last login for user ${user.id}:`, lastLoginTime);
         } else if (this.selectedUser) {
-          console.log(`No login history found for user ${user.id} by ID, trying email...`);
           // If no login found by ID, try by email as fallback
           this.fetchLastLoginByEmail(user.email);
         }
@@ -638,9 +620,6 @@ export class CompanyDetailComponent implements OnInit {
       next: (lastLoginTime) => {
         if (lastLoginTime && this.selectedUser) {
           this.selectedUser.lastLogin = lastLoginTime;
-          console.log(`Retrieved last login for email ${email}:`, lastLoginTime);
-        } else {
-          console.log(`No login history found for email ${email}`);
         }
       },
       error: (err) => {
@@ -679,15 +658,11 @@ export class CompanyDetailComponent implements OnInit {
     }
     
     this.updatingUser = true;
-    
-    console.log(`Updating role for user ${this.selectedUser.id} to ${newRole}`);
-    
+        
     // Call the API directly without checking if the user exists first
     this.apiService.put(`users/${this.selectedUser.id}/role`, { role: newRole })
       .subscribe({
         next: (response) => {
-          console.log(`Successfully updated role for user ${this.selectedUser?.id} to ${newRole}`);
-          console.log('API response:', response);
           
           this.updateRoleLocally(newRole);
           this.updatingUser = false;
@@ -724,9 +699,7 @@ export class CompanyDetailComponent implements OnInit {
   // Update role locally in the UI
   private updateRoleLocally(newRole: string): void {
     if (!this.selectedUser) return;
-    
-    console.log(`Updating role locally to ${newRole} for UI consistency`);
-    
+        
     // Update the selected user's role
     this.selectedUser.role = newRole;
     
@@ -746,14 +719,11 @@ export class CompanyDetailComponent implements OnInit {
     // Convert friendly status name to backend format
     const backendStatus = newStatus === 'Active' ? 'ACTIVATED' : 'DEACTIVATED';
     
-    console.log(`Updating status for user ${this.selectedUser.id} to ${newStatus} (${backendStatus})`);
     
     // Call the API directly without checking if the user exists first
     this.apiService.put(`users/${this.selectedUser.id}/status`, { status: backendStatus })
       .subscribe({
         next: (response) => {
-          console.log(`Successfully updated status for user ${this.selectedUser?.id} to ${newStatus}`);
-          console.log('API response:', response);
           
           this.updateStatusLocally(newStatus);
           this.updatingUser = false;
@@ -791,7 +761,6 @@ export class CompanyDetailComponent implements OnInit {
   private updateStatusLocally(newStatus: string): void {
     if (!this.selectedUser) return;
     
-    console.log(`Updating status locally to ${newStatus} for UI consistency`);
     
     // Update the selected user's status
     this.selectedUser.status = newStatus;
@@ -817,10 +786,6 @@ export class CompanyDetailComponent implements OnInit {
    */
   copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text)
-      .then(() => {
-        // You could show a toast notification here, but we'll keep it simple
-        console.log('Copied to clipboard:', text);
-      })
       .catch(err => {
         console.error('Failed to copy text: ', err);
       });
@@ -842,7 +807,6 @@ export class CompanyDetailComponent implements OnInit {
     if (!userId) return;
     
     try {
-      console.log(`Calling API endpoint: users/pending/${userId}/approve`);
       await this.apiService.post(`users/pending/${userId}/approve`, {}).toPromise();
       this.showToastNotification('User approved successfully', 'success');
       this.fetchPendingUsers();
@@ -857,7 +821,6 @@ export class CompanyDetailComponent implements OnInit {
     if (!userId) return;
     
     try {
-      console.log(`Calling API endpoint: users/pending/${userId}/reject`);
       await this.apiService.post(`users/pending/${userId}/reject`, {}).toPromise();
       this.showToastNotification('User rejected successfully', 'success');
       this.fetchPendingUsers();

@@ -20,20 +20,11 @@ export class EnvironmentService {
   private environment: Environment;
 
   constructor() {
-    console.log('EnvironmentService initializing...');
     const windowEnv = (window as any).env;
-    console.log('Window env available:', windowEnv ? 'Yes' : 'No');
     
     if (!windowEnv) {
       throw new Error('Environment configuration not found. Make sure env.js is loaded.');
     }
-
-    const hostname = window.location.hostname;
-    console.log('Current hostname:', hostname);
-    console.log('Environment from window.env:', {
-      production: windowEnv.production,
-      apiUrl: windowEnv.apiUrl
-    });
 
     // Use window.env values directly
     this.environment = {
@@ -52,13 +43,6 @@ export class EnvironmentService {
       console.warn('Production environment detected but using non-production API URL. Correcting...');
       this.environment.apiUrl = 'https://mycloudmen.mennoplochaet.be/api';
     }
-    
-    console.log('Final environment configuration:', {
-      production: this.environment.production,
-      apiUrl: this.environment.apiUrl,
-      auth0Domain: this.environment.auth0.domain,
-      currentOrigin: window.location.origin
-    });
   }
 
   get isProduction(): boolean {

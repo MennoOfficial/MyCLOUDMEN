@@ -166,7 +166,6 @@ export class UsersComponent implements OnInit {
           const emailParts = user.email.split('@');
           if (emailParts.length === 2) {
             this.companyDomain = emailParts[1];
-            console.log('Company domain set to:', this.companyDomain);
             this.fetchCompanyUsers();
             this.fetchPendingUsers();
           } else {
@@ -177,7 +176,6 @@ export class UsersComponent implements OnInit {
         }
       },
       error: (err: Error) => {
-        console.error('Error getting user profile:', err);
         this.handleError('Failed to get user profile');
       }
     });
@@ -191,19 +189,14 @@ export class UsersComponent implements OnInit {
     
     this.loadingUsers = true;
     this.error = false; // Reset error flag
-    console.log('Fetching users for domain:', this.companyDomain);
     
     // Call the API to get users with the company's domain
     this.apiService.get<any[]>(`users?domain=${this.companyDomain}&excludeStatus=PENDING`)
       .subscribe({
         next: (users) => {
           try {
-            console.log('Raw API response for users:', users);
-            console.log('Number of users returned from API:', users.length);
-            
             // Map API response to User interface format
             this.companyUsers = users.map(user => {
-              console.log('Processing user:', user);
               const processedUser = {
                 id: user.id,
                 name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
@@ -227,17 +220,14 @@ export class UsersComponent implements OnInit {
             // Initialize filtered users with all users
             this.filteredUsers = [...this.companyUsers];
             
-            console.log('Mapped company users:', this.companyUsers);
             this.loadingUsers = false;
             this.error = false; // Ensure error flag is reset
             this.sortUsers('name');
           } catch (error) {
-            console.error('Error processing user data:', error);
             this.handleError('Error processing user data');
           }
         },
         error: (err) => {
-          console.error(`Error fetching users for domain ${this.companyDomain}:`, err);
           this.handleError(`Error fetching users for domain ${this.companyDomain}`);
         }
       });
@@ -245,20 +235,16 @@ export class UsersComponent implements OnInit {
 
   fetchPendingUsers(): void {
     if (!this.companyDomain) {
-      console.error('No company domain available for fetching pending users');
       this.pendingUsers = [];
       this.pendingCount = 0;
       this.hasPendingUsers = false;
       return;
     }
     
-    console.log('Fetching pending users for domain:', this.companyDomain);
-    
     // Call the API to get pending users for the domain
     this.apiService.get<PendingUser[]>(`users?domain=${encodeURIComponent(this.companyDomain)}&status=PENDING`)
       .subscribe({
         next: (pendingUsers) => {
-          console.log('Pending users from API:', pendingUsers);
           // Process the results
           if (Array.isArray(pendingUsers)) {
             this.pendingUsers = pendingUsers
@@ -273,16 +259,13 @@ export class UsersComponent implements OnInit {
             
             this.pendingCount = this.pendingUsers.length;
             this.hasPendingUsers = this.pendingCount > 0;
-            console.log(`Found ${this.pendingCount} pending users for domain ${this.companyDomain}`);
           } else {
-            console.error('API did not return a valid array for pending users:', pendingUsers);
             this.pendingUsers = [];
             this.pendingCount = 0;
             this.hasPendingUsers = false;
           }
         },
         error: (err) => {
-          console.error(`Error fetching pending users:`, err);
           this.pendingUsers = [];
           this.pendingCount = 0;
           this.hasPendingUsers = false;
@@ -301,7 +284,6 @@ export class UsersComponent implements OnInit {
     // Only proxy external URLs, not data URLs or relative paths
     if (url.startsWith('http') && !url.includes(window.location.hostname)) {
       const encodedUrl = encodeURIComponent(url);
-      console.log(`Using proxy for profile image: ${this.environmentService.apiUrl}/proxy/image?url=${encodedUrl}`);
       return `${this.environmentService.apiUrl}/proxy/image?url=${encodedUrl}`;
     }
     
@@ -335,7 +317,6 @@ export class UsersComponent implements OnInit {
     // Find the user being approved
     const user = this.pendingUsers.find(u => u.id === userId);
     if (!user) {
-      console.error(`User with ID ${userId} not found in pending users list`);
       return;
     }
     
@@ -362,7 +343,6 @@ export class UsersComponent implements OnInit {
     // Find the user being rejected
     const user = this.pendingUsers.find(u => u.id === userId);
     if (!user) {
-      console.error(`User with ID ${userId} not found in pending users list`);
       return;
     }
     
@@ -413,7 +393,6 @@ export class UsersComponent implements OnInit {
     if (!this.selectedUser) return;
     
     const userId = this.selectedUser.id;
-    console.log(`Approving user: ${this.selectedUser.firstName} ${this.selectedUser.lastName} (${this.selectedUser.email})`);
     
     // Create a copy of the user for adding to the company users list
     const approvedUser: any = {
@@ -454,14 +433,11 @@ export class UsersComponent implements OnInit {
     this.showApprovePopup = false;
     
     // Call the API to approve the pending user
-    console.log(`Making API call to approve user ${userId}`);
     
     // Use the correct API endpoint format - users/pending/{id}/approve
     this.apiService.post(`users/pending/${userId}/approve`, {})
       .subscribe({
         next: (response) => {
-          console.log(`User ${userId} approved successfully, API response:`, response);
-          
           // Display success message using toast
           this.showToastNotification('User has been approved successfully', 'success');
           
@@ -469,9 +445,6 @@ export class UsersComponent implements OnInit {
           this.fetchCompanyUsers();
         },
         error: (err) => {
-          console.error(`Error approving user ${userId}:`, err);
-          console.error('API endpoint used:', `users/pending/${userId}/approve`);
-          
           // Show error toast
           this.showToastNotification(`Failed to approve user: ${err.message || 'Unknown error'}`, 'error');
           
@@ -496,7 +469,6 @@ export class UsersComponent implements OnInit {
     if (!this.selectedUser) return;
     
     const userId = this.selectedUser.id;
-    console.log(`Rejecting user: ${this.selectedUser.firstName} ${this.selectedUser.lastName} (${this.selectedUser.email})`);
     
     // Create a pendingUser reference in case we need to revert
     const pendingUser: PendingUser = {
@@ -523,13 +495,9 @@ export class UsersComponent implements OnInit {
     this.apiService.post(`users/pending/${userId}/reject`, {})
       .subscribe({
         next: (response) => {
-          console.log(`User ${userId} rejected successfully`);
           this.showToastNotification('User has been rejected successfully', 'success');
         },
         error: (err) => {
-          console.error(`Error rejecting user ${userId}:`, err);
-          console.error('API endpoint used:', `users/pending/${userId}/reject`);
-          
           // Show error toast
           this.showToastNotification(`Failed to reject user: ${err.message || 'Unknown error'}`, 'error');
           
@@ -594,7 +562,6 @@ export class UsersComponent implements OnInit {
     this.error = true;
     this.errorMessage = message;
     this.loadingUsers = false;
-    console.error('Error:', message);
   }
 
   formatRole(role: string): string {
@@ -788,15 +755,12 @@ export class UsersComponent implements OnInit {
       next: (lastLoginTime) => {
         if (lastLoginTime && this.selectedUser) {
           this.selectedUser.lastLogin = lastLoginTime;
-          console.log(`Retrieved last login for user ${user.id}:`, lastLoginTime);
         } else if (this.selectedUser) {
-          console.log(`No login history found for user ${user.id} by ID, trying email...`);
           // If no login found by ID, try by email as fallback
           this.fetchLastLoginByEmail(user.email);
         }
       },
       error: (err) => {
-        console.error(`Error fetching last login time for user ${user.id}:`, err);
         // On error, try by email as fallback
         if (this.selectedUser) {
           this.fetchLastLoginByEmail(user.email);
@@ -817,20 +781,16 @@ export class UsersComponent implements OnInit {
       next: (lastLoginTime) => {
         if (lastLoginTime && this.selectedUser) {
           this.selectedUser.lastLogin = lastLoginTime;
-          console.log(`Retrieved last login for email ${email}:`, lastLoginTime);
-        } else {
-          console.log(`No login history found for email ${email}`);
         }
       },
       error: (err) => {
-        console.error(`Error fetching last login time for email ${email}:`, err);
+        // Silent failure - last login time is not critical
       }
     });
   }
 
   // Method to hide user detail popup
   hideUserDetail(): void {
-    console.log('Hiding user detail popup');
     this.showUserDetailPopup = false;
     setTimeout(() => {
       this.selectedUser = null;
@@ -864,9 +824,6 @@ export class UsersComponent implements OnInit {
     this.apiService.put(`users/${this.selectedUser.id}/status`, { status: backendStatus })
       .subscribe({
         next: (response) => {
-          console.log(`Successfully updated status for user ${this.selectedUser?.id} to ${newStatus}`);
-          console.log('API response:', response);
-          
           // Update the UI
           if (this.selectedUser) {
             this.selectedUser.status = newStatus;
@@ -881,7 +838,6 @@ export class UsersComponent implements OnInit {
           this.updatingUser = false;
         },
         error: (err) => {
-          console.error(`Error updating user status:`, err);
           alert('Failed to update user status.');
           this.updatingUser = false;
         }
@@ -898,9 +854,6 @@ export class UsersComponent implements OnInit {
     this.apiService.put(`users/${this.selectedUser.id}/role`, { role: newRole })
       .subscribe({
         next: (response) => {
-          console.log(`Successfully updated role for user ${this.selectedUser?.id} to ${newRole}`);
-          console.log('API response:', response);
-          
           // Update the UI
           if (this.selectedUser) {
             this.selectedUser.role = newRole;
@@ -915,7 +868,6 @@ export class UsersComponent implements OnInit {
           this.updatingUser = false;
         },
         error: (err) => {
-          console.error(`Error updating user role:`, err);
           alert('Failed to update user role.');
           this.updatingUser = false;
         }
@@ -926,10 +878,10 @@ export class UsersComponent implements OnInit {
   copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text)
       .then(() => {
-        console.log('Copied to clipboard');
+        // Clipboard write successful
       })
       .catch(err => {
-        console.error('Failed to copy text: ', err);
+        // Silent failure
       });
   }
 

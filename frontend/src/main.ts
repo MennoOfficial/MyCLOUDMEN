@@ -10,11 +10,7 @@ import { EnvironmentService } from './app/core/services/environment.service';
 
 function initializeApp(environmentService: EnvironmentService) {
   return () => {
-    // Force environment service initialization
-    console.log('Initializing app with API URL:', environmentService.apiUrl);
-    console.log('Initializing app with Auth0 domain:', environmentService.auth0Domain);
-    console.log('Initializing app with Auth0 client ID:', environmentService.auth0ClientId);
-    console.log('Initializing app with Auth0 audience:', environmentService.auth0Audience);
+
     return Promise.resolve();
   };
 }
