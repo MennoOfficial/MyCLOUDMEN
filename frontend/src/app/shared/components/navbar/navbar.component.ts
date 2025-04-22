@@ -203,7 +203,6 @@ export class NavbarComponent implements OnInit, OnDestroy {
   }
   
   handleImageError(event: any): void {
-    console.log('Image error event triggered, falling back to default image');
     this.profileImageLoading = false;
     // Fallback to default image
     event.target.src = 'https://isobarscience.com/wp-content/uploads/2020/09/default-profile-picture1.jpg';
@@ -224,16 +223,13 @@ export class NavbarComponent implements OnInit, OnDestroy {
       const baseUrl = this.environmentService.apiUrl;
       
       imageUrl = `${baseUrl}/proxy/image?url=${encodedUrl}`;
-      console.log('Using proxy for profile image:', imageUrl);
     }
     
     const img = new Image();
     img.onload = () => {
-      console.log('Profile image loaded successfully:', imageUrl);
       this.profileImageLoading = false;
     };
     img.onerror = () => {
-      console.log('Error loading profile image:', imageUrl);
       this.profileImageLoading = false;
     };
     img.src = imageUrl; // Set src after setting up event handlers

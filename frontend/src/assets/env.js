@@ -3,9 +3,6 @@
   const isProduction =
     hostname.includes("mycloudmen") || hostname.includes("mennoplochaet.be");
 
-  console.log("Current hostname:", hostname);
-  console.log("Is production environment:", isProduction);
-
   window.env = {
     production: isProduction,
     apiUrl: isProduction
@@ -18,9 +15,4 @@
       redirectUri: window.location.origin + "/auth/callback",
     },
   };
-
-  console.log("Environment configuration loaded:", {
-    production: window.env.production,
-    apiUrl: window.env.apiUrl,
-  });
 })(this);

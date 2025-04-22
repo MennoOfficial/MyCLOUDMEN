@@ -25,10 +25,8 @@ export class AppComponent implements OnInit, OnDestroy {
     // Start the periodic status checker when user is authenticated
     this.authSubscription = this.authService.isAuthenticated().subscribe(isAuthenticated => {
       if (isAuthenticated) {
-        console.log('User is authenticated, starting status checker');
         this.statusCheckerService.startPeriodicStatusCheck();
       } else {
-        console.log('User is not authenticated, stopping status checker');
         this.statusCheckerService.stopPeriodicStatusCheck();
       }
     });

@@ -48,7 +48,6 @@ export class SessionTimeoutService {
     
     // Set timeout for warning
     this.warningTimeoutId = setTimeout(() => {
-      console.log('Session timeout warning');
       this.showTimeoutModalSubject.next(true);
       this.startCountdown(this.WARNING_BEFORE_TIMEOUT);
     }, this.SESSION_DURATION - this.WARNING_BEFORE_TIMEOUT);

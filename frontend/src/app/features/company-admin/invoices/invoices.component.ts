@@ -260,14 +260,11 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       // Determine which status filter to use based on active tab
       const status = this.activeTab === 'paid' ? 'paid' : 'unpaid';
       
-      console.log(`Fetching from endpoint: ${baseEndpoint}?status=${status}`);
       const response = await this.apiService.get<TeamleaderInvoiceResponse[]>(`${baseEndpoint}?status=${status}`).toPromise();
       
       if (!response || !Array.isArray(response)) {
         throw new Error('Invalid response format');
       }
-
-      console.log(`Received ${response.length} invoices from API`);
       
       // Process the invoice data using processInvoicesData
       this.allInvoices = this.processInvoicesData(response);
@@ -819,7 +816,6 @@ export class InvoicesComponent implements OnInit, OnDestroy {
    * @returns An array of mock invoices
    */
   private generateTestData(): void {
-    console.log('API request failed - Generating test data as fallback');
     const testInvoices = this.createTestInvoices();
     
     this.allInvoices = testInvoices;

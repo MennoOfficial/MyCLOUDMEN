@@ -105,12 +105,10 @@ export class AuthLogsComponent implements OnInit {
     if (params.length > 0) {
       url += `&${params.join('&')}`;
     }
-    
-    console.log('Loading logs from URL:', url);
+  
     
     this.authService.getAccessToken().subscribe({
       next: (token) => {
-        console.log('Got access token, length:', token ? token.length : 0);
         
         this.http.get<PageResponse<AuthenticationLog>>(url, {
           headers: {
@@ -118,7 +116,6 @@ export class AuthLogsComponent implements OnInit {
           }
         }).subscribe({
           next: (response) => {
-            console.log('Received logs response:', response);
             this.logs = response.content;
             this.totalItems = response.totalElements;
             this.totalPages = response.totalPages;

@@ -22,7 +22,6 @@ export class StatusGuard implements CanActivate {
     state: RouterStateSnapshot
   ): Observable<boolean> | Promise<boolean> | boolean {
     // Log the route being checked
-    console.log('StatusGuard checking access to route:', state.url);
     
     // Always allow access to auth routes, activation routes, or company-inactive page
     if (
@@ -33,37 +32,27 @@ export class StatusGuard implements CanActivate {
       state.url.includes('/company-inactive') ||
       state.url.includes('/logout')
     ) {
-      console.log('Access is allowed to auth/status route:', state.url);
       return true;
     }
 
     const isActivationRoute = route.routeConfig?.path?.includes('activation') || false;
     if (isActivationRoute) {
-      console.log('Access is allowed to activation route');
       return true;
     }
 
     // If user is not authenticated yet, allow access (auth guard will handle this)
     if (!this.authService.isAuthenticated()) {
-      console.log('Auth check deferred to auth guard');
       return true;
     }
 
     // Use the user observable from AuthService
     return this.authService.user$.pipe(
-      tap(user => console.log('User in StatusGuard:', user ? `${user.email} (${user.status})` : 'No user')),
       map(user => {
         if (!user) {
-          console.log('No user found, allowing access (auth guard will handle)');
           return true;
-        }
-
-        console.log('User found, checking company status for:', user.email);
-        
+        }        
         // Check company status
-        const result = this.authService.checkAndHandleCompanyStatus();
-        console.log('Company status check result:', result ? 'Access allowed' : 'Access denied');
-        
+        const result = this.authService.checkAndHandleCompanyStatus();        
         // Allow access by default - any redirects will happen in the checkAndHandleCompanyStatus method
         return result;
       })
