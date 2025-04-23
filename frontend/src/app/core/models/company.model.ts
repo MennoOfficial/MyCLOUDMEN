@@ -1,11 +1,4 @@
-/**
- * Company status types matching backend enum
- */
-export enum CompanyStatusType {
-  ACTIVE = 'ACTIVE',
-  DEACTIVATED = 'DEACTIVATED',
-  SUSPENDED = 'SUSPENDED'
-}
+import { CompanyStatusType } from './enums';
 
 /**
  * Base interface for companies in list view
@@ -14,22 +7,31 @@ export interface CompanyListItem {
   id: string;
   teamleaderId: string;
   name: string;
-  email: string;
-  phoneNumber: string;
-  vatNumber: string;
-  status: string; // Using string to accommodate both old and new status values
-  syncedAt: string;
+  status: string | CompanyStatusType;
+  primaryAddress?: {
+    city?: string;
+    country?: string;
+  };
+  email?: string;
+  website?: string;
+  contactInfo?: ContactInfo[];
+  primaryDomain?: string;
+  syncedAt?: string | Date;
+  hasMyCloudmenAccess?: boolean;
+  phoneNumber?: string;
+  vatNumber?: string;
 }
 
 /**
  * Interface for address information
  */
 export interface CompanyAddress {
-  line1: string;
+  line1?: string;
   line2?: string;
-  postalCode: string;
-  city: string;
-  country: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  type?: string;
 }
 
 /**
@@ -44,14 +46,12 @@ export interface ContactInfo {
  * Interface for detailed company information
  */
 export interface CompanyDetail extends CompanyListItem {
-  website?: string;
+  address?: CompanyAddress;
+  vatNumber?: string;
   businessType?: string;
-  primaryAddress?: CompanyAddress;
-  primaryDomain?: string;
-  contactInfo?: ContactInfo[];
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
   customFields?: Record<string, any>;
-  createdAt: string;
-  updatedAt: string;
 }
 
 /**
@@ -59,7 +59,19 @@ export interface CompanyDetail extends CompanyListItem {
  */
 export interface CompanyListResponse {
   companies: CompanyListItem[];
-  currentPage: number;
-  totalItems: number;
+  total: number;
+  page: number;
+  size: number;
   totalPages: number;
+  totalItems?: number;
+}
+
+/**
+ * Simplified company information for display in UI components
+ */
+export interface Company {
+  id: string;        // MongoDB ID
+  teamleaderId?: string;  // Teamleader ID with dashes
+  name: string;
+  email?: string;
 } 

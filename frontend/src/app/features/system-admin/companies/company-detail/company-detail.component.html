@@ -100,10 +100,10 @@
             <div class="info-value status-container">
               <span
                 class="status-badge"
-                [ngClass]="getStatusClass(company?.status || 'ACTIVE')"
+                [ngClass]="getStatusClass(company.status || 'ACTIVE')"
               >
                 <span class="status-indicator"></span>
-                {{ getStatusDisplayName(company?.status || "ACTIVE") }}
+                {{ getStatusDisplayName(company.status || "ACTIVE") }}
               </span>
               <button class="status-toggle-btn" (click)="toggleStatus()">
                 <span class="material-icons">swap_horiz</span>
@@ -158,22 +158,29 @@
       </div>
 
       <!-- Address -->
-      <div class="detail-section" *ngIf="company.primaryAddress">
+      <div
+        class="detail-section"
+        *ngIf="company.address || company.primaryAddress"
+      >
         <h2 class="section-title">Address</h2>
         <div class="address-container">
           <div class="address-icon">
             <span class="material-icons">location_on</span>
           </div>
           <div class="address-details">
-            <p>{{ company.primaryAddress.line1 }}</p>
-            <p *ngIf="company.primaryAddress.line2">
-              {{ company.primaryAddress.line2 }}
+            <p *ngIf="company.address?.line1">{{ company.address?.line1 }}</p>
+            <p *ngIf="company.address?.line2">
+              {{ company.address?.line2 }}
             </p>
             <p>
-              {{ company.primaryAddress.postalCode }}
-              {{ company.primaryAddress.city }}
+              <span *ngIf="company.address?.postalCode"
+                >{{ company.address?.postalCode }}
+              </span>
+              {{ company.primaryAddress?.city || company.address?.city }}
             </p>
-            <p>{{ company.primaryAddress.country }}</p>
+            <p>
+              {{ company.primaryAddress?.country || company.address?.country }}
+            </p>
           </div>
         </div>
       </div>

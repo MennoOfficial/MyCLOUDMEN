@@ -1,17 +1,5 @@
 import { Injectable } from '@angular/core';
-
-interface Auth0Config {
-  domain: string;
-  clientId: string;
-  audience: string;
-  redirectUri: string;
-}
-
-interface Environment {
-  production: boolean;
-  apiUrl: string;
-  auth0: Auth0Config;
-}
+import { Auth0Config, Environment } from '../models/environment.model';
 
 @Injectable({
   providedIn: 'root'
