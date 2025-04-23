@@ -5,27 +5,7 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
-
-interface AuthenticationLog {
-  id: string;
-  userId: string;
-  email: string;
-  primaryDomain: string;
-  googleUniqueId: string;
-  timestamp: string;
-  ipAddress: string;
-  userAgent: string;
-  failureReason: string;
-  successful: boolean;
-}
-
-interface PageResponse<T> {
-  content: T[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
-}
+import { AuthenticationLog, PageResponse } from '../../../core/models/user.model';
 
 @Component({
   selector: 'app-auth-logs',

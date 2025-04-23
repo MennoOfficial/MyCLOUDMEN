@@ -1,7 +1,8 @@
 import { Component, Input, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { AuthService, User } from '../../../core/auth/auth.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { User } from '../../../core/models/auth.model';
 import { BehaviorSubject, Subject, takeUntil, Observable, map } from 'rxjs';
 import { EnvironmentService } from '../../../core/services/environment.service';
 

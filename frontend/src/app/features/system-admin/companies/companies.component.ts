@@ -5,12 +5,7 @@ import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { CompanyListItem, CompanyDetail, CompanyListResponse, CompanyAddress, ContactInfo } from '../../../core/models/company.model';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
-
-interface PageEvent {
-  pageIndex: number;
-  pageSize: number;
-  length: number;
-}
+import { PageEvent } from '../../../core/models/common.model';
 
 @Component({
   selector: 'app-companies',
@@ -83,7 +78,7 @@ export class CompaniesComponent implements OnInit {
       .subscribe({
         next: (response) => {
           this.companies = response.companies;
-          this.totalCompanies = response.totalItems;
+          this.totalCompanies = response.total;
           this.applyFilters();
           this.loading = false;
         },

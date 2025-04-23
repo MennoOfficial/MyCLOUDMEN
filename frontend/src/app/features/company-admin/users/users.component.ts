@@ -2,43 +2,11 @@ import { Component, OnInit, HostListener, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
-import { AuthService, User } from '../../../core/auth/auth.service';
+import { AuthService } from '../../../core/auth/auth.service';
+import { User as AuthUser } from '../../../core/models/auth.model';
 import { EnvironmentService } from '../../../core/services/environment.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
-
-interface CompanyUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: string;
-  lastLogin?: string;
-  picture?: string;
-}
-
-interface PendingUser {
-  id: string;
-  name: string;
-  email: string;
-  requestedAt: string;
-  primaryDomain: string;
-  roles: string[];
-  picture?: string;
-}
-
-interface SelectedUser {
-  id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  role?: string;
-  status?: string;
-  picture?: string;
-  requestedAt?: string;
-  primaryDomain?: string;
-  roles?: string[];
-  lastLogin?: string;
-}
+import { CompanyUser, PendingUser, SelectedUser } from '../../../core/models/user.model';
 
 @Component({
   selector: 'app-users',
@@ -161,7 +129,7 @@ export class UsersComponent implements OnInit {
 
   private initializeCompanyDomain(): void {
     this.authService.user$.subscribe({
-      next: (user: User | null) => {
+      next: (user: AuthUser | null) => {
         if (user && user.email) {
           // Extract domain from email
           const emailParts = user.email.split('@');

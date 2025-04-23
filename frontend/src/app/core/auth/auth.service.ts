@@ -6,23 +6,7 @@ import { AuthService as Auth0Service } from '@auth0/auth0-angular';
 import { Router } from '@angular/router';
 import { EnvironmentService } from '../services/environment.service';
 import { DOCUMENT } from '@angular/common';
-
-export type UserRole = 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER';
-export type UserStatus = 'ACTIVATED' | 'DEACTIVATED' | 'PENDING' | 'REJECTED';
-
-export interface User {
-  id?: string;
-  auth0Id?: string;
-  email?: string;
-  name?: string;
-  firstName?: string;
-  lastName?: string;
-  picture?: string;
-  roles: UserRole[];
-  status?: UserStatus;
-  company?: any;
-  companyInfo?: any;
-}
+import { User, UserRole, UserStatus } from '../models/auth.model';
 
 /**
  * Core authentication service that handles auth0 integration

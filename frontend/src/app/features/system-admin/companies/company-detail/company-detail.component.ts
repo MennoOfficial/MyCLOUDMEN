@@ -5,33 +5,9 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
 import { CompanyDetail } from '../../../../core/models/company.model';
 import { EnvironmentService } from '../../../../core/services/environment.service';
-import { CompanyStatusType } from '../../../../core/models/company.model';
+import { CompanyStatusType } from '../../../../core/models/enums';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: string;
-  lastLogin?: string;
-}
-
-interface PendingUser {
-  id: string;
-  name: string;
-  email: string;
-  requestedAt: string;
-  status: string;
-  primaryDomain: string;
-  roles: string[];
-  firstName?: string;
-  lastName?: string;
-  picture?: string;
-  auth0Id?: string;
-  dateTimeAdded?: string;
-  dateTimeChanged?: string;
-}
+import { CompanyUser, PendingUser } from '../../../../core/models/user.model';
 
 @Component({
   selector: 'app-company-detail',
@@ -59,7 +35,7 @@ export class CompanyDetailComponent implements OnInit {
   ];
   
   // Company users
-  companyUsers: User[] = [];
+  companyUsers: CompanyUser[] = [];
   loadingUsers = false;
   
   // Pending user requests
@@ -83,8 +59,8 @@ export class CompanyDetailComponent implements OnInit {
 
   // User detail popup
   showUserDetailPopup = false;
-  selectedUser: User | null = null;
-  availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN'];  // Only allow setting to regular user
+  selectedUser: CompanyUser | null = null;
+  availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN']; 
   availableStatuses = ['Active', 'Inactive'];
   updatingUser = false;
 
@@ -561,7 +537,7 @@ export class CompanyDetailComponent implements OnInit {
   }
 
   // Method to show user detail popup
-  showUserDetail(user: User): void {
+  showUserDetail(user: CompanyUser): void {
     this.selectedUser = { ...user }; // Create a copy to avoid direct modification
     this.showUserDetailPopup = true;
     
@@ -588,7 +564,7 @@ export class CompanyDetailComponent implements OnInit {
    * Fetch the last login time for a user, trying by ID first and then falling back to email if needed
    * @param user The user to fetch last login for
    */
-  private fetchLastLoginTime(user: User): void {
+  private fetchLastLoginTime(user: CompanyUser): void {
     // The API returns a LocalDateTime which is serialized as a string
     this.apiService.get<string>(`auth-logs/user/${user.id}/last-login`).subscribe({
       next: (lastLoginTime) => {
