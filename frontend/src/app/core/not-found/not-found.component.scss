@@ -1,0 +1,314 @@
+.not-found-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 0 24px;
+  text-align: center;
+  background-color: var(--deep-ocean);
+  position: relative;
+  overflow: hidden;
+  font-family: 'Roboto', sans-serif;
+}
+
+// Background gradient overlay
+.bg-gradient {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(44, 62, 80, 0.2) 0%, rgba(84, 191, 174, 0.1) 100%);
+  z-index: 0;
+}
+
+// Cloud elements
+.cloud {
+  position: absolute;
+  height: 180px; /* control the size */
+  aspect-ratio: 1.8;
+  --g: radial-gradient(50% 50%, #000 98%, #0000) no-repeat;
+  mask: var(--g) 100% 100%/30% 60%,var(--g) 70% 0/50% 100%,var(--g) 0 100%/36% 68%,var(--g) 27% 18%/26% 40%,linear-gradient(#000 0 0) bottom/67% 58% no-repeat;
+  -webkit-mask: var(--g) 100% 100%/30% 60%,var(--g) 70% 0/50% 100%,var(--g) 0 100%/36% 68%,var(--g) 27% 18%/26% 40%,linear-gradient(#000 0 0) bottom/67% 58% no-repeat;
+  z-index: 1;
+  opacity: 0.2;
+}
+
+.cloud-1 {
+  background: var(--arctic-dawn);
+  top: 10%;
+  right: -5%;
+  transform: scale(0.6);
+  animation: float-cloud 60s linear infinite;
+}
+
+.cloud-2 {
+  background: var(--aqua-spring);
+  bottom: 15%;
+  left: -15%;
+  transform: scale(1.2);
+  animation: float-cloud 80s linear infinite reverse;
+}
+
+.cloud-3 {
+  background: white;
+  top: 60%;
+  right: 20%;
+  transform: scale(0.4) rotate(10deg);
+  animation: float-cloud 50s linear infinite;
+  animation-delay: -20s;
+}
+
+.cloud-4 {
+  background: var(--arctic-dawn);
+  top: 30%;
+  left: 10%;
+  transform: scale(0.5) rotate(-5deg);
+  animation: float-cloud 70s linear infinite reverse;
+  animation-delay: -15s;
+}
+
+.cloud-5 {
+  background: white;
+  top: 5%;
+  left: -10%;
+  transform: scale(0.3) rotate(5deg);
+  animation: float-cloud 45s linear infinite;
+  animation-delay: -10s;
+}
+
+.cloud-6 {
+  background: var(--aqua-spring);
+  bottom: 25%;
+  right: -20%;
+  transform: scale(1.5);
+  animation: float-cloud 95s linear infinite reverse;
+  animation-delay: -35s;
+}
+
+.cloud-7 {
+  background: var(--arctic-dawn);
+  top: 40%;
+  left: -25%;
+  transform: scale(0.8) rotate(-8deg);
+  animation: float-cloud 65s linear infinite;
+  animation-delay: -5s;
+}
+
+.cloud-8 {
+  background: white;
+  bottom: 5%;
+  right: -15%;
+  transform: scale(0.4) rotate(15deg);
+  animation: float-cloud 55s linear infinite reverse;
+  animation-delay: -25s;
+}
+
+// Content container
+.content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 650px;
+  padding: 40px;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(10px);
+  border-radius: 24px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+// Logo styling
+.logo-container {
+  margin-bottom: 20px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.cloud-icon {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  background-color: var(--aqua-spring);
+  border-radius: calc(var(--radius-md)*2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  margin-bottom: 10px;
+}
+
+.cloud-icon .material-icons {
+  font-size: 36px;
+  color: white;
+}
+
+.arrow-icon {
+  position: absolute;
+  font-size: 24px !important;
+  color: white !important;
+  transform: rotate(45deg);
+}
+
+// 404 Display
+.error-code {
+  font-size: 120px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--aqua-spring);
+  margin-bottom: 20px;
+  letter-spacing: -2px;
+}
+
+// Text styling
+h1 {
+  color: var(--deep-ocean);
+  font-size: 2.5rem;
+  font-weight: 500;
+  margin: 0 0 16px;
+  letter-spacing: -0.02em;
+}
+
+p {
+  color: var(--slate);
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin-bottom: 32px;
+  max-width: 550px;
+}
+
+// Button styling
+.btn-container {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 30px;
+}
+
+.btn {
+  padding: 12px 24px;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.btn-primary {
+  background: var(--aqua-spring);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--aqua-spring-hover, #4EAFB9);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--aqua-spring);
+  border: 1px solid var(--aqua-spring);
+}
+
+.btn-outline:hover {
+  background: rgba(var(--aqua-spring-rgb, 55, 100, 180), 0.1);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.icon {
+  font-size: 20px;
+  margin-right: 8px;
+}
+
+
+.cloudmen-logo {
+  width: 72%;
+  height: auto;
+}
+
+// Cloud animation
+@keyframes float-cloud {
+  0% {
+    transform: translateX(-200%) scale(var(--scale, 1)) rotate(var(--rotate, 0deg));
+  }
+  100% {
+    transform: translateX(200vw) scale(var(--scale, 1)) rotate(var(--rotate, 0deg));
+  }
+}
+
+// Responsive styles
+@media (max-width: 768px) {
+  .content {
+    padding: 30px;
+    margin: 16px;
+  }
+  
+.cloudmen-logo {
+    width: 68%;
+    height: auto;
+  }
+  
+  .error-code {
+    font-size: 90px;
+  }
+  
+  h1 {
+    font-size: 1.8rem;
+  }
+  
+  p {
+    font-size: 1rem;
+  }
+  
+  .cloud-icon {
+    width: 70px;
+    height: 70px;
+  }
+  
+  .cloud {
+    height: 100px;
+  }
+  
+  .btn-container {
+    flex-direction: column;
+    width: 100%;
+  }
+  
+}
+
+// Fix for very small mobile screens
+@media (max-width: 360px) {
+  .error-code {
+    font-size: 70px;
+  }
+  .cloudmen-logo {
+    width: 50%;
+    height: auto;
+  }
+  
+  h1 {
+    font-size: 1.5rem;
+  }
+  
+  .content {
+    padding: 20px;
+  }
+  
+  .cloud-icon {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .cloud-icon .material-icons {
+    font-size: 30px;
+  }
+} 
