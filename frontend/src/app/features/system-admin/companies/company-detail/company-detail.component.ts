@@ -6,13 +6,12 @@ import { ApiService } from '../../../../core/services/api.service';
 import { CompanyDetail } from '../../../../core/models/company.model';
 import { EnvironmentService } from '../../../../core/services/environment.service';
 import { CompanyStatusType } from '../../../../core/models/enums';
-import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { CompanyUser, PendingUser } from '../../../../core/models/user.model';
 
 @Component({
   selector: 'app-company-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, LoadingSpinnerComponent],
+  imports: [CommonModule, FormsModule],
   templateUrl: './company-detail.component.html',
   styleUrl: './company-detail.component.scss'
 })
