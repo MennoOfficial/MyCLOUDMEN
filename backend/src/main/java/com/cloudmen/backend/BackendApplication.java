@@ -38,6 +38,11 @@ public class BackendApplication {
             // Admin
             System.setProperty("ADMIN_DOMAIN", dotenv.get("ADMIN_DOMAIN", ""));
             System.setProperty("ADMIN_EMAIL", dotenv.get("ADMIN_EMAIL", ""));
+
+            // Google Workspace
+            System.setProperty("GOOGLE_APPLICATION_NAME", dotenv.get("GOOGLE_APPLICATION_NAME", ""));
+            System.setProperty("GOOGLE_CREDENTIALS_PATH", dotenv.get("GOOGLE_CREDENTIALS_PATH", ""));
+            System.setProperty("GOOGLE_ADMIN_EMAIL", dotenv.get("GOOGLE_ADMIN_EMAIL", ""));
         }
 
         SpringApplication.run(BackendApplication.class, args);
