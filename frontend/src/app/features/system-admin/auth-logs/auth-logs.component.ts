@@ -4,6 +4,7 @@ import { EnvironmentService } from '../../../core/services/environment.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 
 interface AuthenticationLog {
   id: string;
@@ -30,7 +31,7 @@ interface PageResponse<T> {
   selector: 'app-auth-logs',
   templateUrl: './auth-logs.component.html',
   styleUrls: ['./auth-logs.component.scss'],
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingSpinnerComponent],
   standalone: true
 })
 export class AuthLogsComponent implements OnInit {

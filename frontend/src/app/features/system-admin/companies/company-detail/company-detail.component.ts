@@ -6,6 +6,7 @@ import { ApiService } from '../../../../core/services/api.service';
 import { CompanyDetail } from '../../../../core/models/company.model';
 import { EnvironmentService } from '../../../../core/services/environment.service';
 import { CompanyStatusType } from '../../../../core/models/company.model';
+import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
 interface User {
   id: string;
@@ -35,7 +36,7 @@ interface PendingUser {
 @Component({
   selector: 'app-company-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingSpinnerComponent],
   templateUrl: './company-detail.component.html',
   styleUrl: './company-detail.component.scss'
 })

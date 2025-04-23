@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService, User } from '../../../core/auth/auth.service';
 import { EnvironmentService } from '../../../core/services/environment.service';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 
 interface CompanyUser {
   id: string;
@@ -42,7 +43,7 @@ interface SelectedUser {
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingSpinnerComponent],
   templateUrl: './users.component.html',
   styleUrl: './users.component.scss'
 })

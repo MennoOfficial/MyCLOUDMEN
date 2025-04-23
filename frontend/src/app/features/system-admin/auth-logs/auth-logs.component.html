@@ -93,10 +93,8 @@
   </div>
 
   <!-- Loading State -->
-  <div *ngIf="loading" class="loading-container">
-    <div class="loading-spinner"></div>
-    <p>Loading authentication logs...</p>
-  </div>
+  <app-loading-spinner *ngIf="loading" text="Loading authentication logs...">
+  </app-loading-spinner>
 
   <!-- Error State -->
   <div *ngIf="error" class="error-container">
