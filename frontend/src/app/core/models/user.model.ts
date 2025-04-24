@@ -75,3 +75,15 @@ export interface PageResponse<T> {
   size: number;
   number: number;
 } 
+
+
+/**
+ * User model for authentication and authorization
+ */
+export interface User {
+  id?: string;
+  email?: string;
+  status?: 'PENDING' | 'ACTIVE' | 'INACTIVE';
+  roles?: string[];
+}
+

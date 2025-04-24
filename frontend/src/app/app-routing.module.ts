@@ -76,6 +76,10 @@ export const routes: Routes = [
       {
         path: 'error',
         loadComponent: () => import('./core/auth/error/error.component').then(c => c.ErrorComponent)
+      },
+      {
+        path: 'loading',
+        loadComponent: () => import('./core/auth/loading/loading.component').then(c => c.LoadingComponent)
       }
     ]
   },
@@ -91,6 +95,10 @@ export const routes: Routes = [
   {
     path: 'company-inactive',
     loadComponent: () => import('./core/auth/company-inactive/company-inactive.component').then(c => c.CompanyInactiveComponent)
+  },
+  {
+    path: 'company-not-registered',
+    loadComponent: () => import('./core/auth/company-not-registered/company-not-registered.component').then(c => c.CompanyNotRegisteredComponent)
   },
   {
     path: '**',
