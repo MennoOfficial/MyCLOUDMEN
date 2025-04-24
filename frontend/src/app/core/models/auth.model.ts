@@ -23,4 +23,8 @@ export interface User {
   status?: UserStatus;
   company?: any;
   companyInfo?: any;
+  // Additional properties used in authentication flows
+  companyId?: string;
+  companyStatus?: string;
+  companyName?: string;
 }
