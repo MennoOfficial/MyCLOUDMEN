@@ -159,14 +159,15 @@ public class TeamleaderCreditNoteService {
      */
     public List<TeamleaderCreditNoteListDTO> searchCreditNotesByCustomer(String term, String companyId,
             TeamleaderInvoiceService invoiceService) {
+        // Validate input parameters
+        if (companyId == null || companyId.isEmpty() || term == null || term.isEmpty()) {
+            return Collections.emptyList();
+        }
+
         // Get all credit notes for this company
         List<TeamleaderCreditNoteListDTO> companyCreditNotes = findByCustomerId(companyId, invoiceService);
 
         // Then filter by search term
-        if (term == null || term.isEmpty()) {
-            return companyCreditNotes;
-        }
-
         String searchTermLower = term.toLowerCase();
         return companyCreditNotes.stream()
                 .filter(creditNote -> containsIgnoreCase(creditNote.getNumber(), searchTermLower) ||
@@ -186,6 +187,13 @@ public class TeamleaderCreditNoteService {
      */
     public List<TeamleaderCreditNoteListDTO> findByCustomerAndDateRange(
             String companyId, LocalDate startDate, LocalDate endDate, TeamleaderInvoiceService invoiceService) {
+        // First validate company ID and date range
+        if (companyId == null || companyId.isEmpty() ||
+                startDate == null || endDate == null ||
+                endDate.isBefore(startDate)) {
+            return Collections.emptyList();
+        }
+
         // Get all credit notes for this company
         List<TeamleaderCreditNoteListDTO> companyCreditNotes = findByCustomerId(companyId, invoiceService);
 
