@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/apps/reseller/v1/skus"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "bodyFileName": "available-skus.json"
+  }
+} 

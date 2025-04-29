@@ -1,0 +1,13 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "/apps/reseller/v1/customers/11111/subscriptions"
+  },
+  "response": {
+    "status": 200,
+    "bodyFileName": "subscription-response.json",
+    "headers": {
+      "Content-Type": "application/json"
+    }
+  }
+} 

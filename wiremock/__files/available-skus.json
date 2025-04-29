@@ -1,0 +1,70 @@
+{
+  "kind": "reseller#skus",
+  "skus": [
+    {
+      "kind": "reseller#sku",
+      "skuId": "1010020020",
+      "skuName": "Google Workspace Business Starter",
+      "description": "Google Workspace Business Starter plan with 30GB storage",
+      "plans": ["ANNUAL", "FLEXIBLE", "TRIAL"],
+      "price": {
+        "kind": "reseller#price",
+        "basePrice": 6.0,
+        "currency": "USD",
+        "interval": "MONTHLY"
+      }
+    },
+    {
+      "kind": "reseller#sku",
+      "skuId": "1010020028",
+      "skuName": "Google Workspace Business Standard",
+      "description": "Google Workspace Business Standard plan with 2TB storage",
+      "plans": ["ANNUAL", "FLEXIBLE", "TRIAL"],
+      "price": {
+        "kind": "reseller#price",
+        "basePrice": 12.0,
+        "currency": "USD",
+        "interval": "MONTHLY"
+      }
+    },
+    {
+      "kind": "reseller#sku",
+      "skuId": "1010020025",
+      "skuName": "Google Workspace Business Plus",
+      "description": "Google Workspace Business Plus plan with 5TB storage",
+      "plans": ["ANNUAL", "FLEXIBLE", "TRIAL"],
+      "price": {
+        "kind": "reseller#price",
+        "basePrice": 18.0,
+        "currency": "USD",
+        "interval": "MONTHLY"
+      }
+    },
+    {
+      "kind": "reseller#sku",
+      "skuId": "1010060001",
+      "skuName": "Google Workspace Enterprise Plus",
+      "description": "Google Workspace Enterprise Plus plan with unlimited storage",
+      "plans": ["ANNUAL", "FLEXIBLE"],
+      "price": {
+        "kind": "reseller#price",
+        "basePrice": 34.0,
+        "currency": "USD",
+        "interval": "MONTHLY"
+      }
+    },
+    {
+      "kind": "reseller#sku",
+      "skuId": "Google-Vault",
+      "skuName": "Google Vault",
+      "description": "Google Vault add-on",
+      "plans": ["ANNUAL", "FLEXIBLE"],
+      "price": {
+        "kind": "reseller#price",
+        "basePrice": 5.0,
+        "currency": "USD",
+        "interval": "MONTHLY"
+      }
+    }
+  ]
+} 

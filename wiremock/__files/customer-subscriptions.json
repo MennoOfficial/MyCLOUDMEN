@@ -1,0 +1,76 @@
+{
+  "kind": "reseller#subscriptions",
+  "subscriptions": [
+    {
+      "kind": "reseller#subscription",
+      "customerId": "{{request.query.customerId}}",
+      "subscriptionId": "sub-123456",
+      "skuId": "1010020020",
+      "skuName": "Google Workspace Business Starter",
+      "billingMethod": "ONLINE",
+      "creationTime": "{{now offset='-30 days'}}",
+      "plan": {
+        "planName": "ANNUAL",
+        "isCommitmentPlan": true,
+        "commitmentInterval": {
+          "startTime": "{{now offset='-30 days'}}",
+          "endTime": "{{now offset='+335 days'}}"
+        }
+      },
+      "seats": {
+        "numberOfSeats": 7,
+        "licensedNumberOfSeats": 7
+      },
+      "status": "ACTIVE",
+      "renewalSettings": {
+        "renewalType": "RENEW_CURRENT_USERS_MONTHLY_PAY"
+      },
+      "customerDomain": "example.com"
+    },
+    {
+      "kind": "reseller#subscription",
+      "customerId": "{{request.query.customerId}}",
+      "subscriptionId": "sub-789012",
+      "skuId": "1010020028",
+      "skuName": "Google Workspace Business Standard",
+      "billingMethod": "ONLINE",
+      "creationTime": "{{now offset='-15 days'}}",
+      "plan": {
+        "planName": "ANNUAL",
+        "isCommitmentPlan": true,
+        "commitmentInterval": {
+          "startTime": "{{now offset='-15 days'}}",
+          "endTime": "{{now offset='+350 days'}}"
+        }
+      },
+      "seats": {
+        "numberOfSeats": 5,
+        "licensedNumberOfSeats": 5
+      },
+      "status": "ACTIVE",
+      "renewalSettings": {
+        "renewalType": "RENEW_CURRENT_USERS_MONTHLY_PAY"
+      },
+      "customerDomain": "example.com"
+    },
+    {
+      "kind": "reseller#subscription",
+      "customerId": "{{request.query.customerId}}",
+      "subscriptionId": "sub-345678",
+      "skuId": "1010020025",
+      "skuName": "Google Workspace Business Plus",
+      "billingMethod": "ONLINE",
+      "creationTime": "{{now offset='-5 days'}}",
+      "plan": {
+        "planName": "FLEXIBLE",
+        "isCommitmentPlan": false
+      },
+      "seats": {
+        "numberOfSeats": 3,
+        "licensedNumberOfSeats": 3
+      },
+      "status": "ACTIVE",
+      "customerDomain": "example.com"
+    }
+  ]
+} 

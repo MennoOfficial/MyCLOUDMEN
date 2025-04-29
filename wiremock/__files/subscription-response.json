@@ -1,0 +1,30 @@
+{
+  "kind": "reseller#subscription",
+  "subscriptionId": "SUBSCRIPTION-ID-1",
+  "customerId": "11111",
+  "skuId": "1010020020",
+  "skuName": "Google Workspace Business Standard",
+  "plan": {
+    "planName": "ANNUAL_MONTHLY_PAY",
+    "isCommitmentPlan": true,
+    "commitmentInterval": {
+      "startTime": "2023-07-01T00:00:00.000Z",
+      "endTime": "2024-07-01T00:00:00.000Z"
+    }
+  },
+  "seats": {
+    "numberOfSeats": 10,
+    "maximumNumberOfSeats": 25
+  },
+  "creationTime": "2023-07-01T10:00:00.000Z",
+  "customerDomain": "example.com",
+  "resourceUiUrl": "https://admin.google.com/subscriptions",
+  "trialSettings": {
+    "isInTrial": false
+  },
+  "renewalSettings": {
+    "renewalType": "AUTO_RENEW"
+  },
+  "status": "ACTIVE",
+  "purchaseOrderId": "PO-123456"
+} 
