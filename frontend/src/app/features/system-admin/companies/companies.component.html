@@ -27,10 +27,10 @@
   </div>
 
   <!-- Loading State -->
-  <div *ngIf="loading" class="loading-container">
-    <div class="loading-spinner"></div>
-    <p>Loading companies...</p>
-  </div>
+  <app-loading-spinner
+    *ngIf="loading"
+    text="Loading companies..."
+  ></app-loading-spinner>
 
   <!-- Error State -->
   <div *ngIf="error && !authRequired" class="error-container">

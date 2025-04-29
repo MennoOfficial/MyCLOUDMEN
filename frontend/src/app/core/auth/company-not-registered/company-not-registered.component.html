@@ -1,0 +1,43 @@
+<div class="not-registered-container">
+  <div class="logo-container">
+    <img
+      src="https://images.squarespace-cdn.com/content/v1/5ccbf1d3af468332420ae5e1/29cace80-077c-4a83-b165-c29a38b583d8/embleem_transp_white_1700.png"
+      alt="CLOUDMEN Logo"
+      class="logo"
+    />
+  </div>
+
+  <div class="content-card">
+    <div class="header">
+      <i class="material-icons icon">business</i>
+      <h1>Welcome to MyCLOUDMEN</h1>
+    </div>
+
+    <div class="message">
+      <div class="info-box">
+        <i class="material-icons">info</i>
+        <p *ngIf="domain">
+          Your email domain <strong>{{ domain }}</strong> isn't registered with
+          CLOUDMEN.
+        </p>
+        <p *ngIf="!domain">Your email domain isn't registered with CLOUDMEN.</p>
+      </div>
+
+      <p class="description">
+        This application is exclusively for CLOUDMEN customers. Contact our team
+        to become a customer and get access.
+      </p>
+    </div>
+
+    <div class="buttons">
+      <button class="btn primary" (click)="contactSupport()">
+        <i class="material-icons">email</i>
+        Contact Support
+      </button>
+      <button class="btn secondary" (click)="logout()">
+        <i class="material-icons">exit_to_app</i>
+        Logout
+      </button>
+    </div>
+  </div>
+</div>

@@ -4,33 +4,14 @@ import { EnvironmentService } from '../../../core/services/environment.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-
-interface AuthenticationLog {
-  id: string;
-  userId: string;
-  email: string;
-  primaryDomain: string;
-  googleUniqueId: string;
-  timestamp: string;
-  ipAddress: string;
-  userAgent: string;
-  failureReason: string;
-  successful: boolean;
-}
-
-interface PageResponse<T> {
-  content: T[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
-}
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
+import { AuthenticationLog, PageResponse } from '../../../core/models/user.model';
 
 @Component({
   selector: 'app-auth-logs',
   templateUrl: './auth-logs.component.html',
   styleUrls: ['./auth-logs.component.scss'],
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingSpinnerComponent],
   standalone: true
 })
 export class AuthLogsComponent implements OnInit {

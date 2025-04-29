@@ -8,90 +8,13 @@ import { catchError, of, Subscription } from 'rxjs';
 import { AuthService } from '../../../core/auth/auth.service';
 import { RouterModule } from '@angular/router';
 import { UiStateService } from '../../../core/services/ui-state.service';
+import { Invoice, CreditNote, TeamleaderInvoiceResponse, InvoiceDetails } from '../../../core/models/invoice.model';
+import { Company } from '../../../core/models/company.model';
 
 // For production build, define a simple environment object
 const environment = {
   production: false
 };
-
-interface Invoice {
-  id: string;
-  invoiceNumber: string;  // Mapped from id
-  dueDate: string | Date; // Mapped from dueOn
-  totalAmount: number;    // Mapped from total
-  paymentReference: string;
-  currency: string;
-  isPaid: boolean;
-  isOverdue: boolean;
-  type: string;           // Always 'invoice'
-  customer?: string;      // Added in processInvoicesData
-}
-
-interface CreditNote {
-  id: string;
-  creditNoteNumber: string;
-  date: string | Date;
-  totalAmount: number;
-  status: string;
-  relatedInvoiceId: string;
-  type: string;
-}
-
-// Response format from the API (simplified)
-interface TeamleaderInvoiceResponse {
-  id: string;
-  paymentReference: string;
-  dueOn: string;
-  total: number;
-  currency: string;
-  isPaid: boolean;
-  isOverdue: boolean;
-}
-
-// Company with both MongoDB ID and Teamleader ID
-interface Company {
-  id: string;        // MongoDB ID
-  teamleaderId?: string;  // Teamleader ID with dashes
-  name: string;
-  email?: string;
-}
-
-// Invoice details interface for display
-interface InvoiceDetails {
-  id: string;
-  invoiceNumber: string;
-  totalAmount: number;
-  isPaid: boolean;
-  isOverdue: boolean;
-  type: string;
-  customer?: string;
-  paymentReference: string;
-  currency: string;
-  
-  // Extended properties
-  companyName?: string;
-  invoiceDate?: Date;
-  issueDate?: Date;
-  dueDate?: Date;
-  paymentDate?: Date;
-  amount?: {
-    total: number;
-    tax: number;
-    subtotal: number;
-  };
-  description?: string;
-  customerId?: string; // Customer ID property 
-  purchaseOrderNumber?: string; // Purchase order number
-  sent?: boolean; // Whether the invoice has been sent
-  creditNotes?: Array<{
-    id: string;
-    number: string;
-    creditNoteNumber?: string;
-    amount: number;
-    date: Date;
-    downloadUrl: string;
-  }>;
-}
 
 @Component({
   selector: 'app-invoices',

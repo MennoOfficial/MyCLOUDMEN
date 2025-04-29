@@ -1,39 +1,45 @@
 import { Injectable, Inject, Optional } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, of } from 'rxjs';
-import { catchError, tap } from 'rxjs/operators';
+import { BehaviorSubject, Observable, of, throwError, timer, from, firstValueFrom, Subject, forkJoin } from 'rxjs';
+import { catchError, concatMap, map, retryWhen, switchMap, take, tap, timeout, filter, finalize, shareReplay, distinctUntilChanged } from 'rxjs/operators';
 import { AuthService as Auth0Service } from '@auth0/auth0-angular';
 import { Router } from '@angular/router';
 import { EnvironmentService } from '../services/environment.service';
 import { DOCUMENT } from '@angular/common';
+import { User, UserRole, UserStatus } from '../models/auth.model';
 
-export type UserRole = 'SYSTEM_ADMIN' | 'COMPANY_ADMIN' | 'COMPANY_USER';
-export type UserStatus = 'ACTIVATED' | 'DEACTIVATED' | 'PENDING' | 'REJECTED';
+// Define types for better structure
+export interface RedirectResult {
+  path: string;
+  queryParams?: {[key: string]: string};
+  replaceUrl?: boolean;
+}
 
-export interface User {
-  id?: string;
-  auth0Id?: string;
-  email?: string;
-  name?: string;
-  firstName?: string;
-  lastName?: string;
-  picture?: string;
-  roles: UserRole[];
-  status?: UserStatus;
-  company?: any;
-  companyInfo?: any;
+export interface CompanyStatusResult {
+  status: string;
+  name: string;
+  domain?: string;
 }
 
 /**
- * Core authentication service that handles auth0 integration
- * Only responsible for authentication, not user data or company status
+ * Core authentication service that handles auth0 integration and user/company status
  */
 @Injectable({
   providedIn: 'root'
 })
 export class AuthService {
+  // State Observables
   private userSubject = new BehaviorSubject<User | null>(null);
-  public user$ = this.userSubject.asObservable();
+  public user$ = this.userSubject.asObservable().pipe(distinctUntilChanged());
+  
+  private authLoadingSubject = new BehaviorSubject<boolean>(false);
+  public authLoading$ = this.authLoadingSubject.asObservable();
+  
+  private authErrorSubject = new BehaviorSubject<string | null>(null);
+  public authError$ = this.authErrorSubject.asObservable();
+  
+  // Define status constants
+  private readonly INACTIVE_STATUSES = ['DEACTIVATED', 'SUSPENDED'];
   
   constructor(
     @Inject(DOCUMENT) private document: Document,
@@ -42,291 +48,385 @@ export class AuthService {
     private environmentService: EnvironmentService,
     @Optional() @Inject(Auth0Service) private auth0: Auth0Service
   ) {
-    this.loadUserFromStorage();
+    this.initializeAuth();
+  }
+  
+  /**
+   * Initialize auth flow by checking session storage and setting up Auth0
+   */
+  private initializeAuth(): void {
+    // First try to restore from session if possible
+    this.restoreUserFromSession();
     
+    // Then setup Auth0 listener for authentication state changes
     if (this.auth0) {
-      this.setupAuth0();
+      this.setupAuth0Listeners();
     }
   }
   
-  private setupAuth0(): void {
-    // Check if we're already authenticated
-    this.auth0.isAuthenticated$.subscribe(isAuthenticated => {
+  /**
+   * Setup Auth0 listeners for auth state changes
+   */
+  private setupAuth0Listeners(): void {
+    // Listen for authentication state changes
+    this.auth0.isAuthenticated$.pipe(
+      distinctUntilChanged()
+    ).subscribe(isAuthenticated => {
+      console.log(`[Auth] Authentication state changed: ${isAuthenticated}`);
+      
       if (isAuthenticated) {
+        this.authLoadingSubject.next(true);
+        
+        // Get user info from Auth0
         this.auth0.user$.pipe(
-          tap(auth0User => {
-            if (auth0User) {
-              this.fetchUserProfile(auth0User);
-            }
-          })
-        ).subscribe();
-      }
-    });
-
-    // Subscribe to future authentication changes
-    this.auth0.user$.subscribe(auth0User => {
-      if (auth0User) {
-        this.fetchUserProfile(auth0User);
+          filter(user => !!user),
+          take(1)
+        ).subscribe({
+          next: auth0User => this.processAuth0User(auth0User),
+          error: error => this.handleAuthError('Failed to get user profile', error)
+        });
+      } else {
+        // If not authenticated and we have a user, clear it
+        if (this.userSubject.value) {
+          this.clearUserState();
+        }
       }
     });
   }
 
-  private loadUserFromStorage(): void {
+  /**
+   * Process the Auth0 user and fetch backend profile
+   */
+  private processAuth0User(auth0User: any): void {
+    if (!auth0User?.sub) {
+      this.handleAuthError('No auth0 user ID found', null);
+      return;
+    }
+    
+    console.log(`[Auth] Processing Auth0 user: ${auth0User.email}`);
+    this.fetchUserProfile(auth0User);
+  }
+  
+  /**
+   * Restore user from session storage
+   */
+  private restoreUserFromSession(): void {
+    try {
     const storedUser = sessionStorage.getItem('user_profile');
-    if (storedUser) {
-      try {
+      if (!storedUser) return;
+      
         const user = JSON.parse(storedUser);
+      
+      // Ensure user has roles
         if (!Array.isArray(user.roles) || user.roles.length === 0) {
           user.roles = ['COMPANY_USER'];
         }
+      
+      console.log(`[Auth] Restored user from session: ${user.email}`);
         this.userSubject.next(user);
         
-        // Check company status after loading from storage
-        this.checkAndHandleCompanyStatus();
-      } catch (e) {
+      // Check if redirection is needed (on app startup)
+      this.checkUserStatus(user);
+    } catch (error) {
+      console.error('[Auth] Failed to restore user from session:', error);
         sessionStorage.removeItem('user_profile');
-      }
     }
   }
-
-  private saveUserToStorage(user: User): void {
-    sessionStorage.setItem('user_profile', JSON.stringify(user));
-  }
-
+  
+  /**
+   * Fetch user profile from backend API
+   */
   private fetchUserProfile(auth0User: any): void {
-    if (!auth0User?.sub) {
-      return;
-    }
-
-    const auth0Id = auth0User.sub;
-    const encodedAuth0Id = encodeURIComponent(auth0Id);
+    const auth0Id = encodeURIComponent(auth0User.sub);
     
-    // Fetch user from backend API
-    this.http.get<User>(`${this.environmentService.apiUrl}/users/${encodedAuth0Id}`)
+    console.log(`[Auth] Fetching user profile for: ${auth0User.email}`);
+    
+    this.http.get<User>(`${this.environmentService.apiUrl}/users/${auth0Id}`)
       .pipe(
+        // Add retry with backoff for network issues
+        retryWhen(errors => 
+          errors.pipe(
+            take(3),
+            concatMap((error, i) => timer((i + 1) * 500)),
+            catchError(error => throwError(() => error))
+          )
+        ),
         catchError(error => {
-          // If user not found, register them via backend
+          // If user not found, register them
           if (error.status === 404) {
+            console.log('[Auth] User not found, registering new user');
+            return this.registerNewUser(auth0User);
+          }
+          return throwError(() => error);
+        }),
+        finalize(() => this.authLoadingSubject.next(false))
+      )
+      .subscribe({
+        next: user => this.processUserProfile(user),
+        error: error => this.handleAuthError('Failed to fetch user profile', error)
+      });
+  }
+  
+  /**
+   * Register a new user in the backend
+   */
+  private registerNewUser(auth0User: any): Observable<User> {
             return this.http.post<User>(`${this.environmentService.apiUrl}/users/register`, {
               auth0Id: auth0User.sub,
               email: auth0User.email,
               name: auth0User.name,
               picture: auth0User.picture
             }).pipe(
-              catchError(() => {
-                return of(null);
+      catchError(error => {
+        console.error('[Auth] Failed to register user:', error);
+        return throwError(() => error);
               })
             );
           }
           
-          return of(null);
-        })
-      )
-      .subscribe(user => {
-        if (user) {
-          // Ensure user has a role
-          if (!Array.isArray(user.roles) || user.roles.length === 0) {
-            user.roles = ['COMPANY_USER'];
-          }
-            
-          this.userSubject.next(user);
-          this.saveUserToStorage(user);
-              
-          // Handle redirects based on user status
-          this.handleUserStatusRedirect(user);
-        }
-      });
-  }
-
-  private handleUserStatusRedirect(user: User): void {
-    if (user.status === 'PENDING') {
-      this.router.navigate(['/pending-account']);
-    } else if (user.status === 'DEACTIVATED') {
-      this.router.navigate(['/account-deactivated'], {
-        queryParams: { status: user.status }
-      });
-    } else {
-      // Handle company status check
-      this.handleCompanyStatusCheck(user);
+  /**
+   * Process the user profile after fetching
+   */
+  private processUserProfile(user: User | null): void {
+    if (!user) {
+      this.handleAuthError('No user profile returned', null);
+      return;
     }
-  }
-
-  private handleCompanyStatusCheck(user: any): void {
-    if (!user) return;
-
-    // First check if user already has company status information
-    if (user.companyStatus) {
-      if (user.companyStatus === 'DEACTIVATED' || user.companyStatus === 'SUSPENDED') {
-        this.redirectToCompanyInactive(user.companyStatus, user.companyName || '');
-        return;
-      }
-    }
-
-    // If user has a companyId, check that company's status
-    if (user.companyId) {
-      this.http.get<any>(`${this.environmentService.apiUrl}/companies/${user.companyId}`)
-        .pipe(
-          catchError(() => {
-            return of(null);
-          })
-        )
-        .subscribe(company => {
-          if (company && company.status) {
-            if (company.status === 'DEACTIVATED' || company.status === 'SUSPENDED') {
-              this.redirectToCompanyInactive(company.status, company.name || '');
+    
+    // Ensure user has roles
+            if (!Array.isArray(user.roles) || user.roles.length === 0) {
+              user.roles = ['COMPANY_USER'];
             }
-          }
-        });
+              
+    console.log(`[Auth] User profile processed: ${user.email}, Status: ${user.status}`);
+    
+    // Update state and storage
+            this.userSubject.next(user);
+    this.saveUserToSession(user);
+    
+    // Check if redirection is needed
+    this.checkUserStatus(user);
+  }
+  
+  /**
+   * Handle authentication errors
+   */
+  private handleAuthError(message: string, error: any): void {
+    console.error(`[Auth] ${message}:`, error);
+    this.authErrorSubject.next(message);
+    this.authLoadingSubject.next(false);
+    this.clearUserState();
+  }
+  
+  /**
+   * Clear user state (logout without redirect)
+   */
+  private clearUserState(): void {
+          this.userSubject.next(null);
+          sessionStorage.removeItem('user_profile');
+    sessionStorage.removeItem('auth_target_url');
+  }
+  
+  /**
+   * Save user to session storage
+   */
+  private saveUserToSession(user: User): void {
+    sessionStorage.setItem('user_profile', JSON.stringify(user));
+  }
+  
+  /**
+   * Check user status and handle redirects if needed
+   */
+  private checkUserStatus(user: User): void {
+    // Skip checks for specific paths
+    const currentPath = this.router.url;
+    if (this.isExcludedPath(currentPath)) {
+      console.log(`[Auth] Current path ${currentPath} is excluded from status checks`);
       return;
     }
 
-    // If no company info in user, check by email domain
-    if (user.email) {
-      const domain = this.getEmailDomain(user.email);
-      if (domain) {
-        this.fetchCompanyByDomain(domain);
+    this.determineUserRedirect(user).then(redirectResult => {
+      if (!redirectResult) {
+        console.log('[Auth] No redirection needed for user');
+        return;
       }
-    }
-  }
-  
-  private redirectToCompanyInactive(status: string, companyName: string): void {
-    this.router.navigate(['/company-inactive'], {
-      queryParams: { 
-        status: status,
-        company: companyName
-      },
-      replaceUrl: true
+      
+      // If already on the correct page, don't redirect
+      if (currentPath === redirectResult.path) {
+        console.log(`[Auth] User already on correct path: ${redirectResult.path}`);
+        return;
+      }
+      
+      console.log(`[Auth] Redirecting user to: ${redirectResult.path}`);
+      this.router.navigate([redirectResult.path], {
+        queryParams: redirectResult.queryParams,
+        replaceUrl: redirectResult.replaceUrl ?? true
+      });
     });
   }
 
   /**
-   * Check company status for current user and redirect if inactive
-   * Used by the status guard to enforce company status checks
+   * Check if path is excluded from status checks
    */
-  checkAndHandleCompanyStatus(): boolean {
-    const currentUser = this.getCurrentUser();
-    if (!currentUser || !currentUser.email) {
+  private isExcludedPath(path: string): boolean {
+    return path.includes('/auth/') ||
+           path.includes('/login') ||
+           path.includes('/sign-up') ||
+           path.includes('/callback') ||
+           path.includes('/company-inactive') ||
+           path.includes('/company-not-registered') ||
+           path.includes('/pending-account') ||
+           path.includes('/account-deactivated') ||
+           path.includes('/logout') ||
+           path.includes('/error');
+  }
+  
+  /**
+   * Determine where user should be redirected based on status
+   */
+  private async determineUserRedirect(user: User): Promise<RedirectResult | null> {
+    if (!user) return null;
+    
+    console.log(`[Auth] Checking redirect for user: ${user.email}, Status: ${user.status}`);
+    
+    try {
+      // 1. Check company status FIRST (most important check)
+      if (user.email) {
+        const companyStatus = await this.checkCompanyStatus(user);
+        if (companyStatus) {
+          console.log(`[Auth] Redirecting based on company status to: ${companyStatus.path}`);
+          return companyStatus;
+        }
+      }
+      
+      // 2. Check user status SECOND - Only if we don't have a company status redirect
+      if (user.status === 'PENDING') {
+        console.log('[Auth] User is PENDING, redirecting to pending account page');
+        return { path: '/pending-account', replaceUrl: true };
+      }
+      
+      if (user.status === 'DEACTIVATED') {
+        console.log('[Auth] User is DEACTIVATED, redirecting to account deactivated page');
+        return { 
+          path: '/account-deactivated', 
+          queryParams: { status: user.status },
+          replaceUrl: true 
+        };
+      }
+      
+      // 3. Role-based default redirects
+      return this.getRoleBasedRedirect(user.roles);
+    } catch (error) {
+      console.error('[Auth] Error determining redirect path:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Check company status and return redirect if needed
+   */
+  private async checkCompanyStatus(user: User): Promise<RedirectResult | null> {
+    if (!user.email) return null;
+    
+    const domain = this.getEmailDomain(user.email);
+    if (!domain) return null;
+    
+    console.log(`[Auth] Checking company status for domain: ${domain}`);
+    
+    try {
+      // First check if user has already been identified as part of an unregistered company
+      if (user.companyStatus === 'NOT_FOUND' || user.companyInfo?.status === 'NOT_FOUND') {
+        console.log(`[Auth] User already identified as having no registered company`);
+        return {
+          path: '/company-not-registered',
+          queryParams: { domain },
+          replaceUrl: true
+        };
+      }
+      
+      // Next check if user has an inactive company
+      if (this.hasInactiveCompany(user)) {
+        console.log(`[Auth] User company is inactive`);
+        return {
+          path: '/company-inactive',
+          queryParams: { 
+            status: user.company?.status || user.companyStatus || 'DEACTIVATED',
+            company: user.company?.name || user.companyName || ''
+          },
+          replaceUrl: true
+        };
+      }
+      
+      // If no status found on user object, fetch company by domain
+      const companyInfo = await this.fetchCompanyByDomain(domain);
+      
+      if (!companyInfo) {
+        console.log(`[Auth] Could not determine company status for domain: ${domain}`);
+        return null;
+      }
+      
+      if (companyInfo.status === 'NOT_FOUND') {
+        console.log(`[Auth] No company found for domain: ${domain}`);
+        return {
+          path: '/company-not-registered',
+          queryParams: { domain },
+          replaceUrl: true
+        };
+      }
+      
+      if (this.INACTIVE_STATUSES.includes(companyInfo.status)) {
+        console.log(`[Auth] Company is inactive with status: ${companyInfo.status}`);
+        return {
+          path: '/company-inactive',
+          queryParams: { 
+            status: companyInfo.status,
+            company: companyInfo.name
+          },
+          replaceUrl: true
+        };
+      }
+    } catch (error) {
+      console.error('[Auth] Error checking company status:', error);
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Check if user has inactive company
+   */
+  private hasInactiveCompany(user: User): boolean {
+    // Check direct status property
+    if (user.companyStatus && this.INACTIVE_STATUSES.includes(user.companyStatus)) {
       return true;
     }
     
-    // Get company status from user object - prioritize database information
-    let companyStatus = null;
-    let companyName = '';
+    // Check company object
+    if (user.company?.status && this.INACTIVE_STATUSES.includes(user.company.status)) {
+      return true;
+    }
     
-    // First check company data from user object (from database)
-    if (currentUser.company && currentUser.company.status) {
-      companyStatus = currentUser.company.status;
-      companyName = currentUser.company.name || '';
-      return this.handleCompanyStatus(companyStatus, companyName);
+    // Check companyInfo object
+    if (user.companyInfo?.status && this.INACTIVE_STATUSES.includes(user.companyInfo.status)) {
+      return true;
+    }
+    
+    return false;
+  }
+  
+  /**
+   * Get default redirect based on user role
+   */
+  private getRoleBasedRedirect(roles: UserRole[] = []): RedirectResult {
+    if (roles.includes('SYSTEM_ADMIN')) {
+      return { path: '/system-admin/companies' };
     } 
     
-    if (currentUser.companyInfo && currentUser.companyInfo.status) {
-      companyStatus = currentUser.companyInfo.status;
-      companyName = currentUser.companyInfo.name || '';
-      return this.handleCompanyStatus(companyStatus, companyName);
+    if (roles.includes('COMPANY_ADMIN')) {
+      return { path: '/company-admin/users' };
     }
     
-    // If no company data on user, check by email domain
-    const emailDomain = this.getEmailDomain(currentUser.email);
-    if (emailDomain) {
-      // We need to do an async call, so we can't return immediately
-      // Instead, we'll return true for now and let the async check handle redirection
-      this.fetchCompanyByDomain(emailDomain);
-    }
-    
-    // Allow access for now until async company check completes
-    return true;
-  }
-  
-  private fetchCompanyByDomain(domain: string): void {
-    if (!domain) return;
-    
-    // Use the correct API endpoint - teamleader/companies/remote instead of just companies
-    this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies/remote`)
-      .pipe(
-        catchError(error => {
-          // If we get a 404 error, try the /companies endpoint as fallback
-          if (error.status === 404) {
-            return this.http.get<any>(`${this.environmentService.apiUrl}/companies`)
-              .pipe(
-                catchError(() => {
-                  return of(null);
-                })
-              );
-          }
-          return of(null);
-        })
-      )
-      .subscribe(response => {
-        // Check if response is an array or has a companies property
-        const companies = Array.isArray(response) ? response : response?.companies || response?.content;
-        
-        if (!companies || companies.length === 0) {
-          return;
-        }
-        
-        // Look for a company with matching domain
-        const matchingCompany = this.findCompanyByDomain(companies, domain);
-        
-        if (matchingCompany) {
-          // Get company status - either direct or from customFields
-          const status = matchingCompany.status || 
-            (matchingCompany.customFields && matchingCompany.customFields.status);
-          
-          // Redirect if company is not active
-          if (status === 'DEACTIVATED' || status === 'SUSPENDED') {
-            this.redirectToCompanyInactive(status, matchingCompany.name || '');
-          }
-        } else {
-          // Specific check for known company 'FutureBuild Solutions'
-          const targetCompanyName = 'FutureBuild Solutions';
-          const exactNameMatch = companies.find((c: any) => c.name === targetCompanyName);
-          
-          if (exactNameMatch) {
-            // Check status
-            const status = exactNameMatch.status || 
-              (exactNameMatch.customFields && exactNameMatch.customFields.status);
-            
-            // Redirect if company is not active
-            if (status === 'DEACTIVATED' || status === 'SUSPENDED') {
-              this.redirectToCompanyInactive(status, exactNameMatch.name || '');
-            }
-          }
-        }
-      });
-  }
-  
-  private processCompanyMatch(company: any): void {
-    if (!company) return;
-    
-    // Get status from standard property or customFields
-    let status = company.status;
-    
-    // Check for status in customFields as fallback
-    if (!status && company.customFields && company.customFields.status) {
-      status = company.customFields.status;
-    }
-    
-    if (status === 'DEACTIVATED' || status === 'SUSPENDED') {
-      this.redirectToCompanyInactive(status, company.name || 'Your company');
-    }
-  }
-  
-  private handleCompanyStatus(status: string, companyName: string): boolean {
-    // Only proceed with redirect if we have a valid status
-    if (status === 'DEACTIVATED' || status === 'SUSPENDED') {
-      // Clear the current route navigation history to prevent back navigation
-      this.router.navigate(['/company-inactive'], {
-        queryParams: { 
-          status: status,
-          company: companyName
-        },
-        replaceUrl: true  // Replace current URL in history
-      });
-      return false;
-    }
-    
-    return true;
+    return { path: '/company-user/requests' };
   }
   
   /**
@@ -337,43 +437,215 @@ export class AuthService {
     return email.split('@')[1];
   }
 
-  private redirectBasedOnRoles(roles: UserRole[]): void {
-    if (roles.includes('SYSTEM_ADMIN')) {
-      this.router.navigate(['/system-admin/companies']);
-    } else if (roles.includes('COMPANY_ADMIN')) {
-      this.router.navigate(['/company-admin/users']);
-    } else {
-      this.router.navigate(['/company-user/requests']);
+  /**
+   * Fetch company information by domain
+   */
+  private async fetchCompanyByDomain(domain: string): Promise<CompanyStatusResult | null> {
+    if (!domain) return null;
+    
+    console.log(`[Auth] Fetching company info for domain: ${domain}`);
+    
+    try {
+      // Try primary endpoint
+      const response = await firstValueFrom(
+        this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies`).pipe(
+          catchError(error => {
+            // Fallback to alternative endpoint
+            if (error.status === 404) {
+              return this.http.get<any>(`${this.environmentService.apiUrl}/companies`);
+            }
+            return throwError(() => error);
+          }),
+          catchError(() => of(null))
+        )
+      );
+      
+      if (!response) {
+        console.log(`[Auth] No response from company endpoints`);
+        return { status: 'NOT_FOUND', name: '', domain };
+      }
+      
+      // Extract companies array
+      const companies = Array.isArray(response) 
+        ? response 
+        : response?.companies || response?.content || [];
+      
+      if (!companies || companies.length === 0) {
+        console.log(`[Auth] No companies found in the response`);
+        return { status: 'NOT_FOUND', name: '', domain };
+      }
+      
+      // Find matching company
+      const company = this.findCompanyByDomain(companies, domain);
+      
+      if (company) {
+        const status = company.status || 
+                      (company.customFields && company.customFields.status) || 
+                      'ACTIVE';
+        
+        console.log(`[Auth] Found company for domain ${domain} with status: ${status}`);
+        return {
+          status: status,
+          name: company.name || ''
+        };
+      }
+      
+      console.log(`[Auth] No matching company found for domain: ${domain}`);
+      return { status: 'NOT_FOUND', name: '', domain };
+    } catch (error) {
+      console.error('[Auth] Error fetching company by domain:', error);
+      // If there's an error, don't assume company is not found, just return null
+      return null;
     }
   }
 
   /**
-   * Checks company status for specific test emails
-   * Public for internal usage by guards and components
+   * Find company by domain in company list
    */
-  checkCompanyStatusForEmail(email: string): { status: string, name: string } | null {
-    // This method now uses API data only - no hardcoded values
-    return null;
-  }
-
-  login(): void {
-    if (!this.auth0) {
-      return;
+  private findCompanyByDomain(companies: any[], domain: string): any {
+    if (!domain) return null;
+    
+    // Special case for cloudmen.net domain
+    if (domain.toLowerCase() === 'cloudmen.net') {
+      const cloudmenCompany = companies.find(c => 
+        c.name === 'CLOUDMEN' || 
+        (c.contactInfo && c.contactInfo.some((contact: any) => 
+          contact.value && contact.value.includes('@cloudmen.net')
+        ))
+      );
+      
+      if (cloudmenCompany) return cloudmenCompany;
+      
+      const activeCompany = companies.find(c => c.status === 'ACTIVE');
+      if (activeCompany) return activeCompany;
     }
     
+    // Try to match by primaryDomain
+    let match = companies.find(c => 
+      c.primaryDomain && c.primaryDomain.toLowerCase() === domain.toLowerCase()
+    );
+    
+    if (match) return match;
+    
+    // Try to match by contactInfo emails
+    match = companies.find(c => {
+      // Check contactInfo array
+      if (c.contactInfo && Array.isArray(c.contactInfo)) {
+        return c.contactInfo.some((contact: any) => {
+          if (!contact.value && !contact.email) return false;
+          
+          const email = contact.value || contact.email;
+          const contactDomain = this.getEmailDomain(email);
+          return domain.toLowerCase() === (contactDomain || '').toLowerCase();
+        });
+      }
+      
+      // Check email property
+      if (c.email) {
+        const companyDomain = this.getEmailDomain(c.email);
+        return domain.toLowerCase() === (companyDomain || '').toLowerCase();
+      }
+      
+      // Check contactEmails array
+      if (c.contactEmails && Array.isArray(c.contactEmails)) {
+        return c.contactEmails.some((email: string) => {
+          const contactDomain = this.getEmailDomain(email);
+          return domain.toLowerCase() === (contactDomain || '').toLowerCase();
+        });
+      }
+      
+      return false;
+    });
+    
+    return match;
+  }
+  
+  /* PUBLIC API METHODS */
+  
+  /**
+   * Handle Auth0 callback
+   */
+  handleAuthCallback(): void {
+    if (!this.auth0) return;
+    
+    console.log('[Auth] Handling auth callback');
+    this.authLoadingSubject.next(true);
+    
+    // Navigate to loading page immediately
+    this.router.navigate(['/auth/loading'], { replaceUrl: true });
+    
+    // Process the callback
+    this.auth0.handleRedirectCallback().subscribe({
+      next: result => {
+        console.log('[Auth] Auth0 callback processed successfully');
+        if (result.appState?.target) {
+          sessionStorage.setItem('auth_target_url', result.appState.target);
+        }
+        // Auth0 will trigger the isAuthenticated$ observable, which will handle profile loading
+      },
+      error: error => {
+        console.error('[Auth] Error handling auth callback:', error);
+        
+        // If there's a state error but we're authenticated, try to get profile
+        if (error.message?.includes('state')) {
+          this.auth0.isAuthenticated$.pipe(take(1)).subscribe(isAuthenticated => {
+            if (isAuthenticated) {
+              this.auth0.user$.pipe(
+                filter(user => !!user),
+                take(1),
+                timeout(5000)
+              ).subscribe({
+                next: auth0User => this.processAuth0User(auth0User),
+                error: () => {
+                  this.authLoadingSubject.next(false);
+                  this.router.navigate(['/login'], { replaceUrl: true });
+                }
+              });
+            } else {
+              this.authLoadingSubject.next(false);
+              this.login();
+            }
+          });
+        } else {
+          this.authLoadingSubject.next(false);
+          sessionStorage.setItem('auth_error', JSON.stringify({
+            message: error.message || 'Unknown authentication error',
+            timestamp: new Date().toISOString()
+          }));
+          
+          this.router.navigate(['/auth/error'], { 
+            queryParams: { error: 'authentication_failed' },
+            replaceUrl: true 
+          });
+        }
+      }
+    });
+  }
+  
+  /**
+   * Start login flow
+   */
+  login(): void {
+    if (!this.auth0) return;
+    
+    console.log('[Auth] Starting login process');
     sessionStorage.removeItem('auth_error');
+    this.authLoadingSubject.next(true);
+    
     this.auth0.loginWithRedirect({
       appState: { target: window.location.pathname }
     });
   }
 
+  /**
+   * Logout user
+   */
   logout(): void {
-    if (!this.auth0) {
-      return;
-    }
+    if (!this.auth0) return;
     
-    this.userSubject.next(null);
-    sessionStorage.removeItem('user_profile');
+    console.log('[Auth] Logging out');
+    this.clearUserState();
+    
     this.auth0.logout({
       logoutParams: {
         returnTo: window.location.origin
@@ -381,50 +653,25 @@ export class AuthService {
     });
   }
 
+  /**
+   * Get access token for API calls
+   */
   getAccessToken(): Observable<string> {
-    if (!this.auth0) {
-      return of('');
-    }
+    if (!this.auth0) return of('');
     return this.auth0.getAccessTokenSilently();
   }
 
-  handleAuthCallback(): void {
-    if (!this.auth0) {
-      return;
-    }
-    
-    // First try handling with state validation
-    this.auth0.handleRedirectCallback().subscribe({
-      next: (result) => {
-        // Navigate to the target URL or home page
-        const targetUrl = result.appState?.target || '/';
-        this.router.navigate([targetUrl]);
-      },
-      error: (err) => {
-        // If there's a state error, try to check if we're authenticated anyway
-        if (err.message && err.message.includes('state')) {
-          this.auth0.isAuthenticated$.subscribe(isAuthenticated => {
-            if (isAuthenticated) {
-              this.router.navigate(['/']);
-            } else {
-              this.router.navigate(['/']);
-            }
-          });
-        } else {
-          // For other errors, just go to home
-          this.router.navigate(['/']);
-        }
-      }
-    });
-  }
-
+  /**
+   * Check if user is authenticated
+   */
   isAuthenticated(): Observable<boolean> {
-    if (!this.auth0) {
-      return of(false);
-    }
+    if (!this.auth0) return of(false);
     return this.auth0.isAuthenticated$;
   }
 
+  /**
+   * Get user roles
+   */
   getUserRoles(): UserRole[] {
     const user = this.userSubject.value;
     if (!user || !user.roles || user.roles.length === 0) {
@@ -433,84 +680,99 @@ export class AuthService {
     return user.roles;
   }
 
+  /**
+   * Get primary user role
+   */
   getUserRole(): UserRole {
     return this.getUserRoles()[0];
   }
 
+  /**
+   * Get current user
+   */
   getCurrentUser(): User | null {
     return this.userSubject.value;
   }
 
+  /**
+   * Check if user has specific role
+   */
   hasRole(role: UserRole): boolean {
     return this.getUserRoles().includes(role);
   }
 
+  /**
+   * Force refresh user profile
+   */
   refreshUserProfile(): void {
+    console.log('[Auth] Refreshing user profile');
     sessionStorage.removeItem('user_profile');
-    this.userSubject.next(null);
+    this.authLoadingSubject.next(true);
     
-    this.auth0.user$.subscribe(auth0User => {
+    this.auth0.user$.pipe(
+      take(1),
+      timeout(5000),
+      catchError(error => {
+        console.error('[Auth] Error getting auth0 user during refresh:', error);
+        this.clearUserState();
+        this.authLoadingSubject.next(false);
+        return of(null);
+      })
+    ).subscribe(auth0User => {
       if (auth0User) {
-        this.fetchUserProfile(auth0User);
+        this.processAuth0User(auth0User);
+      } else {
+        console.error('[Auth] No auth0 user available for refresh');
+        this.clearUserState();
+        this.authLoadingSubject.next(false);
       }
     });
   }
 
   /**
-   * Find a company that matches the given domain
-   * First checks primaryDomain, then checks contactInfo emails
+   * Check if navigation to URL should be allowed
+   * Used by guards to control route access
    */
-  private findCompanyByDomain(companies: any[], domain: string): any {
-    if (!domain) return null;
-    
-    // First try to match by primaryDomain exact match
-    let matchingCompany = companies.find((company: any) => 
-      company.primaryDomain && 
-      company.primaryDomain.toLowerCase() === domain.toLowerCase()
-    );
-    
-    if (matchingCompany) {
-      return matchingCompany;
-    }
-    
-    // Second, try to find company by looking at contactInfo email domains
-    matchingCompany = companies.find((company: any) => {
-      if (company.contactInfo && Array.isArray(company.contactInfo)) {
-        const hasMatchingDomain = company.contactInfo.some((contact: any) => {
-          if (!contact.email && !contact.value) return false;
-          const email = contact.email || contact.value;
-          const contactDomain = this.getEmailDomain(email);
-          const matches = domain.toLowerCase() === (contactDomain || '').toLowerCase();
-          return matches;
-        });
-        
-        if (hasMatchingDomain) return true;
-      }
-      
-      // Check email property directly if it exists
-      if (company.email) {
-        const companyDomain = this.getEmailDomain(company.email);
-        const matches = domain.toLowerCase() === (companyDomain || '').toLowerCase();
-        if (matches) {
-          return true;
+  canNavigateToUrl(url: string): Observable<boolean> {
+    return this.user$.pipe(
+      // Only proceed when we have a user or know for sure we don't
+      filter(user => user !== undefined),
+      take(1),
+      switchMap(user => {
+        if (!user) {
+          console.log('[Auth] No authenticated user, blocking navigation');
+          return of(false);
         }
-      }
-      
-      // For exact email match with your domain
-      const userDomain = domain.toLowerCase();
-      if (company.contactEmails && Array.isArray(company.contactEmails)) {
-        const hasMatchingEmail = company.contactEmails.some((email: string) => {
-          const contactDomain = this.getEmailDomain(email);
-          const matches = userDomain === (contactDomain || '').toLowerCase();
-          return matches;
-        });
         
-        if (hasMatchingEmail) return true;
-      }
+        // For excluded paths, always allow
+        if (this.isExcludedPath(url)) {
+          return of(true);
+        }
+        
+        // Check if user needs to be redirected
+        return from(this.determineUserRedirect(user)).pipe(
+          map(redirectResult => {
+            if (!redirectResult) {
+              // No redirect needed
+              return true;
+            }
+            
+            // If the URL matches the target redirect, allow it
+            if (url === redirectResult.path) {
+          return true;
+            }
+            
+            // Redirect to appropriate path
+            console.log(`[Auth] Redirecting from ${url} to ${redirectResult.path}`);
+            this.router.navigate([redirectResult.path], {
+              queryParams: redirectResult.queryParams,
+              replaceUrl: redirectResult.replaceUrl ?? true
+            });
       
       return false;
-    });
-    
-    return matchingCompany;
+          })
+        );
+      })
+    );
   }
 }

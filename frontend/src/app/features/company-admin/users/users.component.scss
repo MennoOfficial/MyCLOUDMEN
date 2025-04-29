@@ -506,7 +506,7 @@
       box-shadow: 0 2px 4px rgba(69, 190, 174, 0.2);
       
       &:hover {
-        background-color: darken(#45beae, 5%);
+        background-color: rgba(var(--aqua-spring-rgb), 0.9);
         box-shadow: 0 3px 6px rgba(69, 190, 174, 0.3);
       }
     }
@@ -518,7 +518,7 @@
       box-shadow: 0 2px 4px rgba(236, 78, 78, 0.2);
       
       &:hover {
-        background-color: darken(#ec4e4e, 5%);
+        background-color: rgba(var(--fire-red-rgb), 0.9);
         box-shadow: 0 3px 6px rgba(236, 78, 78, 0.3);
       }
     }

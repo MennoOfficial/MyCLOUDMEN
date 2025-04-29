@@ -309,6 +309,7 @@ public class UserController {
      */
     @PostMapping("/register")
     public ResponseEntity<UserResponseDTO> registerUser(@RequestBody UserDTO userDTO) {
+        logger.info("Attempting to register user with Auth0 ID: {}", userDTO.getAuth0Id());
         // Extract domain from email for company association
         String email = userDTO.getEmail();
         String domain = "";
@@ -320,40 +321,54 @@ public class UserController {
             System.out.println("Extracted domain: " + domain + " from email: " + email);
         }
 
-        // Create user
-        User newUser = new User();
-        newUser.setAuth0Id(userDTO.getAuth0Id());
-        newUser.setEmail(userDTO.getEmail());
-        newUser.setName(userDTO.getName());
-        newUser.setFirstName(userDTO.getFirstName());
-        newUser.setLastName(userDTO.getLastName());
-        newUser.setPicture(userDTO.getPicture());
-        newUser.setStatus(StatusType.PENDING);
+        try {
+            // Create user
+            User newUser = new User();
+            newUser.setAuth0Id(userDTO.getAuth0Id());
+            newUser.setEmail(userDTO.getEmail());
+            newUser.setName(userDTO.getName());
+            newUser.setFirstName(userDTO.getFirstName());
+            newUser.setLastName(userDTO.getLastName());
+            newUser.setPicture(userDTO.getPicture());
+            newUser.setStatus(StatusType.PENDING);
 
-        // Set the primaryDomain directly to just the domain part
-        newUser.setPrimaryDomain(domain);
+            // Set the primaryDomain directly to just the domain part
+            newUser.setPrimaryDomain(domain);
 
-        newUser.setDateTimeAdded(LocalDateTime.now());
+            newUser.setDateTimeAdded(LocalDateTime.now());
 
-        // Handle Google integration if applicable
-        if (userDTO.getProvider() != null && userDTO.getProvider().equals("Google")
-                && userDTO.getCustomerGoogleId() != null) {
-            newUser.setCustomerGoogleId(userDTO.getCustomerGoogleId());
+            // Handle Google integration if applicable
+            if (userDTO.getProvider() != null && userDTO.getProvider().equals("Google")
+                    && userDTO.getCustomerGoogleId() != null) {
+                newUser.setCustomerGoogleId(userDTO.getCustomerGoogleId());
+            }
+
+            // Let UserSyncService determine the appropriate role
+            logger.info("Assigning role for user: {}", userDTO.getAuth0Id());
+            userSyncService.assignUserRole(newUser);
+            logger.info("Role assigned for user: {}", userDTO.getAuth0Id());
+
+            // Saves the user via UserService
+            logger.info("Creating user in database for Auth0 ID: {}", userDTO.getAuth0Id());
+            User savedUser = userService.createUser(newUser);
+            logger.info("User successfully created with ID: {} for Auth0 ID: {}", savedUser.getId(),
+                    userDTO.getAuth0Id());
+
+            // Create a response DTO with limited information for security
+            UserResponseDTO response = new UserResponseDTO(
+                    savedUser.getId(),
+                    savedUser.getEmail(),
+                    savedUser.getRoles(),
+                    savedUser.getAuth0Id());
+
+            return new ResponseEntity<>(response, HttpStatus.CREATED);
+
+        } catch (Exception e) {
+            logger.error("Failed to register user with Auth0 ID {}: {}", userDTO.getAuth0Id(), e.getMessage(), e);
+            // Return an appropriate error response, e.g., 500
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(null); // Avoid sending back a body on internal error
         }
-
-        // Let UserSyncService determine the appropriate role
-        userSyncService.assignUserRole(newUser);
-
-        User savedUser = userService.createUser(newUser);
-
-        // Create a response DTO with limited information for security
-        UserResponseDTO response = new UserResponseDTO(
-                savedUser.getId(),
-                savedUser.getEmail(),
-                savedUser.getRoles(),
-                savedUser.getAuth0Id());
-
-        return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
     /**

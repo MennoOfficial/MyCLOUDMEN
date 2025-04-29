@@ -1,0 +1,132 @@
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-md) 0;
+  
+  &.dark-spinner {
+    .loading-spinner {
+      .wave-element {
+        background-color: rgba(255, 255, 255, 0.9);
+        
+        &.wave-1 {
+          background-color: var(--aqua-spring);
+        }
+        
+        &.wave-2 {
+          background-color: rgba(255, 255, 255, 0.7);
+        }
+        
+        &.wave-3 {
+          background-color: rgba(255, 255, 255, 0.5);
+        }
+      }
+    }
+    
+    p {
+      color: rgba(255, 255, 255, 0.9);
+    }
+  }
+  
+  &.light-blue-spinner {
+    .loading-spinner {
+      .wave-element {
+        &.wave-1 {
+          background-color: var(--ocean-blue);
+        }
+        
+        &.wave-2 {
+          background-color: var(--deep-ocean);
+        }
+        
+        &.wave-3 {
+          background-color: rgba(var(--ocean-blue-rgb), 0.5);
+        }
+      }
+    }
+  }
+  
+  .loading-spinner {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+    // Default (medium) size
+    width: 60px;
+    height: 40px;
+    
+    // Size variants
+    &.small {
+      width: 40px;
+      height: 30px;
+      
+      .wave-element {
+        width: 4px;
+      }
+    }
+    
+    &.large {
+      width: 80px;
+      height: 50px;
+      
+      .wave-element {
+        width: 8px;
+      }
+    }
+    
+    // CloudMen wave animation
+    .wave-element {
+      position: relative;
+      width: 6px;
+      height: 100%;
+      margin: 0 3px;
+      border-radius: 12px;
+      
+      &.wave-1 {
+        background-color: var(--aqua-spring);
+        animation: wave 1.2s ease-in-out infinite;
+      }
+      
+      &.wave-2 {
+        background-color: var(--deep-ocean);
+        animation: wave 1.2s ease-in-out infinite;
+        animation-delay: -0.3s;
+      }
+      
+      &.wave-3 {
+        background-color: var(--ocean-blue);
+        animation: wave 1.2s ease-in-out infinite;
+        animation-delay: -0.6s;
+      }
+    }
+  }
+  
+  p {
+    margin-top: var(--space-md);
+    color: var(--deep-ocean);
+    font-size: 14px;
+    font-weight: 500;
+    position: relative;
+    
+    // Add a subtle fade animation to the text
+    animation: text-fade 2s ease-in-out infinite;
+  }
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: scaleY(0.5);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@keyframes text-fade {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+} 
