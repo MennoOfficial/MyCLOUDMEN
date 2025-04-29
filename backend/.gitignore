@@ -36,3 +36,11 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# Google Workspace Service Account Keys
+*.json
+!package.json
+!package-lock.json
+service-account*.json
+google-credentials*.json
+*-credentials.json

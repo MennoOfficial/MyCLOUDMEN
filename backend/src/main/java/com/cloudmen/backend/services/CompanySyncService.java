@@ -2,6 +2,7 @@ package com.cloudmen.backend.services;
 
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
 import com.cloudmen.backend.repositories.TeamleaderCompanyRepository;
+import com.cloudmen.backend.config.TeamleaderConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,8 +10,11 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -24,256 +28,328 @@ public class CompanySyncService {
     private final TeamleaderCompanyService companyService;
     private final TeamleaderCompanyRepository companyRepository;
     private final UserSyncService userSyncService;
+    private final TeamleaderConfig teamleaderConfig;
 
     public CompanySyncService(
             TeamleaderCompanyService companyService,
             TeamleaderCompanyRepository companyRepository,
-            UserSyncService userSyncService) {
+            UserSyncService userSyncService,
+            TeamleaderConfig teamleaderConfig) {
         this.companyService = companyService;
         this.companyRepository = companyRepository;
         this.userSyncService = userSyncService;
-        logger.info("CompanySyncService initialized");
+        this.teamleaderConfig = teamleaderConfig;
     }
 
     /**
-     * Synchronize all companies from Teamleader
-     * 
-     * @return Summary of the synchronization
+     * Synchronize all companies from Teamleader API to local database
      */
     @Async
     public CompletableFuture<Map<String, Object>> syncAllCompanies() {
-        logger.info("Starting synchronization of all companies from Teamleader");
+        logger.info("Starting companies synchronization");
         Map<String, Object> summary = new HashMap<>();
+        int[] stats = { 0, 0, 0, 0 }; // total, created, updated, errors
 
         try {
-            int page = 1;
-            int pageSize = 50;
-            int totalCompanies = 0;
-            int created = 0;
-            int updated = 0;
-            int errors = 0;
-            boolean hasMorePages = true;
-
-            logger.info("Starting company synchronization with page size: {}", pageSize);
-
-            while (hasMorePages) {
-                logger.info("Fetching companies page: {}", page);
-                JsonNode companiesResponse = companyService.getCompanies(page, pageSize);
-
-                if (companiesResponse == null) {
-                    logger.error("Received null response when fetching companies page {}", page);
-                    errors++;
-                    break;
-                }
-
-                if (companiesResponse.has("error")) {
-                    logger.error("Error fetching companies page {}: {}", page, companiesResponse);
-                    errors++;
-                    break;
-                }
-
-                JsonNode companiesData = companiesResponse.get("data");
-                if (companiesData == null || !companiesData.isArray()) {
-                    logger.error("Invalid data format in companies response for page {}", page);
-                    errors++;
-                    break;
-                }
-
-                int companiesCount = companiesData.size();
-                totalCompanies += companiesCount;
-
-                // Process each company
-                for (JsonNode companyData : companiesData) {
-                    try {
-                        String companyId = companyData.get("id").asText();
-
-                        // Get detailed company info
-                        JsonNode companyDetails = companyService.getCompanyDetails(companyId);
-
-                        if (companyDetails == null || companyDetails.has("error")) {
-                            logger.error("Failed to fetch details for company ID: {}", companyId);
-                            errors++;
-                            continue;
-                        }
-
-                        // Save the company data
-                        boolean isNew = processSingleCompany(companyDetails.get("data"));
-                        if (isNew) {
-                            created++;
-                        } else {
-                            updated++;
-                        }
-                    } catch (Exception e) {
-                        logger.error("Error processing company data: {}", e.getMessage());
-                        errors++;
-                    }
-                }
-
-                // Check if there are more pages
-                hasMorePages = companiesCount == pageSize;
-                page++;
-            }
-
-            // Update summary with results
-            summary.put("success", true);
-            summary.put("totalCompanies", totalCompanies);
-            summary.put("created", created);
-            summary.put("updated", updated);
-            summary.put("errors", errors);
-            summary.put("timestamp", LocalDateTime.now().toString());
-
-            logger.info("Company synchronization completed: {} total, {} created, {} updated, {} errors",
-                    totalCompanies, created, updated, errors);
-
-            // After sync is complete, update user roles
+            fetchAndProcessCompanies(stats);
             userSyncService.updateExistingUserRoles();
 
-            return CompletableFuture.completedFuture(summary);
+            summary.put("success", true);
+            summary.put("totalCompanies", stats[0]);
+            summary.put("created", stats[1]);
+            summary.put("updated", stats[2]);
+            summary.put("errors", stats[3]);
+            summary.put("timestamp", LocalDateTime.now().toString());
+
+            logger.info("Sync completed: {} total, {} created, {} updated, {} errors",
+                    stats[0], stats[1], stats[2], stats[3]);
         } catch (Exception e) {
-            logger.error("Error during company synchronization", e);
+            logger.error("Sync error", e);
             summary.put("success", false);
             summary.put("error", e.getMessage());
             summary.put("timestamp", LocalDateTime.now().toString());
-            return CompletableFuture.completedFuture(summary);
+        }
+
+        return CompletableFuture.completedFuture(summary);
+    }
+
+    private void fetchAndProcessCompanies(int[] stats) {
+        int page = 1;
+        int pageSize = 50;
+        boolean hasMorePages = true;
+
+        while (hasMorePages) {
+            JsonNode companiesResponse = companyService.getCompanies(page, pageSize);
+
+            if (companiesResponse == null || companiesResponse.has("error") ||
+                    !companiesResponse.has("data") || !companiesResponse.get("data").isArray()) {
+                stats[3]++; // errors
+                break;
+            }
+
+            JsonNode companiesData = companiesResponse.get("data");
+            int count = companiesData.size();
+
+            for (JsonNode companyNode : companiesData) {
+                try {
+                    JsonNode details = companyService.getCompanyDetails(companyNode.get("id").asText());
+                    if (details == null || details.has("error") || !details.has("data")) {
+                        stats[3]++; // errors
+                        continue;
+                    }
+
+                    boolean isNew = processCompany(details.get("data"));
+                    if (isNew)
+                        stats[1]++;
+                    else
+                        stats[2]++; // created or updated
+                    stats[0]++; // total
+                } catch (Exception e) {
+                    logger.error("Error processing company", e);
+                    stats[3]++; // errors
+                }
+            }
+
+            hasMorePages = count == pageSize;
+            page++;
         }
     }
 
     /**
-     * Process a single company from JSON data
-     * 
-     * @param companyData Company data from Teamleader API
-     * @return true if new company was created, false if existing company was
-     *         updated
+     * Process a company from Teamleader and save to database if it has access
      */
-    private boolean processSingleCompany(JsonNode companyData) {
-        if (companyData == null) {
-            logger.warn("Skipping null company data");
+    private boolean processCompany(JsonNode data) {
+        String id = data.get("id").asText();
+        String name = data.get("name").asText();
+
+        // Check if company exists
+        Optional<TeamleaderCompany> existing = companyRepository.findByTeamleaderId(id);
+        boolean isNew = !existing.isPresent();
+
+        // Check for MyCLOUDMEN access
+        boolean hasAccess = checkAccess(data);
+
+        // If no access, remove if exists and return
+        if (!hasAccess) {
+            if (!isNew) {
+                companyRepository.delete(existing.get());
+                logger.info("Removed company without access: {}", name);
+            }
             return false;
         }
 
-        try {
-            String teamleaderId = companyData.get("id").asText();
-            String name = companyData.get("name").asText();
+        // Create or update company
+        TeamleaderCompany company = isNew ? new TeamleaderCompany() : existing.get();
+        company.setTeamleaderId(id);
+        company.setName(name);
 
-            logger.info("Processing company: {} (ID: {})", name, teamleaderId);
+        // Set company fields
+        if (data.has("website"))
+            company.setWebsite(data.get("website").asText());
+        if (data.has("vat_number"))
+            company.setVatNumber(data.get("vat_number").asText());
 
-            // Check if company already exists
-            TeamleaderCompany existingCompany = companyRepository.findByTeamleaderId(teamleaderId).orElse(null);
-            boolean isNew = existingCompany == null;
+        // Set custom fields
+        Map<String, Object> customFields = extractCustomFields(data);
+        if (!customFields.isEmpty())
+            company.setCustomFields(customFields);
 
-            // Create new company or update existing one
-            TeamleaderCompany company = isNew ? new TeamleaderCompany() : existingCompany;
+        // Set contact info
+        List<TeamleaderCompany.ContactInfo> contacts = extractContactInfo(data);
+        if (!contacts.isEmpty())
+            company.setContactInfo(contacts);
 
-            // Set basic fields
-            company.setTeamleaderId(teamleaderId);
-            company.setName(name);
+        // Set timestamps
+        LocalDateTime now = LocalDateTime.now();
+        if (isNew)
+            company.setCreatedAt(now);
+        company.setUpdatedAt(now);
+        company.setSyncedAt(now);
 
-            // Set additional fields if available
-            if (companyData.has("website")) {
-                company.setWebsite(companyData.get("website").asText());
+        // Save
+        companyRepository.save(company);
+        logger.info("{} company: {}", isNew ? "Created" : "Updated", name);
+
+        return isNew;
+    }
+
+    /**
+     * Check if company has MyCLOUDMEN access
+     */
+    private boolean checkAccess(JsonNode data) {
+        if (!data.has("custom_fields"))
+            return true; // Default to true if no fields
+
+        String accessFieldId = teamleaderConfig.getMyCloudmenAccessFieldId();
+        JsonNode fields = data.get("custom_fields");
+
+        // Check array format
+        if (fields.isArray()) {
+            for (JsonNode field : fields) {
+                if (field.has("definition") && field.has("value") &&
+                        field.get("definition").has("id") &&
+                        field.get("definition").get("id").asText().equals(accessFieldId)) {
+                    return parseAccessValue(field.get("value"));
+                }
             }
-
-            if (companyData.has("vat_number")) {
-                company.setVatNumber(companyData.get("vat_number").asText());
-            }
-
-            // Set last synced timestamp
-            company.setSyncedAt(LocalDateTime.now());
-
-            // Save to repository
-            companyRepository.save(company);
-
-            logger.info("Successfully {} company: {}", isNew ? "created" : "updated", name);
-            return isNew;
-        } catch (Exception e) {
-            logger.error("Error processing company: {}", e.getMessage());
-            return false;
         }
+        // Check object format
+        else if (fields.isObject() && fields.has(accessFieldId)) {
+            return parseAccessValue(fields.get(accessFieldId));
+        }
+
+        return true; // Default to true if field not found
+    }
+
+    /**
+     * Parse access value from different formats
+     */
+    private boolean parseAccessValue(JsonNode value) {
+        if (value.isTextual()) {
+            String text = value.asText().toLowerCase();
+            return text.contains("true") || text.contains("yes") ||
+                    text.contains("1") || text.contains("on") || text.contains("enable");
+        } else if (value.isBoolean())
+            return value.asBoolean();
+        else if (value.isNumber())
+            return value.asInt() > 0;
+        else if (value.isObject() && value.has("value"))
+            return parseAccessValue(value.get("value"));
+        return false;
+    }
+
+    /**
+     * Extract custom fields from company data
+     */
+    private Map<String, Object> extractCustomFields(JsonNode data) {
+        Map<String, Object> fields = new HashMap<>();
+        if (!data.has("custom_fields"))
+            return fields;
+
+        JsonNode customFields = data.get("custom_fields");
+
+        // Array format
+        if (customFields.isArray()) {
+            for (JsonNode field : customFields) {
+                if (field.has("definition") && field.has("value") && field.get("definition").has("id")) {
+                    String id = field.get("definition").get("id").asText();
+                    fields.put(id, extractValue(field.get("value")));
+                }
+            }
+        }
+        // Object format
+        else if (customFields.isObject()) {
+            customFields.fields().forEachRemaining(entry -> fields.put(entry.getKey(), extractValue(entry.getValue())));
+        }
+
+        // Add status if available
+        if (data.has("status"))
+            fields.put("status", data.get("status").asText());
+
+        return fields;
+    }
+
+    /**
+     * Extract contact info from company data
+     */
+    private List<TeamleaderCompany.ContactInfo> extractContactInfo(JsonNode data) {
+        List<TeamleaderCompany.ContactInfo> contacts = new ArrayList<>();
+
+        // Process emails
+        if (data.has("emails") && data.get("emails").isArray()) {
+            for (JsonNode email : data.get("emails")) {
+                if (email.has("type") && email.has("email")) {
+                    contacts.add(new TeamleaderCompany.ContactInfo(
+                            "email-" + email.get("type").asText(),
+                            email.get("email").asText()));
+                }
+            }
+        }
+
+        // Process phones
+        if (data.has("telephones") && data.get("telephones").isArray()) {
+            for (JsonNode phone : data.get("telephones")) {
+                if (phone.has("type") && phone.has("number")) {
+                    contacts.add(new TeamleaderCompany.ContactInfo(
+                            "phone-" + phone.get("type").asText(),
+                            phone.get("number").asText()));
+                }
+            }
+        }
+
+        return contacts;
+    }
+
+    /**
+     * Extract value based on type
+     */
+    private Object extractValue(JsonNode value) {
+        if (value.isTextual())
+            return value.asText();
+        else if (value.isNumber())
+            return value.asDouble();
+        else if (value.isBoolean())
+            return value.asBoolean();
+        else if (value.isNull())
+            return null;
+        return value.toString();
     }
 
     /**
      * Refresh custom fields for all companies
-     * 
-     * @return Summary of the refresh operation
      */
     @Async
     public CompletableFuture<Map<String, Object>> refreshCustomFields() {
-        logger.info("Starting refresh of custom fields for all companies");
+        logger.info("Starting custom fields refresh");
         Map<String, Object> summary = new HashMap<>();
+        int[] stats = { 0, 0, 0, 0 }; // total, updated, removed, errors
 
         try {
-            int total = 0;
-            int updated = 0;
-            int errors = 0;
-
-            // Get all companies
             Iterable<TeamleaderCompany> companies = companyRepository.findAll();
 
             for (TeamleaderCompany company : companies) {
-                total++;
+                stats[0]++; // total
 
                 try {
-                    // Get fresh data from API
-                    JsonNode companyDetails = companyService.getCompanyDetails(company.getTeamleaderId());
-
-                    if (companyDetails == null || companyDetails.has("error")) {
-                        logger.error("Failed to fetch details for company: {}", company.getName());
-                        errors++;
+                    JsonNode details = companyService.getCompanyDetails(company.getTeamleaderId());
+                    if (details == null || details.has("error") || !details.has("data")) {
+                        stats[3]++; // errors
                         continue;
                     }
 
-                    JsonNode companyData = companyDetails.get("data");
+                    JsonNode data = details.get("data");
+                    boolean hasAccess = checkAccess(data);
 
-                    // Update custom fields
-                    if (companyData.has("custom_fields")) {
-                        Map<String, Object> customFields = new HashMap<>();
-
-                        JsonNode customFieldsNode = companyData.get("custom_fields");
-                        customFieldsNode.fields().forEachRemaining(entry -> {
-                            String key = entry.getKey();
-                            JsonNode value = entry.getValue();
-
-                            if (value.isTextual()) {
-                                customFields.put(key, value.asText());
-                            } else if (value.isNumber()) {
-                                customFields.put(key, value.asDouble());
-                            } else if (value.isBoolean()) {
-                                customFields.put(key, value.asBoolean());
-                            } else {
-                                customFields.put(key, value.toString());
-                            }
-                        });
-
-                        company.setCustomFields(customFields);
-                        companyRepository.save(company);
-                        updated++;
-
-                        logger.info("Updated custom fields for company: {}", company.getName());
+                    if (!hasAccess) {
+                        companyRepository.delete(company);
+                        stats[2]++; // removed
+                        continue;
                     }
+
+                    processCompany(data); // Reuse existing method to update
+                    stats[1]++; // updated
                 } catch (Exception e) {
-                    logger.error("Error updating custom fields for company {}: {}",
-                            company.getName(), e.getMessage());
-                    errors++;
+                    logger.error("Error refreshing company {}: {}", company.getName(), e.getMessage());
+                    stats[3]++; // errors
                 }
             }
 
-            // Update summary
             summary.put("success", true);
-            summary.put("totalCompanies", total);
-            summary.put("updated", updated);
-            summary.put("errors", errors);
+            summary.put("totalCompanies", stats[0]);
+            summary.put("updated", stats[1]);
+            summary.put("removed", stats[2]);
+            summary.put("errors", stats[3]);
             summary.put("timestamp", LocalDateTime.now().toString());
 
-            logger.info("Custom fields refresh completed: {} total, {} updated, {} errors",
-                    total, updated, errors);
-
-            return CompletableFuture.completedFuture(summary);
+            logger.info("Refresh completed: {} total, {} updated, {} removed, {} errors",
+                    stats[0], stats[1], stats[2], stats[3]);
         } catch (Exception e) {
-            logger.error("Error during custom fields refresh", e);
+            logger.error("Error during refresh", e);
             summary.put("success", false);
             summary.put("error", e.getMessage());
             summary.put("timestamp", LocalDateTime.now().toString());
-            return CompletableFuture.completedFuture(summary);
         }
+
+        return CompletableFuture.completedFuture(summary);
     }
 }

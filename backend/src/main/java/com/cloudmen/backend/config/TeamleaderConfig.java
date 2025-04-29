@@ -8,8 +8,8 @@ public class TeamleaderConfig {
     // Development environment custom field IDs
     public static final String DEV_MYCLOUDMEN_ACCESS_FIELD_ID = "9faf2006-c6ed-07ec-b25d-131116783b7b";
 
-    // Production environment custom field IDs (to be filled in later)
-    public static final String PROD_MYCLOUDMEN_ACCESS_FIELD_ID = ""; // TODO: Add production field ID
+    // Production environment custom field IDs
+    public static final String PROD_MYCLOUDMEN_ACCESS_FIELD_ID = "9faf2006-c6ed-07ec-b25d-131116783b7b";
 
     @Value("${teamleader.environment:development}")
     private String environment;

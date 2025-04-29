@@ -38,6 +38,10 @@ public class BackendApplication {
             // Admin
             System.setProperty("ADMIN_DOMAIN", dotenv.get("ADMIN_DOMAIN", ""));
             System.setProperty("ADMIN_EMAIL", dotenv.get("ADMIN_EMAIL", ""));
+
+            // Google Workspace API
+            System.setProperty("GOOGLE_WORKSPACE_API_URL",
+                    dotenv.get("GOOGLE_WORKSPACE_API_URL", "https://mycloudmen.mennoplochaet.be/mock-api"));
         }
 
         SpringApplication.run(BackendApplication.class, args);
