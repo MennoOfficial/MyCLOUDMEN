@@ -39,10 +39,9 @@ public class BackendApplication {
             System.setProperty("ADMIN_DOMAIN", dotenv.get("ADMIN_DOMAIN", ""));
             System.setProperty("ADMIN_EMAIL", dotenv.get("ADMIN_EMAIL", ""));
 
-            // Google Workspace
-            System.setProperty("GOOGLE_APPLICATION_NAME", dotenv.get("GOOGLE_APPLICATION_NAME", ""));
-            System.setProperty("GOOGLE_CREDENTIALS_PATH", dotenv.get("GOOGLE_CREDENTIALS_PATH", ""));
-            System.setProperty("GOOGLE_ADMIN_EMAIL", dotenv.get("GOOGLE_ADMIN_EMAIL", ""));
+            // Google Workspace API
+            System.setProperty("GOOGLE_WORKSPACE_API_URL",
+                    dotenv.get("GOOGLE_WORKSPACE_API_URL", "https://mycloudmen.mennoplochaet.be/mock-api"));
         }
 
         SpringApplication.run(BackendApplication.class, args);
