@@ -1,6 +1,8 @@
 package com.cloudmen.backend.services;
 
-import com.cloudmen.backend.api.dtos.GoogleWorkspaceSubscriptionDTO;
+import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceSubscriptionDTO;
+import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceSubscriptionListResponseDTO;
+import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceCreateSubscriptionRequestDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -30,7 +32,7 @@ public class GoogleWorkspaceService {
     private final Retry webClientRetrySpec;
     private final ObjectMapper objectMapper;
 
-    @Value("${google.workspace.api.baseUrl:https://mycloudmen.mennoplochaet.be/mock-api}")
+    @Value("${google.workspace.api.baseUrl:${GOOGLE_WORKSPACE_API_URL:https://mycloudmen.mennoplochaet.be/google-workspace-api}}")
     private String apiBaseUrl;
 
     public GoogleWorkspaceService(WebClient.Builder webClientBuilder,
@@ -55,7 +57,7 @@ public class GoogleWorkspaceService {
      * @param customerId The Google customer ID
      * @return DTO containing the list of subscriptions
      */
-    public Mono<GoogleWorkspaceSubscriptionDTO.SubscriptionListResponse> getCustomerSubscriptions(String customerId) {
+    public Mono<GoogleWorkspaceSubscriptionListResponseDTO> getCustomerSubscriptions(String customerId) {
         logger.info("Fetching subscriptions for customer: {}", customerId);
 
         return webClient.get()
@@ -78,7 +80,7 @@ public class GoogleWorkspaceService {
      * @return The newly created subscription
      */
     public Mono<GoogleWorkspaceSubscriptionDTO> createSubscription(String customerId,
-            GoogleWorkspaceSubscriptionDTO.CreateSubscriptionRequest request) {
+            GoogleWorkspaceCreateSubscriptionRequestDTO request) {
         logger.info("Creating subscription for customer: {}, SKU: {}", customerId, request.getSkuId());
 
         Map<String, Object> requestBody = new HashMap<>();
@@ -127,9 +129,9 @@ public class GoogleWorkspaceService {
     /**
      * Converts the Google API response to our simplified subscription list DTO
      */
-    private GoogleWorkspaceSubscriptionDTO.SubscriptionListResponse convertToSimplifiedSubscriptionList(
+    private GoogleWorkspaceSubscriptionListResponseDTO convertToSimplifiedSubscriptionList(
             JsonNode jsonNode) {
-        GoogleWorkspaceSubscriptionDTO.SubscriptionListResponse response = new GoogleWorkspaceSubscriptionDTO.SubscriptionListResponse();
+        GoogleWorkspaceSubscriptionListResponseDTO response = new GoogleWorkspaceSubscriptionListResponseDTO();
         List<GoogleWorkspaceSubscriptionDTO> subscriptions = new ArrayList<>();
 
         if (jsonNode.has("subscriptions") && jsonNode.get("subscriptions").isArray()) {

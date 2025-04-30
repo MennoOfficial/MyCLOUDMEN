@@ -1,6 +1,8 @@
 package com.cloudmen.backend.api.controllers;
 
-import com.cloudmen.backend.api.dtos.GoogleWorkspaceSubscriptionDTO;
+import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceSubscriptionDTO;
+import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceSubscriptionListResponseDTO;
+import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceCreateSubscriptionRequestDTO;
 import com.cloudmen.backend.services.GoogleWorkspaceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +32,7 @@ public class GoogleWorkspaceController {
      * @return List of licenses by subscription type
      */
     @GetMapping("/customers/{customerId}/licenses")
-    public Mono<ResponseEntity<GoogleWorkspaceSubscriptionDTO.SubscriptionListResponse>> getCustomerLicenses(
+    public Mono<ResponseEntity<GoogleWorkspaceSubscriptionListResponseDTO>> getCustomerLicenses(
             @PathVariable String customerId) {
         logger.info("Received request to get license information for customer: {}", customerId);
 
@@ -51,7 +53,7 @@ public class GoogleWorkspaceController {
     @PostMapping("customers/{customerId}/licenses")
     public Mono<ResponseEntity<GoogleWorkspaceSubscriptionDTO>> addLicenses(
             @PathVariable String customerId,
-            @RequestBody GoogleWorkspaceSubscriptionDTO.CreateSubscriptionRequest request) {
+            @RequestBody GoogleWorkspaceCreateSubscriptionRequestDTO request) {
         logger.info("Received request to add {} licenses of SKU {} for customer: {}",
                 request.getNumberOfLicenses(), request.getSkuId(), customerId);
 

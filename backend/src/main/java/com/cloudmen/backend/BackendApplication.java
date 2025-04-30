@@ -41,7 +41,12 @@ public class BackendApplication {
 
             // Google Workspace API
             System.setProperty("GOOGLE_WORKSPACE_API_URL",
-                    dotenv.get("GOOGLE_WORKSPACE_API_URL", "https://mycloudmen.mennoplochaet.be/mock-api"));
+                    dotenv.get("GOOGLE_WORKSPACE_API_URL", "https://mycloudmen.mennoplochaet.be/google-workspace-api"));
+
+            // SignatureSatori API
+            System.setProperty("SIGNATURESATORI_API_URL",
+                    dotenv.get("SIGNATURESATORI_API_URL", "https://mycloudmen.mennoplochaet.be/signature-satori-api"));
+            System.setProperty("SIGNATURESATORI_API_TOKEN", dotenv.get("SIGNATURESATORI_API_TOKEN", ""));
         }
 
         SpringApplication.run(BackendApplication.class, args);
