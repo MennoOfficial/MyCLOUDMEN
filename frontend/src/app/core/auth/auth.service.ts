@@ -139,31 +139,55 @@ export class AuthService {
   private fetchUserProfile(auth0User: any): void {
     const auth0Id = encodeURIComponent(auth0User.sub);
     
-    console.log(`[Auth] Fetching user profile for: ${auth0User.email}`);
+    console.log(`[Auth] Fetching user profile for: ${auth0User.email}, ID: ${auth0Id}`);
     
     this.http.get<User>(`${this.environmentService.apiUrl}/users/${auth0Id}`)
       .pipe(
-        // Add retry with backoff for network issues
+        // Don't retry on 404 as that's expected for new users
         retryWhen(errors => 
           errors.pipe(
-            take(3),
-            concatMap((error, i) => timer((i + 1) * 500)),
-            catchError(error => throwError(() => error))
+            concatMap((error, i) => {
+              // Only retry network errors, not 404s
+              if (error.status === 404) {
+                return throwError(() => error);
+              }
+              if (i >= 3) {
+                return throwError(() => error);
+              }
+              console.log(`[Auth] Retrying API call after error, attempt ${i + 1}`);
+              return timer((i + 1) * 500);
+            })
           )
         ),
         catchError(error => {
           // If user not found, register them
           if (error.status === 404) {
-            console.log('[Auth] User not found, registering new user');
-            return this.registerNewUser(auth0User);
+            console.log('[Auth] User not found (404), registering new user');
+            return this.registerNewUser(auth0User).pipe(
+              tap(() => console.log('[Auth] Registration API call completed')),
+              catchError(regError => {
+                console.error('[Auth] Registration failed with error:', regError);
+                if (regError.error) {
+                  console.error('[Auth] Registration error details:', regError.error);
+                }
+                return throwError(() => new Error('Failed to register: ' + (regError.message || regError.statusText || 'Unknown error')));
+              })
+            );
           }
+          console.error('[Auth] Error fetching user profile:', error);
           return throwError(() => error);
         }),
         finalize(() => this.authLoadingSubject.next(false))
       )
       .subscribe({
-        next: user => this.processUserProfile(user),
-        error: error => this.handleAuthError('Failed to fetch user profile', error)
+        next: user => {
+          console.log('[Auth] User profile received successfully:', user);
+          this.processUserProfile(user);
+        },
+        error: error => {
+          console.error('[Auth] Final error in fetchUserProfile:', error);
+          this.handleAuthError('Failed to fetch or register user profile', error);
+        }
       });
   }
   
@@ -171,19 +195,49 @@ export class AuthService {
    * Register a new user in the backend
    */
   private registerNewUser(auth0User: any): Observable<User> {
-            return this.http.post<User>(`${this.environmentService.apiUrl}/users/register`, {
-              auth0Id: auth0User.sub,
-              email: auth0User.email,
-              name: auth0User.name,
-              picture: auth0User.picture
-            }).pipe(
+    console.log(`[Auth] Starting registration for: ${auth0User.email}, Auth0 ID: ${auth0User.sub}`);
+    
+    // Extract domain for potential company matching
+    const email = auth0User.email;
+    const domain = this.getEmailDomain(email);
+    
+    // Ensure auth0Id is properly set
+    const auth0Id = auth0User.sub;
+    if (!auth0Id) {
+      console.error('[Auth] Missing auth0Id during registration!');
+      return throwError(() => new Error('Missing auth0Id'));
+    }
+    
+    const userData = {
+      auth0Id: auth0Id,
+      email: auth0User.email,
+      name: auth0User.name || '',
+      firstName: auth0User.given_name || '',
+      lastName: auth0User.family_name || '',
+      picture: auth0User.picture || '',
+      provider: auth0Id.startsWith('google-oauth2|') ? 'Google' : 'Auth0',
+      customerGoogleId: auth0Id.startsWith('google-oauth2|') ? 
+        auth0Id.substring('google-oauth2|'.length) : undefined,
+      primaryDomain: domain
+    };
+    
+    console.log('[Auth] Sending registration data:', JSON.stringify(userData));
+    
+    return this.http.post<User>(
+      `${this.environmentService.apiUrl}/users/register`, 
+      userData
+    ).pipe(
+      tap(user => console.log(`[Auth] User registered successfully:`, user)),
       catchError(error => {
-        console.error('[Auth] Failed to register user:', error);
+        console.error('[Auth] Registration HTTP error:', error);
+        if (error.error) {
+          console.error('[Auth] Server error response:', error.error);
+        }
         return throwError(() => error);
-              })
-            );
-          }
-          
+      })
+    );
+  }
+  
   /**
    * Process the user profile after fetching
    */
@@ -193,15 +247,21 @@ export class AuthService {
       return;
     }
     
-    // Ensure user has roles
-            if (!Array.isArray(user.roles) || user.roles.length === 0) {
-              user.roles = ['COMPANY_USER'];
-            }
-              
-    console.log(`[Auth] User profile processed: ${user.email}, Status: ${user.status}`);
+    // Check if user has roles
+    if (!Array.isArray(user.roles)) {
+      user.roles = [];
+    }
+    
+    // Only add default COMPANY_USER role if there are no roles and not pending
+    if (user.roles.length === 0 && user.status !== 'PENDING') {
+      console.log(`[Auth] Adding default COMPANY_USER role to user with no roles`);
+      user.roles = ['COMPANY_USER'];
+    }
+      
+    console.log(`[Auth] User profile processed: ${user.email}, Status: ${user.status}, Roles: ${user.roles.join(', ') || 'none'}`);
     
     // Update state and storage
-            this.userSubject.next(user);
+    this.userSubject.next(user);
     this.saveUserToSession(user);
     
     // Check if redirection is needed
@@ -574,6 +634,10 @@ export class AuthService {
     // Navigate to loading page immediately
     this.router.navigate(['/auth/loading'], { replaceUrl: true });
     
+    // Clear any previous errors
+    this.authErrorSubject.next(null);
+    sessionStorage.removeItem('auth_error');
+    
     // Process the callback
     this.auth0.handleRedirectCallback().subscribe({
       next: result => {
@@ -586,27 +650,49 @@ export class AuthService {
       error: error => {
         console.error('[Auth] Error handling auth callback:', error);
         
-        // If there's a state error but we're authenticated, try to get profile
+        // If there's a state error, this is often due to browser cache or multiple logins
         if (error.message?.includes('state')) {
-          this.auth0.isAuthenticated$.pipe(take(1)).subscribe(isAuthenticated => {
-            if (isAuthenticated) {
-              this.auth0.user$.pipe(
-                filter(user => !!user),
-                take(1),
-                timeout(5000)
-              ).subscribe({
-                next: auth0User => this.processAuth0User(auth0User),
-                error: () => {
-                  this.authLoadingSubject.next(false);
-                  this.router.navigate(['/login'], { replaceUrl: true });
-                }
-              });
-            } else {
+          console.log('[Auth] Detected state error, trying to recover by checking authentication state');
+          
+          // Only continue if user is already authenticated
+          this.auth0.isAuthenticated$.pipe(
+            take(1),
+            timeout(5000)
+          ).subscribe({
+            next: isAuthenticated => {
+              if (isAuthenticated) {
+                console.log('[Auth] User is authenticated despite state error, proceeding with profile fetch');
+                
+                // Get user profile directly
+                this.auth0.user$.pipe(
+                  filter(user => !!user),
+                  take(1),
+                  timeout(5000)
+                ).subscribe({
+                  next: auth0User => {
+                    console.log('[Auth] Retrieved user profile after state error:', auth0User?.email);
+                    this.processAuth0User(auth0User);
+                  },
+                  error: profileError => {
+                    console.error('[Auth] Failed to get user profile after state error:', profileError);
+                    this.authLoadingSubject.next(false);
+                    this.handleInvalidStateError();
+                  }
+                });
+              } else {
+                console.log('[Auth] User is not authenticated after state error, redirecting to login');
+                this.authLoadingSubject.next(false);
+                this.handleInvalidStateError();
+              }
+            },
+            error: timeoutError => {
+              console.error('[Auth] Timeout checking authentication state after state error:', timeoutError);
               this.authLoadingSubject.next(false);
-              this.login();
+              this.handleInvalidStateError();
             }
           });
         } else {
+          // For non-state errors, handle differently
           this.authLoadingSubject.next(false);
           sessionStorage.setItem('auth_error', JSON.stringify({
             message: error.message || 'Unknown authentication error',
@@ -620,6 +706,27 @@ export class AuthService {
         }
       }
     });
+  }
+  
+  /**
+   * Handle invalid state error by clearing session and redirecting
+   */
+  private handleInvalidStateError(): void {
+    console.log('[Auth] Handling invalid state error - clearing session and redirecting');
+    
+    // Clear any lingering state
+    sessionStorage.removeItem('auth_state');
+    localStorage.removeItem('auth0.is.authenticated');
+    
+    // Store error but don't display yet
+    sessionStorage.setItem('auth_error', JSON.stringify({
+      message: 'Authentication session expired or invalid',
+      timestamp: new Date().toISOString(),
+      recoverable: true
+    }));
+    
+    // Redirect to login page
+    this.router.navigate(['/login'], { replaceUrl: true });
   }
   
   /**

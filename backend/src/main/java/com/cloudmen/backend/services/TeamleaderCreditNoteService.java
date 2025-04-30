@@ -1,7 +1,6 @@
 package com.cloudmen.backend.services;
 
 import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteListDTO;
-import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteDetailDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
