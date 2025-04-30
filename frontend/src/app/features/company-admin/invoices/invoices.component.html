@@ -560,13 +560,32 @@
 
     <!-- Footer with Download Button -->
     <div class="detail-footer">
-      <button
-        class="download-invoice-button"
-        (click)="downloadInvoice(selectedInvoice)"
-      >
-        <i class="material-icons">file_download</i>
-        Download Invoice
-      </button>
+      <div class="dropdown download-options">
+        <button
+          class="download-invoice-button"
+          (click)="toggleDownloadOptions($event)"
+        >
+          <i class="material-icons">file_download</i>
+          Download Invoice
+          <i class="material-icons dropdown-arrow">arrow_drop_down</i>
+        </button>
+        <div class="dropdown-menu" [class.show]="showDownloadOptions">
+          <a
+            class="dropdown-item"
+            href="javascript:void(0)"
+            (click)="downloadInvoice(selectedInvoice, 'pdf')"
+          >
+            <i class="material-icons">picture_as_pdf</i> PDF
+          </a>
+          <a
+            class="dropdown-item"
+            href="javascript:void(0)"
+            (click)="downloadInvoice(selectedInvoice, 'ubl/e-fff')"
+          >
+            <i class="material-icons">receipt</i> UBL/E-FFF (XML)
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 </div>

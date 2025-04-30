@@ -1329,4 +1329,65 @@
   }
 }
 
+/* Styles for download options dropdown */
+.download-options {
+  position: relative;
+  display: inline-block;
+  
+  .download-invoice-button {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    
+    .dropdown-arrow {
+      font-size: 18px;
+      transition: transform 0.2s ease;
+    }
+  }
+  
+  .dropdown-menu {
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    margin-bottom: 8px;
+    background-color: white;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    min-width: 180px;
+    display: none;
+    z-index: 10;
+    
+    &.show {
+      display: block;
+    }
+    
+    .dropdown-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      color: #333;
+      text-decoration: none;
+      transition: background-color 0.2s ease;
+      
+      &:hover {
+        background-color: #f5f5f5;
+      }
+      
+      i {
+        font-size: 18px;
+        color: #666;
+      }
+      
+      &:first-child {
+        border-radius: 4px 4px 0 0;
+      }
+      
+      &:last-child {
+        border-radius: 0 0 4px 4px;
+      }
+    }
+  }
+}
+
 

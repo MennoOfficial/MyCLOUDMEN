@@ -1,6 +1,7 @@
 package com.cloudmen.backend.services;
 
 import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDetailDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDownloadDTO;
 import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceListDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -371,5 +373,66 @@ public class TeamleaderInvoiceService {
             return node.get(fieldName).asText();
         }
         return null;
+    }
+
+    /**
+     * Download an invoice in the specified format
+     * 
+     * @param invoiceId Invoice ID in Teamleader format
+     * @param format    The format to download (pdf, ubl/e-fff, ubl/peppol_bis_3)
+     * @return Optional containing the download information if successful
+     */
+    public Optional<TeamleaderInvoiceDownloadDTO> downloadInvoice(String invoiceId, String format) {
+        log.info("Downloading invoice ID: {} in format: {}", invoiceId, format);
+
+        try {
+            String accessToken = oAuthService.getAccessToken();
+            if (accessToken == null || accessToken.isEmpty()) {
+                log.error("No valid access token available for TeamLeader API");
+                return Optional.empty();
+            }
+
+            // Create request as proper JSON using ObjectMapper
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("id", invoiceId.trim()); // Ensure ID is trimmed
+            requestBody.put("format", format);
+
+            // Convert to JSON string
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
+
+            // Call the API directly
+            JsonNode response = webClient.post()
+                    .uri("/invoices.download")
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Content-Type", "application/json")
+                    .bodyValue(jsonBody)
+                    .retrieve()
+                    .bodyToMono(JsonNode.class)
+                    .block();
+
+            // Return empty if no valid response
+            if (response == null || !response.has("data")) {
+                log.error("Invalid or empty response from Teamleader API for invoice download");
+                return Optional.empty();
+            }
+
+            // Map and return the download information
+            JsonNode data = response.get("data");
+            TeamleaderInvoiceDownloadDTO downloadDTO = new TeamleaderInvoiceDownloadDTO();
+
+            if (data.has("location")) {
+                downloadDTO.setLocation(data.get("location").asText());
+            }
+
+            if (data.has("expires")) {
+                downloadDTO.setExpires(ZonedDateTime.parse(data.get("expires").asText()));
+            }
+
+            return Optional.of(downloadDTO);
+        } catch (Exception e) {
+            log.error("Error downloading invoice with ID: {}", invoiceId, e);
+            return Optional.empty();
+        }
     }
 }

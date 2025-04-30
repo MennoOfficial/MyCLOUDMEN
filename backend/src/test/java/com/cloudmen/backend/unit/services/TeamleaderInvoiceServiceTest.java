@@ -1,6 +1,7 @@
 package com.cloudmen.backend.unit.services;
 
 import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDetailDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDownloadDTO;
 import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceListDTO;
 import com.cloudmen.backend.services.TeamleaderInvoiceService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
@@ -18,6 +19,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -475,6 +478,97 @@ class TeamleaderInvoiceServiceTest {
         verify(webClient).post();
     }
 
+    @Test
+    @DisplayName("downloadInvoice should return download information when successful")
+    void downloadInvoice_shouldReturnDownloadInfo_whenSuccessful() {
+        // Arrange
+        String invoiceId = "123456";
+        String format = "pdf";
+        String accessToken = "valid-token";
+
+        // Mock OAuth token
+        lenient().when(oAuthService.getAccessToken()).thenReturn(accessToken);
+
+        // Mock response JSON
+        JsonNode responseNode = createMockInvoiceDownloadResponse();
+        lenient().when(responseSpec.bodyToMono(JsonNode.class)).thenReturn(Mono.just(responseNode));
+
+        // Act
+        Optional<TeamleaderInvoiceDownloadDTO> result = invoiceService.downloadInvoice(invoiceId, format);
+
+        // Assert
+        assertTrue(result.isPresent());
+        assertEquals("https://cdn.teamleader.eu/file", result.get().getLocation());
+        assertNotNull(result.get().getExpires());
+        verify(oAuthService).getAccessToken();
+        verify(webClient).post();
+        verify(requestBodyUriSpec).uri("/invoices.download");
+    }
+
+    @Test
+    @DisplayName("downloadInvoice should return empty optional when OAuth token is invalid")
+    void downloadInvoice_shouldReturnEmptyOptional_whenOAuthTokenIsInvalid() {
+        // Arrange
+        String invoiceId = "123456";
+        String format = "pdf";
+        lenient().when(oAuthService.getAccessToken()).thenReturn(null);
+
+        // Act
+        Optional<TeamleaderInvoiceDownloadDTO> result = invoiceService.downloadInvoice(invoiceId, format);
+
+        // Assert
+        assertFalse(result.isPresent());
+        verify(oAuthService).getAccessToken();
+        verifyNoInteractions(requestBodyUriSpec);
+    }
+
+    @Test
+    @DisplayName("downloadInvoice should return empty optional when API returns null response")
+    void downloadInvoice_shouldReturnEmptyOptional_whenApiReturnsNullResponse() {
+        // Arrange
+        String invoiceId = "123456";
+        String format = "pdf";
+        String accessToken = "valid-token";
+
+        // Mock OAuth token
+        lenient().when(oAuthService.getAccessToken()).thenReturn(accessToken);
+
+        // Mock null response
+        lenient().when(responseSpec.bodyToMono(JsonNode.class)).thenReturn(Mono.empty());
+
+        // Act
+        Optional<TeamleaderInvoiceDownloadDTO> result = invoiceService.downloadInvoice(invoiceId, format);
+
+        // Assert
+        assertFalse(result.isPresent());
+        verify(oAuthService).getAccessToken();
+        verify(webClient).post();
+    }
+
+    @Test
+    @DisplayName("downloadInvoice should handle API exceptions and return empty optional")
+    void downloadInvoice_shouldHandleApiExceptions_andReturnEmptyOptional() {
+        // Arrange
+        String invoiceId = "123456";
+        String format = "pdf";
+        String accessToken = "valid-token";
+
+        // Mock OAuth token
+        lenient().when(oAuthService.getAccessToken()).thenReturn(accessToken);
+
+        // Mock exception
+        lenient().when(responseSpec.bodyToMono(JsonNode.class))
+                .thenReturn(Mono.error(new RuntimeException("API Error")));
+
+        // Act
+        Optional<TeamleaderInvoiceDownloadDTO> result = invoiceService.downloadInvoice(invoiceId, format);
+
+        // Assert
+        assertFalse(result.isPresent());
+        verify(oAuthService).getAccessToken();
+        verify(webClient).post();
+    }
+
     // Helper methods
 
     private void setupWebClientMock() {
@@ -591,6 +685,20 @@ class TeamleaderInvoiceServiceTest {
         dataArray.add(notOverdueInvoice);
         responseNode.set("data", dataArray);
 
+        return responseNode;
+    }
+
+    /**
+     * Creates a mock invoice download response
+     */
+    private JsonNode createMockInvoiceDownloadResponse() {
+        ObjectNode responseNode = objectMapper.createObjectNode();
+        ObjectNode dataNode = objectMapper.createObjectNode();
+
+        dataNode.put("location", "https://cdn.teamleader.eu/file");
+        dataNode.put("expires", ZonedDateTime.now(ZoneId.of("UTC")).plusHours(1).toString());
+
+        responseNode.set("data", dataNode);
         return responseNode;
     }
 }
