@@ -1,7 +1,7 @@
 package com.cloudmen.backend.api.controllers;
 
-import com.cloudmen.backend.api.dtos.CompanyDetailDTO;
-import com.cloudmen.backend.api.dtos.CompanyListDTO;
+import com.cloudmen.backend.api.dtos.companies.CompanyDetailDTO;
+import com.cloudmen.backend.api.dtos.companies.CompanyListDTO;
 import com.cloudmen.backend.domain.enums.CompanyStatusType;
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
 import com.cloudmen.backend.repositories.TeamleaderCompanyRepository;

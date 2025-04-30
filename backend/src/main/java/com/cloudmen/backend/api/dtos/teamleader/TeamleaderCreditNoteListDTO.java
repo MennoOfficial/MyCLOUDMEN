@@ -1,4 +1,4 @@
-package com.cloudmen.backend.api.dtos;
+package com.cloudmen.backend.api.dtos.teamleader;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonInclude;

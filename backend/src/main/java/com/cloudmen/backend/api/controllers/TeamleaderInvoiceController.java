@@ -1,7 +1,7 @@
 package com.cloudmen.backend.api.controllers;
 
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceDetailDTO;
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDetailDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceListDTO;
 import com.cloudmen.backend.services.TeamleaderInvoiceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,8 +26,8 @@ public class TeamleaderInvoiceController {
     /**
      * Get invoices for a specific company, with flexible filtering options
      * 
-     * @param companyId The TeamLeader ID of the company/customer
-     * @param status Optional filter: 'paid', 'unpaid', 'overdue', or 'all'
+     * @param companyId  The TeamLeader ID of the company/customer
+     * @param status     Optional filter: 'paid', 'unpaid', 'overdue', or 'all'
      * @param searchTerm Optional search term to filter invoices
      * @return List of invoice list DTOs
      */
@@ -43,7 +43,7 @@ public class TeamleaderInvoiceController {
         // Convert status parameter to boolean isPaid value (or null for all)
         Boolean isPaid = null;
         Boolean isOverdue = null;
-        
+
         if (status != null && !status.isEmpty()) {
             if (status.equalsIgnoreCase("paid")) {
                 isPaid = true;
@@ -54,11 +54,11 @@ public class TeamleaderInvoiceController {
                 isOverdue = true;
             }
         }
-        
+
         // Fetch invoices with appropriate filters
         List<TeamleaderInvoiceListDTO> invoices = invoiceService.findInvoicesByCompany(
                 companyId, isPaid, isOverdue, searchTerm);
-                
+
         return ResponseEntity.ok(invoices);
     }
 
@@ -76,19 +76,21 @@ public class TeamleaderInvoiceController {
             @PathVariable String invoiceId) {
 
         log.info("Request received for invoice with ID: {} for company: {}", invoiceId, companyId);
-        
+
         Optional<TeamleaderInvoiceDetailDTO> invoiceOpt = invoiceService.findById(invoiceId);
 
         if (invoiceOpt.isEmpty()) {
             log.warn("Invoice not found with ID: {}", invoiceId);
             return ResponseEntity.notFound().build();
         }
-        
+
         return ResponseEntity.ok(invoiceOpt.get());
     }
 
     /**
-     * Mock endpoint that returns test data for frontend development - disabled in production
+     * Mock endpoint that returns test data for frontend development - disabled in
+     * production
+     * 
      * @return 404 Not Found response to force frontend to use real API
      */
     @GetMapping("/mock/invoices")
@@ -98,7 +100,9 @@ public class TeamleaderInvoiceController {
     }
 
     /**
-     * Mock endpoint that returns test data for a single invoice - disabled in production
+     * Mock endpoint that returns test data for a single invoice - disabled in
+     * production
+     * 
      * @param invoiceId The invoice ID
      * @return 404 Not Found response to force frontend to use real API
      */
@@ -110,6 +114,7 @@ public class TeamleaderInvoiceController {
 
     /**
      * Endpoint for testing empty unpaid invoice responses - disabled in production
+     * 
      * @return 404 Not Found response to force frontend to use real API
      */
     @GetMapping("/mock/invoices/empty/unpaid")

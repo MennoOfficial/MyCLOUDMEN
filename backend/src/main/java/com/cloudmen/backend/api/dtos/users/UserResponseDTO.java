@@ -1,4 +1,4 @@
-package com.cloudmen.backend.api.dtos;
+package com.cloudmen.backend.api.dtos.users;
 
 import com.cloudmen.backend.domain.enums.RoleType;
 
