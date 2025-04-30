@@ -83,6 +83,9 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   selectedInvoiceId: string | null = null;
   isShowingInvoiceDetails = false;
   
+  // New property for download options
+  showDownloadOptions: boolean = false;
+  
   constructor(
     private apiService: ApiService,
     private authService: AuthService,
@@ -675,8 +678,9 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   }
 
   // Download invoice
-  downloadInvoice(invoice: Invoice | InvoiceDetails): void {
-    window.open(`${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${this.getApiCompanyId()}/invoice/${invoice.id}/pdf`, '_blank');
+  downloadInvoice(invoice: Invoice | InvoiceDetails, format: string = 'pdf'): void {
+    // Use the redirect parameter to open the download link directly without an extra AJAX call
+    window.open(`${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${this.getApiCompanyId()}/invoice/${invoice.id}/download?format=${format}&redirect=true`, '_blank');
   }
 
   // Helper to get active invoices based on current tab
@@ -907,6 +911,23 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       return date;
     } catch (e) {
       return new Date();
+    }
+  }
+
+  // Toggle the download options dropdown
+  toggleDownloadOptions(event: Event): void {
+    event.stopPropagation(); // Prevent the click from closing the detail panel
+    this.showDownloadOptions = !this.showDownloadOptions;
+    
+    // Close the dropdown when clicking outside
+    if (this.showDownloadOptions) {
+      setTimeout(() => {
+        const closeDropdown = () => {
+          this.showDownloadOptions = false;
+          document.removeEventListener('click', closeDropdown);
+        };
+        document.addEventListener('click', closeDropdown);
+      }, 0);
     }
   }
 }
