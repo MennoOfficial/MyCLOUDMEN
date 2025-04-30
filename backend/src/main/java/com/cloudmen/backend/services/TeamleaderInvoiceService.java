@@ -1,7 +1,7 @@
 package com.cloudmen.backend.services;
 
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceDetailDTO;
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDetailDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceListDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;

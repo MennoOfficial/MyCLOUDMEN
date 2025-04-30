@@ -1,7 +1,8 @@
 package com.cloudmen.backend.api.controllers;
 
-import com.cloudmen.backend.api.dtos.TeamleaderCreditNoteListDTO;
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceDetailDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteListDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteDetailDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDetailDTO;
 import com.cloudmen.backend.services.TeamleaderCreditNoteService;
 import com.cloudmen.backend.services.TeamleaderInvoiceService;
 import lombok.RequiredArgsConstructor;

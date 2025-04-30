@@ -1,7 +1,7 @@
 package com.cloudmen.backend.unit.services;
 
-import com.cloudmen.backend.api.dtos.TeamleaderCreditNoteListDTO;
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteListDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceListDTO;
 import com.cloudmen.backend.services.TeamleaderCreditNoteService;
 import com.cloudmen.backend.services.TeamleaderInvoiceService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;

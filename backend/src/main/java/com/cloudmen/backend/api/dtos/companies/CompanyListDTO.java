@@ -1,4 +1,4 @@
-package com.cloudmen.backend.api.dtos;
+package com.cloudmen.backend.api.dtos.companies;
 
 import com.cloudmen.backend.domain.enums.CompanyStatusType;
 import com.cloudmen.backend.domain.models.TeamleaderCompany;

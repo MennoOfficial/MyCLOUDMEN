@@ -14,9 +14,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-
+import org.springframework.http.MediaType;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.util.retry.Retry;
@@ -74,26 +73,16 @@ class TeamleaderCompanyServiceTest {
     private WebClient.RequestHeadersSpec requestHeadersSpec;
 
     @Mock
+    private WebClient.ResponseSpec responseSpec;
+
+    @Mock
     private ArrayNode includesArrayNode;
 
     private TeamleaderCompanyService teamleaderCompanyService;
-
-    // Mock objects for WebClient chain
-    private WebClient.RequestBodyUriSpec requestBodyUriSpec;
-    private WebClient.RequestBodySpec requestBodySpec;
-    private WebClient.ResponseSpec responseSpec;
     private Mono<JsonNode> responseMono;
 
     @BeforeEach
     void setUp() {
-        // Initialize the service with mocks
-        teamleaderCompanyService = new TeamleaderCompanyService(
-                oAuthService, apiConfig, objectMapper, companyRepository, webClient, webClientRetrySpec);
-
-        // Set up WebClient chain mocks
-        requestBodyUriSpec = mock(WebClient.RequestBodyUriSpec.class);
-        requestBodySpec = mock(WebClient.RequestBodySpec.class);
-        responseSpec = mock(WebClient.ResponseSpec.class);
         // Set up the service with all required dependencies
         teamleaderCompanyService = new TeamleaderCompanyService(
                 oAuthService,
@@ -110,11 +99,10 @@ class TeamleaderCompanyServiceTest {
         // Set up default WebClient chain with lenient stubs
         lenient().when(webClient.post()).thenReturn(requestBodyUriSpec);
         lenient().when(requestBodyUriSpec.uri(anyString())).thenReturn(requestBodySpec);
-        lenient().when(requestBodySpec.contentType(any(MediaType.class))).thenReturn(requestBodySpec);
+        lenient().when(requestBodySpec.contentType(any())).thenReturn(requestBodySpec);
 
         // Fix the headers setup - using the proper way to set bearer auth
         lenient().when(requestBodySpec.headers(any())).thenReturn(requestBodySpec);
-
         lenient().when(requestBodySpec.bodyValue(any())).thenReturn(requestHeadersSpec);
         lenient().when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
 
@@ -141,6 +129,7 @@ class TeamleaderCompanyServiceTest {
         assertNotNull(result);
         assertEquals(teamleaderId, result.getTeamleaderId());
         assertEquals("Test Company", result.getName());
+        verify(companyRepository).findByTeamleaderId(teamleaderId);
     }
 
     @Test
@@ -159,6 +148,7 @@ class TeamleaderCompanyServiceTest {
         assertEquals(2, result.size());
         assertEquals("Company 1", result.get(0).getName());
         assertEquals("Company 2", result.get(1).getName());
+        verify(companyRepository).findAll();
     }
 
     @Test
@@ -205,13 +195,14 @@ class TeamleaderCompanyServiceTest {
     @DisplayName("getCompanies should successfully retrieve companies")
     void getCompanies_shouldSuccessfullyRetrieveCompanies() {
         // Arrange
+        String accessToken = "mock-token";
         JsonNode responseNode = mock(JsonNode.class);
         ObjectNode requestNode = mock(ObjectNode.class);
         ObjectNode paginationNode = mock(ObjectNode.class);
 
         // Mock OAuth token
         when(oAuthService.hasValidToken()).thenReturn(true);
-        when(oAuthService.getAccessToken()).thenReturn("mock-token");
+        when(oAuthService.getAccessToken()).thenReturn(accessToken);
 
         // Mock ArrayNode for includes
         when(objectMapper.createArrayNode()).thenReturn(includesArrayNode);
@@ -251,7 +242,6 @@ class TeamleaderCompanyServiceTest {
         // Verify key interactions
         verify(webClient).post();
         verify(requestBodyUriSpec).uri("/companies.list");
-        verify(companyRepository).findByTeamleaderId(teamleaderId);
     }
 
     @Test
@@ -270,27 +260,23 @@ class TeamleaderCompanyServiceTest {
     }
 
     @Test
-    @DisplayName("getAllCompanies should return all companies from repository")
-    void getAllCompanies_shouldReturnAllCompaniesFromRepository() {
+    @DisplayName("getAllCompanies should return empty list when no companies exist")
+    void getAllCompanies_shouldReturnEmptyListWhenNoCompaniesExist() {
         // Arrange
-        List<TeamleaderCompany> expectedCompanies = Arrays.asList(
-                createTestCompany("1", "Company 1"),
-                createTestCompany("2", "Company 2"));
-        when(companyRepository.findAll()).thenReturn(expectedCompanies);
+        when(companyRepository.findAll()).thenReturn(Collections.emptyList());
 
         // Act
         List<TeamleaderCompany> result = teamleaderCompanyService.getAllCompanies();
 
         // Assert
-        assertEquals(2, result.size());
-        assertEquals("Company 1", result.get(0).getName());
-        assertEquals("Company 2", result.get(1).getName());
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
         verify(companyRepository).findAll();
     }
 
     @Test
-    @DisplayName("getAllCompanies should return empty list when no companies exist")
-    void getAllCompanies_shouldReturnEmptyListWhenNoCompaniesExist() {
+    @DisplayName("getCompanies should handle API errors")
+    void getCompanies_shouldHandleApiErrors() {
         // Arrange
         ObjectNode errorNode = mock(ObjectNode.class);
         ObjectNode requestNode = mock(ObjectNode.class);
@@ -329,16 +315,12 @@ class TeamleaderCompanyServiceTest {
         doReturn(responseMono).when(responseMono).retryWhen(any());
         doReturn(responseMono).when(responseMono).onErrorResume(any());
         doReturn(errorNode).when(responseMono).block();
-      
-        when(companyRepository.findAll()).thenReturn(Collections.emptyList());
 
         // Act
-        List<TeamleaderCompany> result = teamleaderCompanyService.getAllCompanies();
+        JsonNode result = teamleaderCompanyService.getCompanies(1, 10);
 
         // Assert - we just verify it doesn't throw an exception
         assertNotNull(result);
-        assertTrue(result.isEmpty());
-        verify(companyRepository).findAll();
     }
 
     @Test
@@ -430,7 +412,7 @@ class TeamleaderCompanyServiceTest {
         // Act
         JsonNode result = teamleaderCompanyService.getCompanyDetails(companyId);
 
-        // Assert - CHANGE THIS LINE to avoid assertSame
+        // Assert
         assertNotNull(result);
         assertTrue(result instanceof JsonNode);
 

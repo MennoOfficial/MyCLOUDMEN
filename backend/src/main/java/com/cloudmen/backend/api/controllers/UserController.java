@@ -1,7 +1,7 @@
 package com.cloudmen.backend.api.controllers;
 
-import com.cloudmen.backend.api.dtos.UserDTO;
-import com.cloudmen.backend.api.dtos.UserResponseDTO;
+import com.cloudmen.backend.api.dtos.users.UserDTO;
+import com.cloudmen.backend.api.dtos.users.UserResponseDTO;
 import com.cloudmen.backend.domain.enums.RoleType;
 import com.cloudmen.backend.domain.enums.StatusType;
 import com.cloudmen.backend.domain.models.User;

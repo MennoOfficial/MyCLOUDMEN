@@ -1,7 +1,7 @@
 package com.cloudmen.backend.unit.services;
 
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceDetailDTO;
-import com.cloudmen.backend.api.dtos.TeamleaderInvoiceListDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDetailDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceListDTO;
 import com.cloudmen.backend.services.TeamleaderInvoiceService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
 import com.fasterxml.jackson.databind.JsonNode;
