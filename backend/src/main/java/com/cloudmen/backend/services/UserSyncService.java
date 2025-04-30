@@ -48,9 +48,21 @@ public class UserSyncService {
      */
     public User syncUserWithAuth0(String email, Map<String, Object> auth0Data) {
         logger.info("Syncing user data for: {}", email);
-        return userService.getUserByEmail(email)
-                .map(user -> updateExistingUser(user, auth0Data))
-                .orElseGet(() -> createNewUser(email, auth0Data));
+
+        // First check if user exists
+        Optional<User> existingUser = userService.getUserByEmail(email);
+
+        if (existingUser.isPresent()) {
+            User user = existingUser.get();
+            logger.info("Found existing user: {}, current status: {}, roles: {}",
+                    email, user.getStatus(), user.getRoles());
+
+            // Only update profile fields, don't touch roles or status
+            return updateExistingUser(user, auth0Data);
+        } else {
+            logger.info("Creating new user during sync for: {}", email);
+            return createNewUser(email, auth0Data);
+        }
     }
 
     private User updateExistingUser(User user, Map<String, Object> auth0Data) {
@@ -73,6 +85,17 @@ public class UserSyncService {
             }
         }
 
+        // Update Google ID if applicable
+        if (user.getCustomerGoogleId() == null && auth0Data.containsKey("sub")) {
+            String sub = (String) auth0Data.get("sub");
+            if (sub != null && sub.startsWith("google-oauth2|")) {
+                user.setCustomerGoogleId(sub.substring("google-oauth2|".length()));
+                updated = true;
+            }
+        }
+
+        // Don't modify roles or status when just updating profile information
+        // Only update timestamp if anything has changed
         if (updated) {
             user.setDateTimeChanged(LocalDateTime.now());
             logger.info("Saving updated user data for: {}", user.getEmail());
@@ -130,10 +153,11 @@ public class UserSyncService {
             newUser.setName(newUser.getFirstName() + " " + newUser.getLastName());
         }
 
-        // Set domain and custom ID
+        // Set domain from email
         String domain = extractDomainFromEmail(email);
         if (domain != null) {
             newUser.setPrimaryDomain(domain);
+            logger.info("Set primary domain for user {}: {}", email, domain);
         }
 
         // Handle Google ID
@@ -142,48 +166,142 @@ public class UserSyncService {
             newUser.setCustomerGoogleId(sub.substring("google-oauth2|".length()));
         }
 
-        // Assign role based on email and domain
-        assignUserRole(newUser);
-
-        // Set default status (will be updated to ACTIVATED for certain roles)
-        if (newUser.getStatus() == null) {
-            newUser.setStatus(StatusType.PENDING);
+        // First check if user is a system admin
+        if (isSystemAdmin(email, domain)) {
+            logger.info("New user {} is recognized as a system admin", email);
+            newUser.setRoles(List.of(RoleType.SYSTEM_ADMIN));
+            newUser.setStatus(StatusType.ACTIVATED);
+        }
+        // Check if user's email exactly matches a company contact email (highest
+        // priority for company admin)
+        else if (isExactCompanyContactMatch(email)) {
+            logger.info("New user {} is an exact match for a company primary contact, setting as COMPANY_ADMIN", email);
+            newUser.setRoles(List.of(RoleType.COMPANY_ADMIN));
+            newUser.setStatus(StatusType.ACTIVATED);
+        }
+        // Check if user is a company contact (based on domain)
+        else if (isCompanyContactEmail(email)) {
+            logger.info("New user {} is recognized as a company contact", email);
+            newUser.setRoles(List.of(RoleType.COMPANY_ADMIN));
+            newUser.setStatus(StatusType.ACTIVATED);
+        }
+        // Otherwise check company domain match
+        else {
+            TeamleaderCompany matchingCompany = findCompanyByDomain(domain);
+            if (matchingCompany != null) {
+                logger.info("New user {} matches company domain for: {}",
+                        email, matchingCompany.getName());
+                newUser.setRoles(List.of(RoleType.COMPANY_USER));
+                newUser.setStatus(StatusType.PENDING);
+            } else {
+                logger.info("New user {} has no company match, setting as PENDING with no roles", email);
+                newUser.setRoles(new ArrayList<>());
+                newUser.setStatus(StatusType.PENDING);
+            }
         }
 
         newUser.setDateTimeAdded(LocalDateTime.now());
 
-        logger.info("Saving new user: {}, Domain: {}, Roles: {}",
-                newUser.getName(), newUser.getPrimaryDomain(), newUser.getRoles());
+        logger.info("Saving new user: {}, Domain: {}, Roles: {}, Status: {}",
+                newUser.getName(), newUser.getPrimaryDomain(), newUser.getRoles(), newUser.getStatus());
 
         return userRepository.save(newUser);
+    }
+
+    /**
+     * Check if a user's email exactly matches a company contact email
+     */
+    private boolean isExactCompanyContactMatch(String email) {
+        if (email == null || email.isEmpty()) {
+            return false;
+        }
+
+        List<TeamleaderCompany> companies = teamleaderCompanyService.getAllCompanies();
+        if (companies == null || companies.isEmpty()) {
+            return false;
+        }
+
+        for (TeamleaderCompany company : companies) {
+            // Skip the MyCloudmenAccess check since all companies in our DB should have
+            // access
+            List<String> companyEmails = getCompanyEmails(company);
+
+            if (companyEmails.isEmpty()) {
+                continue;
+            }
+
+            for (String companyEmail : companyEmails) {
+                if (email.equalsIgnoreCase(companyEmail)) {
+                    logger.info("Found exact email match between user {} and company contact in {}",
+                            email, company.getName());
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
      * Assign appropriate role to user based on email and domain
      */
     public void assignUserRole(User user) {
-        List<RoleType> roles = new ArrayList<>();
+        // Preserve existing roles for updates unless explicitly changed
+        List<RoleType> roles = user.getRoles() != null ? new ArrayList<>(user.getRoles()) : new ArrayList<>();
         String email = user.getEmail();
         String domain = user.getPrimaryDomain();
 
+        // Check if user should be a system admin
         if (isSystemAdmin(email, domain)) {
             logger.info("Assigning SYSTEM_ADMIN role to user: {}", email);
-            roles.add(RoleType.SYSTEM_ADMIN);
+            if (!roles.contains(RoleType.SYSTEM_ADMIN)) {
+                roles.add(RoleType.SYSTEM_ADMIN);
+            }
             user.setStatus(StatusType.ACTIVATED);
-        } else if (isCompanyContactEmail(email)) {
+        }
+        // Check if user's email exactly matches a company contact email (highest
+        // priority)
+        else if (isExactCompanyContactMatch(email)) {
+            logger.info("User {} is an exact match for company contact, assigning COMPANY_ADMIN role", email);
+            if (!roles.contains(RoleType.COMPANY_ADMIN)) {
+                roles.add(RoleType.COMPANY_ADMIN);
+            }
+            user.setStatus(StatusType.ACTIVATED);
+        }
+        // Check if user is a company contact which should be an admin (domain-based
+        // match)
+        else if (isCompanyContactEmail(email)) {
             logger.info("Assigning COMPANY_ADMIN role to contact: {}", email);
-            roles.add(RoleType.COMPANY_ADMIN);
+            if (!roles.contains(RoleType.COMPANY_ADMIN)) {
+                roles.add(RoleType.COMPANY_ADMIN);
+            }
             user.setStatus(StatusType.ACTIVATED);
-        } else {
+        }
+        // Check if domain matches a company
+        else {
             TeamleaderCompany matchingCompany = findCompanyByDomain(domain);
             if (matchingCompany != null) {
                 logger.info("Assigning COMPANY_USER role to domain match: {} for company: {}",
                         email, matchingCompany.getName());
-                roles.add(RoleType.COMPANY_USER);
-                user.setStatus(StatusType.PENDING);
+                // Only add COMPANY_USER role if no roles exist
+                if (roles.isEmpty() && !roles.contains(RoleType.COMPANY_USER)) {
+                    roles.add(RoleType.COMPANY_USER);
+                }
+
+                // For new users, set to PENDING
+                if (user.getStatus() == null) {
+                    user.setStatus(StatusType.PENDING);
+                }
             } else {
-                logger.info("No role assigned for user: {}", email);
-                user.setStatus(StatusType.PENDING);
+                logger.info("No matching company found for user: {}", email);
+                // If no roles already exist and no company match, don't assign roles
+                if (roles.isEmpty()) {
+                    logger.info("No role assigned for user: {}", email);
+                    // Only set PENDING if status is not already set
+                    if (user.getStatus() == null) {
+                        user.setStatus(StatusType.PENDING);
+                    }
+                }
             }
         }
 
@@ -196,10 +314,51 @@ public class UserSyncService {
     }
 
     private boolean isCompanyContactEmail(String email) {
-        return teamleaderCompanyService.getAllCompanies().stream()
-                .filter(this::hasMyCloudmenAccess)
-                .flatMap(company -> getCompanyEmails(company).stream())
-                .anyMatch(contactEmail -> contactEmail.equals(email));
+        if (email == null || email.isEmpty()) {
+            logger.debug("Empty or null email, cannot be a company contact");
+            return false;
+        }
+
+        logger.debug("Checking if {} is a company contact email", email);
+        List<TeamleaderCompany> companies = teamleaderCompanyService.getAllCompanies();
+
+        if (companies == null || companies.isEmpty()) {
+            logger.warn("No companies found when checking for company contact email");
+            return false;
+        }
+
+        for (TeamleaderCompany company : companies) {
+            // Skip MyCloudmenAccess check since all companies in our DB should have access
+            List<String> companyEmails = getCompanyEmails(company);
+
+            // Check for exact email match first (high priority match)
+            if (companyEmails.contains(email)) {
+                logger.info("Email {} is an exact match for primary contact in company {}",
+                        email, company.getName());
+                return true;
+            }
+
+            // As a fallback, check domain-based matching
+            String userDomain = extractDomainFromEmail(email);
+            if (userDomain != null) {
+                for (String companyEmail : companyEmails) {
+                    if (email.equalsIgnoreCase(companyEmail)) {
+                        logger.info("Email {} is an exact case-insensitive match for company contact in {}",
+                                email, company.getName());
+                        return true;
+                    }
+
+                    String companyDomain = extractDomainFromEmail(companyEmail);
+                    if (userDomain.equals(companyDomain)) {
+                        logger.info("Email {} matches domain with company contact {} from {}",
+                                email, companyEmail, company.getName());
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 
     private boolean hasMyCloudmenAccess(TeamleaderCompany company) {
@@ -208,37 +367,130 @@ public class UserSyncService {
         }
 
         String fieldId = teamleaderConfig.getMyCloudmenAccessFieldId();
-        return CustomFieldUtils.isCustomFieldTrue(company.getCustomFields(), fieldId);
+        boolean hasAccess = CustomFieldUtils.isCustomFieldTrue(company.getCustomFields(), fieldId);
+
+        return hasAccess;
     }
 
     private List<String> getCompanyEmails(TeamleaderCompany company) {
         List<TeamleaderCompany.ContactInfo> contactInfo = company.getContactInfo();
-        if (contactInfo == null) {
+
+        if (contactInfo == null || contactInfo.isEmpty()) {
             return Collections.emptyList();
         }
 
-        return contactInfo.stream()
+        // Get all emails - primary and non-primary
+        List<String> allEmails = new ArrayList<>();
+
+        // Check for explicit email field first (if it exists in the model)
+        try {
+            if (company.getClass().getMethod("getEmail").invoke(company) != null) {
+                String mainEmail = (String) company.getClass().getMethod("getEmail").invoke(company);
+                if (mainEmail != null && !mainEmail.isEmpty()) {
+                    allEmails.add(mainEmail);
+                }
+            }
+        } catch (Exception e) {
+            // Expected if getEmail method doesn't exist, ignore
+        }
+
+        // Get primary emails first
+        List<String> primaryEmails = contactInfo.stream()
                 .filter(info -> "email-primary".equals(info.getType()))
                 .map(TeamleaderCompany.ContactInfo::getValue)
+                .filter(email -> email != null && !email.isEmpty())
                 .collect(Collectors.toList());
+
+        allEmails.addAll(primaryEmails);
+
+        // Then check for any contact info that contains "email" in type
+        List<String> otherEmails = contactInfo.stream()
+                .filter(info -> info.getType() != null
+                        && info.getType().toLowerCase().contains("email")
+                        && !"email-primary".equals(info.getType()))
+                .map(TeamleaderCompany.ContactInfo::getValue)
+                .filter(email -> email != null && !email.isEmpty())
+                .collect(Collectors.toList());
+
+        allEmails.addAll(otherEmails);
+
+        return allEmails;
     }
 
     private TeamleaderCompany findCompanyByDomain(String domain) {
         if (domain == null || domain.isEmpty()) {
+            logger.debug("Empty or null domain, cannot find matching company");
             return null;
         }
 
-        return teamleaderCompanyService.getAllCompanies().stream()
-                .filter(this::hasMyCloudmenAccess)
-                .filter(company -> companyHasDomain(company, domain))
-                .findFirst()
-                .orElse(null);
+        logger.debug("Looking for company matching domain: {}", domain);
+        List<TeamleaderCompany> companies = teamleaderCompanyService.getAllCompanies();
+
+        if (companies == null || companies.isEmpty()) {
+            logger.warn("No companies found when looking for domain match");
+            return null;
+        }
+
+        // First try to find direct domain match via website (as domain isn't stored
+        // directly)
+        for (TeamleaderCompany company : companies) {
+            // Skip the MyCloudmenAccess check since all companies in our DB should have
+            // access
+
+            // Check if website matches domain
+            String website = company.getWebsite();
+            if (website != null) {
+                String websiteDomain = extractDomainFromUrl(website);
+                if (websiteDomain != null && websiteDomain.equalsIgnoreCase(domain)) {
+                    logger.info("Found company {} with website domain match: {}",
+                            company.getName(), domain);
+                    return company;
+                }
+            }
+
+            // Check all company email domains
+            for (String email : getCompanyEmails(company)) {
+                String companyDomain = extractDomainFromEmail(email);
+                if (companyDomain != null && companyDomain.equalsIgnoreCase(domain)) {
+                    logger.info("Found company {} via email domain match: {}",
+                            company.getName(), domain);
+                    return company;
+                }
+            }
+        }
+
+        logger.debug("No company found matching domain: {}", domain);
+        return null;
     }
 
-    private boolean companyHasDomain(TeamleaderCompany company, String domain) {
-        return getCompanyEmails(company).stream()
-                .map(this::extractDomainFromEmail)
-                .anyMatch(domain::equals);
+    /**
+     * Extract domain from a URL
+     */
+    private String extractDomainFromUrl(String url) {
+        if (url == null || url.isEmpty()) {
+            return null;
+        }
+
+        // Remove protocol
+        String domain = url.toLowerCase();
+        if (domain.startsWith("http://")) {
+            domain = domain.substring("http://".length());
+        } else if (domain.startsWith("https://")) {
+            domain = domain.substring("https://".length());
+        }
+
+        // Remove www. prefix if present
+        if (domain.startsWith("www.")) {
+            domain = domain.substring("www.".length());
+        }
+
+        // Remove path and query string
+        int pathStart = domain.indexOf('/');
+        if (pathStart > 0) {
+            domain = domain.substring(0, pathStart);
+        }
+
+        return domain;
     }
 
     private String extractDomainFromEmail(String email) {
@@ -247,7 +499,8 @@ public class UserSyncService {
         }
 
         String[] parts = email.split("@");
-        return parts.length > 1 ? parts[1] : null;
+        String domain = parts.length > 1 ? parts[1] : null;
+        return domain;
     }
 
     /**
@@ -266,15 +519,60 @@ public class UserSyncService {
         return updatedUsers.size();
     }
 
+    /**
+     * Update user roles only if needed based on new rules
+     */
     private boolean updateUserRoleIfNeeded(User user) {
+        // Keep track of original roles and status
         List<RoleType> oldRoles = new ArrayList<>(user.getRoles());
-        assignUserRole(user);
+        StatusType oldStatus = user.getStatus();
 
-        if (!oldRoles.equals(user.getRoles())) {
-            logger.info("Updating roles for user {}: {} -> {}",
-                    user.getEmail(), oldRoles, user.getRoles());
+        // Store if the user was previously eligible for any role
+        boolean wasEligibleForRole = !oldRoles.isEmpty();
+        boolean currentlyEligibleForRole = isUserEligibleForAnyRole(user);
+
+        // Only make changes if eligibility status has changed
+        if (!wasEligibleForRole && currentlyEligibleForRole) {
+            // User wasn't eligible before but now is, assign roles
+            logger.info("User {} is now eligible for roles, updating", user.getEmail());
+            assignUserRole(user);
             user.setDateTimeChanged(LocalDateTime.now());
             userRepository.save(user);
+            return true;
+        } else if (wasEligibleForRole && !currentlyEligibleForRole) {
+            // User was eligible before but isn't now, remove roles
+            logger.info("User {} is no longer eligible for roles, removing roles", user.getEmail());
+            user.setRoles(new ArrayList<>());
+            user.setDateTimeChanged(LocalDateTime.now());
+            userRepository.save(user);
+            return true;
+        } else if (needsSystemAdminOrCompanyAdmin(user, oldRoles)) {
+            // Special case: check if user should be promoted to system admin or company
+            // admin
+            logger.info("User {} needs role promotion, updating", user.getEmail());
+            assignUserRole(user);
+            user.setDateTimeChanged(LocalDateTime.now());
+            userRepository.save(user);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if user should be promoted to system admin or company admin
+     */
+    private boolean needsSystemAdminOrCompanyAdmin(User user, List<RoleType> currentRoles) {
+        String email = user.getEmail();
+        String domain = user.getPrimaryDomain();
+
+        // Check if user should be system admin but isn't
+        if (isSystemAdmin(email, domain) && !currentRoles.contains(RoleType.SYSTEM_ADMIN)) {
+            return true;
+        }
+
+        // Check if user should be company admin but isn't
+        if (isCompanyContactEmail(email) && !currentRoles.contains(RoleType.COMPANY_ADMIN)) {
             return true;
         }
 

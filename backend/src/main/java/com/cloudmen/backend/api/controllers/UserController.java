@@ -308,8 +308,44 @@ public class UserController {
      * @return ResponseEntity containing the created user with 201 Created status
      */
     @PostMapping("/register")
-    public ResponseEntity<UserResponseDTO> registerUser(@RequestBody UserDTO userDTO) {
-        logger.info("Attempting to register user with Auth0 ID: {}", userDTO.getAuth0Id());
+    public ResponseEntity<?> registerUser(@RequestBody UserDTO userDTO) {
+        logger.info("Attempting to register user with Auth0 ID: {}, Email: {}", userDTO.getAuth0Id(),
+                userDTO.getEmail());
+
+        // Validate required fields
+        if (userDTO.getAuth0Id() == null || userDTO.getAuth0Id().trim().isEmpty()) {
+            logger.error("Missing Auth0 ID in registration request");
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", true);
+            errorResponse.put("message", "Auth0 ID is required");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        if (userDTO.getEmail() == null || userDTO.getEmail().trim().isEmpty()) {
+            logger.error("Missing email in registration request");
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", true);
+            errorResponse.put("message", "Email is required");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+
+        // Check if user already exists
+        if (userService.getUserByAuth0Id(userDTO.getAuth0Id()).isPresent()) {
+            logger.warn("User with Auth0 ID {} already exists", userDTO.getAuth0Id());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", true);
+            errorResponse.put("message", "User with this Auth0 ID already exists");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+        }
+
+        if (userService.getUserByEmail(userDTO.getEmail()).isPresent()) {
+            logger.warn("User with email {} already exists", userDTO.getEmail());
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", true);
+            errorResponse.put("message", "User with this email already exists");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+        }
+
         // Extract domain from email for company association
         String email = userDTO.getEmail();
         String domain = "";
@@ -318,7 +354,7 @@ public class UserController {
         // "user@gmail.com")
         if (email != null && email.contains("@")) {
             domain = email.substring(email.indexOf('@') + 1);
-            System.out.println("Extracted domain: " + domain + " from email: " + email);
+            logger.info("Extracted domain: {} from email: {}", domain, email);
         }
 
         try {
@@ -330,23 +366,28 @@ public class UserController {
             newUser.setFirstName(userDTO.getFirstName());
             newUser.setLastName(userDTO.getLastName());
             newUser.setPicture(userDTO.getPicture());
-            newUser.setStatus(StatusType.PENDING);
-
-            // Set the primaryDomain directly to just the domain part
+            newUser.setStatus(StatusType.PENDING); // Default status, may be changed by UserSyncService
             newUser.setPrimaryDomain(domain);
-
             newUser.setDateTimeAdded(LocalDateTime.now());
 
             // Handle Google integration if applicable
             if (userDTO.getProvider() != null && userDTO.getProvider().equals("Google")
                     && userDTO.getCustomerGoogleId() != null) {
                 newUser.setCustomerGoogleId(userDTO.getCustomerGoogleId());
+                logger.info("Set Google ID for user: {}", userDTO.getCustomerGoogleId());
             }
 
             // Let UserSyncService determine the appropriate role
             logger.info("Assigning role for user: {}", userDTO.getAuth0Id());
             userSyncService.assignUserRole(newUser);
-            logger.info("Role assigned for user: {}", userDTO.getAuth0Id());
+            logger.info("Role assigned for user: {}. Roles: {}, Status: {}",
+                    userDTO.getAuth0Id(), newUser.getRoles(), newUser.getStatus());
+
+            // Log special situations for debugging
+            if (newUser.getStatus() == StatusType.ACTIVATED &&
+                    newUser.getRoles().contains(RoleType.COMPANY_ADMIN)) {
+                logger.info("User {} was automatically activated as COMPANY_ADMIN", email);
+            }
 
             // Saves the user via UserService
             logger.info("Creating user in database for Auth0 ID: {}", userDTO.getAuth0Id());
@@ -362,12 +403,16 @@ public class UserController {
                     savedUser.getAuth0Id());
 
             return new ResponseEntity<>(response, HttpStatus.CREATED);
-
         } catch (Exception e) {
             logger.error("Failed to register user with Auth0 ID {}: {}", userDTO.getAuth0Id(), e.getMessage(), e);
-            // Return an appropriate error response, e.g., 500
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(null); // Avoid sending back a body on internal error
+
+            // Create a detailed error response
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("error", true);
+            errorResponse.put("message", "Failed to register user: " + e.getMessage());
+            errorResponse.put("auth0Id", userDTO.getAuth0Id());
+
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
         }
     }
 
