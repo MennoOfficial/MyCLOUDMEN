@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Credit Purchase Request</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      .container {
+        padding: 20px;
+        background-color: #f9f9f9;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 20px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      .header img {
+        max-width: 200px;
+      }
+      .content {
+        margin-bottom: 25px;
+      }
+      .details {
+        background-color: #f0f0f0;
+        padding: 15px;
+        border-radius: 5px;
+        margin: 20px 0;
+      }
+      .details-item {
+        margin-bottom: 10px;
+      }
+      .details-label {
+        font-weight: bold;
+      }
+      .button {
+        display: inline-block;
+        background-color: #4b72b2;
+        color: white;
+        padding: 12px 24px;
+        text-decoration: none;
+        border-radius: 5px;
+        font-weight: bold;
+        margin: 20px 0;
+        text-align: center;
+      }
+      .button:hover {
+        background-color: #3a5a8e;
+      }
+      .fallback {
+        margin-top: 15px;
+        font-size: 14px;
+        color: #666;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #e0e0e0;
+        font-size: 12px;
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Credit Purchase Request</h1>
+      </div>
+
+      <div class="content">
+        <p>Hello,</p>
+        <p>
+          A new credit purchase request has been submitted and is awaiting your
+          approval.
+        </p>
+
+        <div class="details">
+          <div class="details-item">
+            <span class="details-label">Customer:</span>
+            <span th:text="${userName}">John Doe</span>
+          </div>
+          <div class="details-item">
+            <span class="details-label">Credit Amount:</span>
+            <span th:text="${creditAmount}">100</span>
+          </div>
+          <div class="details-item">
+            <span class="details-label">Request ID:</span>
+            <span th:text="${requestId}">REQ-12345</span>
+          </div>
+        </div>
+
+        <p>Please review this request and take appropriate action.</p>
+
+        <a th:href="${acceptUrl}" class="button"> Accept Purchase </a>
+
+        <div class="fallback">
+          <p>
+            If the button doesn't work, copy and paste this URL into your
+            browser:
+          </p>
+          <p th:text="${acceptUrl}">
+            https://mycloudmen.mennoplochaet.be/purchase/accept?requestId=REQ-12345
+          </p>
+        </div>
+      </div>
+
+      <div class="footer">
+        <p>
+          This is an automated message from the MyCLOUDMEN platform. Please do
+          not reply to this email.
+        </p>
+        <p>&copy; 2023 MyCLOUDMEN. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>
