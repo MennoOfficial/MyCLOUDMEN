@@ -47,6 +47,12 @@ public class BackendApplication {
             System.setProperty("SIGNATURESATORI_API_URL",
                     dotenv.get("SIGNATURESATORI_API_URL", "https://mycloudmen.mennoplochaet.be/signature-satori-api"));
             System.setProperty("SIGNATURESATORI_API_TOKEN", dotenv.get("SIGNATURESATORI_API_TOKEN", ""));
+
+            // Email
+            System.setProperty("MAIL_HOST", dotenv.get("MAIL_HOST", "smtp.gmail.com"));
+            System.setProperty("MAIL_PORT", dotenv.get("MAIL_PORT", "587"));
+            System.setProperty("MAIL_USERNAME", dotenv.get("MAIL_USERNAME", "mycloudmen@gmail.com"));
+            System.setProperty("MAIL_PASSWORD", dotenv.get("MAIL_PASSWORD", "your-app-password-here"));
         }
 
         SpringApplication.run(BackendApplication.class, args);
