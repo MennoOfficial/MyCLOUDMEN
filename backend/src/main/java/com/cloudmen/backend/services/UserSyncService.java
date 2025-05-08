@@ -361,17 +361,6 @@ public class UserSyncService {
         return false;
     }
 
-    private boolean hasMyCloudmenAccess(TeamleaderCompany company) {
-        if (company == null || company.getCustomFields() == null) {
-            return false;
-        }
-
-        String fieldId = teamleaderConfig.getMyCloudmenAccessFieldId();
-        boolean hasAccess = CustomFieldUtils.isCustomFieldTrue(company.getCustomFields(), fieldId);
-
-        return hasAccess;
-    }
-
     private List<String> getCompanyEmails(TeamleaderCompany company) {
         List<TeamleaderCompany.ContactInfo> contactInfo = company.getContactInfo();
 
@@ -525,7 +514,6 @@ public class UserSyncService {
     private boolean updateUserRoleIfNeeded(User user) {
         // Keep track of original roles and status
         List<RoleType> oldRoles = new ArrayList<>(user.getRoles());
-        StatusType oldStatus = user.getStatus();
 
         // Store if the user was previously eligible for any role
         boolean wasEligibleForRole = !oldRoles.isEmpty();

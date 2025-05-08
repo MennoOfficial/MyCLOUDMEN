@@ -2,18 +2,10 @@ package com.cloudmen.backend;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Bean;
 import io.github.cdimascio.dotenv.Dotenv;
 
 @SpringBootApplication
 public class BackendApplication {
-
-    @Bean
-    public Dotenv dotenv() {
-        return Dotenv.configure()
-                .ignoreIfMissing()
-                .load();
-    }
 
     public static void main(String[] args) {
         // Load .env file before application starts
@@ -23,8 +15,14 @@ public class BackendApplication {
 
         // Set environment variables from .env file
         if (dotenv != null) {
-            // MongoDB
-            System.setProperty("MONGODB_URI", dotenv.get("MONGODB_URI", ""));
+            String user = dotenv.get("MONGO_USER", "");
+            String password = dotenv.get("MONGO_PASSWORD", "").replace("!", "%21");
+            String cluster = dotenv.get("MONGO_CLUSTER", "");
+            String db = dotenv.get("MONGO_DATABASE", "");
+
+            // Construct URI
+            String uri = String.format("mongodb+srv://%s:%s@%s/%s", user, password, cluster, db);
+            System.setProperty("spring.data.mongodb.uri", uri);
 
             // Auth0
             System.setProperty("AUTH0_AUDIENCE", dotenv.get("AUTH0_AUDIENCE", ""));

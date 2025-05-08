@@ -32,4 +32,9 @@ public class GoogleWorkspaceLicenseRequestDTO {
      * If not provided, will use the domain of the requesting user.
      */
     private String domain;
+
+    /**
+     * The cost of the license purchase.
+     */
+    private Double cost;
 }

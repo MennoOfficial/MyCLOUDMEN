@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.ZonedDateTime;
+import java.util.Date;
 
 /**
  * Response DTO for Google Workspace license purchase operations.
@@ -32,7 +32,7 @@ public class GoogleWorkspaceLicenseResponseDTO {
     /**
      * Timestamp of the purchase.
      */
-    private ZonedDateTime purchaseDate;
+    private Date purchaseDate;
 
     /**
      * Request ID associated with this purchase.
@@ -48,4 +48,9 @@ public class GoogleWorkspaceLicenseResponseDTO {
      * Additional information or message about the purchase.
      */
     private String message;
+
+    /**
+     * The cost of the license purchase.
+     */
+    private Double cost;
 }

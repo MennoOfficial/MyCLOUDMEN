@@ -30,17 +30,14 @@ public class GoogleWorkspaceService {
     private WebClient webClient;
     private final WebClient.Builder webClientBuilder;
     private final Retry webClientRetrySpec;
-    private final ObjectMapper objectMapper;
 
     @Value("${google.workspace.api.baseUrl:${GOOGLE_WORKSPACE_API_URL:https://mycloudmen.mennoplochaet.be/google-workspace-api}}")
     private String apiBaseUrl;
 
     public GoogleWorkspaceService(WebClient.Builder webClientBuilder,
-            @Qualifier("webClientRetrySpec") Retry webClientRetrySpec,
-            ObjectMapper objectMapper) {
+            @Qualifier("webClientRetrySpec") Retry webClientRetrySpec) {
         this.webClientBuilder = webClientBuilder;
         this.webClientRetrySpec = webClientRetrySpec;
-        this.objectMapper = objectMapper;
     }
 
     @PostConstruct
@@ -178,5 +175,84 @@ public class GoogleWorkspaceService {
         }
 
         return dto;
+    }
+
+    /**
+     * Check if the customer has at least one license of the requested type.
+     * 
+     * @param subscriptions The customer's current subscriptions
+     * @param licenseType   The type of license being requested
+     * @return true if the customer has at least one matching license
+     */
+    public boolean hasMatchingLicense(GoogleWorkspaceSubscriptionListResponseDTO subscriptions, String licenseType) {
+        if (subscriptions == null || subscriptions.getSubscriptions() == null) {
+            logger.warn("No subscriptions found or subscriptions list is null");
+            return false;
+        }
+
+        List<GoogleWorkspaceSubscriptionDTO> customerSubscriptions = subscriptions.getSubscriptions();
+        logger.info("Checking for license type: {} among {} subscriptions", licenseType, customerSubscriptions.size());
+
+        // Log available subscriptions for debugging
+        customerSubscriptions
+                .forEach(sub -> logger.info("Available subscription: ID={}, Name={}, Status={}, Licenses={}",
+                        sub.getSkuId(), sub.getSkuName(), sub.getStatus(), sub.getTotalLicenses()));
+
+        // Normalize the requested license type for more flexible matching
+        String normalizedRequestedType = normalizeGoogleLicenseType(licenseType);
+        logger.info("Normalized requested license type: {}", normalizedRequestedType);
+
+        // Check for matching licenses
+        boolean hasMatch = customerSubscriptions.stream()
+                .anyMatch(subscription -> {
+                    if (subscription.getSkuName() == null) {
+                        return false;
+                    }
+
+                    // Normalize the subscription name for comparison
+                    String normalizedSkuName = normalizeGoogleLicenseType(subscription.getSkuName());
+                    logger.info("Comparing normalized license types: {} with {}", normalizedSkuName,
+                            normalizedRequestedType);
+
+                    boolean isMatching = normalizedSkuName.equals(normalizedRequestedType);
+                    boolean isActive = "ACTIVE".equalsIgnoreCase(subscription.getStatus());
+                    boolean hasLicenses = subscription.getTotalLicenses() > 0;
+
+                    logger.info("License match: {}, Active: {}, Has licenses: {}", isMatching, isActive, hasLicenses);
+
+                    return isMatching && isActive && hasLicenses;
+                });
+
+        logger.info("License match result for {}: {}", licenseType, hasMatch);
+        return hasMatch;
+    }
+
+    /**
+     * Normalize Google Workspace license types to handle various naming formats.
+     * Extracts the core license tier (e.g., "Business Standard") from various
+     * formats.
+     * 
+     * @param licenseType The license type string to normalize
+     * @return Normalized license type string
+     */
+    private String normalizeGoogleLicenseType(String licenseType) {
+        if (licenseType == null) {
+            return "";
+        }
+
+        // Remove "Google Workspace" prefix if present
+        String normalized = licenseType.replaceAll("(?i)^google\\s+workspace\\s+", "");
+
+        // Extract core tier name (Business Starter, Business Standard, Business Plus)
+        if (normalized.contains("Starter") || normalized.contains("starter")) {
+            return "Business Starter";
+        } else if (normalized.contains("Standard") || normalized.contains("standard")) {
+            return "Business Standard";
+        } else if (normalized.contains("Plus") || normalized.contains("plus")) {
+            return "Business Plus";
+        }
+
+        // If no specific tier found, return the original normalized string
+        return normalized;
     }
 }
