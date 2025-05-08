@@ -1,0 +1,788 @@
+<!-- Material Icons import -->
+<link
+  href="https://fonts.googleapis.com/icon?family=Material+Icons"
+  rel="stylesheet"
+/>
+
+<!-- Different views based on mode -->
+<!-- Accept Purchase Mode (formerly PurchaseAcceptComponent) -->
+<div *ngIf="mode === 'accept-purchase'" class="purchase-accept-container">
+  <div class="purchase-accept-card">
+    <!-- Loading state -->
+    <div *ngIf="loading" class="loading-state">
+      <div class="spinner"></div>
+      <h2>
+        Processing Your
+        {{ requestType === "license" ? "License" : "Purchase" }} Request
+      </h2>
+      <p>
+        Your {{ requestType === "license" ? "license" : "purchase" }} request is
+        being processed and approved. This may take a minute...
+      </p>
+      <div class="progress-container">
+        <div class="progress-dots">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+        <p class="progress-text">Awaiting approval confirmation</p>
+      </div>
+      <p class="small-text">
+        Please don't close this window. You will be redirected automatically
+        once the process is complete.
+      </p>
+    </div>
+
+    <!-- Success state -->
+    <div *ngIf="success" class="success-state">
+      <div class="success-icon">
+        <i class="material-icons">check_circle</i>
+      </div>
+      <h2>
+        {{ requestType === "license" ? "License" : "Purchase" }} Approved!
+      </h2>
+      <p class="message">{{ message }}</p>
+      <p class="redirect-message">
+        You will be redirected automatically in a moment...
+      </p>
+      <button
+        (click)="mode = 'normal'; router.navigate(['/purchase-requests'])"
+        class="btn btn-primary"
+      >
+        Go to Purchase Requests
+      </button>
+    </div>
+
+    <!-- Error state -->
+    <div *ngIf="error" class="error-state">
+      <div class="error-icon">
+        <i class="material-icons">error_outline</i>
+      </div>
+      <h2>Something Went Wrong</h2>
+      <p class="message">{{ message }}</p>
+      <button
+        (click)="mode = 'normal'; router.navigate(['/purchase-requests'])"
+        class="btn btn-primary"
+      >
+        Go to Purchase Requests
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Purchase Mode -->
+<div *ngIf="mode === 'confirm'" class="confirm-page">
+  <div class="confirm-container">
+    <div class="spinner-container">
+      <div class="spinner"></div>
+      <div class="spinner-text">Processing your request...</div>
+    </div>
+    <h2>Confirming Your Purchase</h2>
+    <p>Please wait while we securely process your transaction.</p>
+    <div class="confirm-details">
+      <p><strong>Request ID:</strong> {{ requestId }}</p>
+      <p><strong>Email:</strong> {{ userEmail }}</p>
+    </div>
+  </div>
+</div>
+
+<!-- Approve License Mode -->
+<div *ngIf="mode === 'approve-license'" class="confirm-page">
+  <div class="confirm-container">
+    <div class="spinner-container">
+      <div class="spinner"></div>
+      <div class="spinner-text">Processing your request...</div>
+    </div>
+    <h2>Approving License Request</h2>
+    <p>Please wait while we activate your Google Workspace licenses.</p>
+    <div class="confirm-details">
+      <p><strong>Request ID:</strong> {{ requestId }}</p>
+      <p><strong>License Type:</strong> {{ licenseType }}</p>
+      <p><strong>Quantity:</strong> {{ count }}</p>
+      <p><strong>Domain:</strong> {{ domain }}</p>
+      <p><strong>Email:</strong> {{ userEmail }}</p>
+    </div>
+  </div>
+</div>
+
+<!-- Purchase Success Mode -->
+<div *ngIf="mode === 'purchase-success'" class="success-page">
+  <div class="success-container">
+    <div class="success-icon">
+      <i class="material-icons">check_circle</i>
+    </div>
+    <h1>Request Sent!</h1>
+    <div class="message-container">
+      <p class="lead">Your purchase request has been sent successfully!</p>
+      <div class="details-card">
+        <div class="detail-row" *ngIf="requestId">
+          <span class="detail-label">Request ID:</span>
+          <span class="detail-value">{{ requestId }}</span>
+        </div>
+        <div class="detail-row" *ngIf="userEmail">
+          <span class="detail-label">Email:</span>
+          <span class="detail-value">{{ userEmail }}</span>
+        </div>
+        <div class="detail-row" *ngIf="count">
+          <span class="detail-label">Quantity:</span>
+          <span class="detail-value">{{ count }}</span>
+        </div>
+      </div>
+      <p>
+        A confirmation email has been sent to your email address. Please check
+        your inbox to approve the purchase.
+      </p>
+    </div>
+    <div class="button-container">
+      <button (click)="mode = 'normal'" class="btn btn-primary">
+        View Purchase Requests
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- License Success Mode -->
+<div *ngIf="mode === 'license-success'" class="license-success-page">
+  <div class="success-container">
+    <div class="success-icon">
+      <i class="material-icons">check_circle</i>
+    </div>
+    <h1>License Request Sent!</h1>
+    <div class="message-container">
+      <p class="lead">
+        Your Google Workspace license request has been sent for approval.
+      </p>
+      <div class="details-card">
+        <div class="detail-row" *ngIf="requestId">
+          <span class="detail-label">Request ID:</span>
+          <span class="detail-value">{{ requestId }}</span>
+        </div>
+        <div class="detail-row" *ngIf="licenseType">
+          <span class="detail-label">License Type:</span>
+          <span class="detail-value">{{ licenseType }}</span>
+        </div>
+        <div class="detail-row" *ngIf="count">
+          <span class="detail-label">Number of Licenses:</span>
+          <span class="detail-value">{{ count }}</span>
+        </div>
+        <div class="detail-row" *ngIf="domain">
+          <span class="detail-label">Domain:</span>
+          <span class="detail-value">{{ domain }}</span>
+        </div>
+        <div class="detail-row" *ngIf="userEmail">
+          <span class="detail-label">Requested By:</span>
+          <span class="detail-value">{{ userEmail }}</span>
+        </div>
+      </div>
+      <p>
+        A confirmation email has been sent to approve this request. Please check
+        your inbox.
+      </p>
+      <p class="note">
+        The license will be added to your Google Workspace account after
+        approval.
+      </p>
+    </div>
+    <div class="button-container">
+      <button (click)="mode = 'normal'" class="btn btn-primary">
+        View Purchase Requests
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Purchase Error Mode -->
+<div *ngIf="mode === 'purchase-error'" class="error-page">
+  <div class="error-container">
+    <div class="error-icon">
+      <span class="material-icons">error</span>
+    </div>
+    <h2>Purchase Request Error</h2>
+    <p class="error-message">
+      We encountered an error while processing your purchase request.
+    </p>
+    <div class="error-details">
+      <p *ngIf="requestId"><strong>Request ID:</strong> {{ requestId }}</p>
+      <p>
+        <strong>Error:</strong>
+        {{ errorMessage || "An unexpected error occurred" }}
+      </p>
+      <p class="error-help">
+        Please try again or contact support if this issue persists.
+      </p>
+    </div>
+    <div class="button-container">
+      <a href="/" class="btn btn-primary">Return to Dashboard</a>
+      <a routerLink="/purchase-requests" class="btn btn-secondary">Try Again</a>
+    </div>
+  </div>
+</div>
+
+<!-- License Error Mode -->
+<div *ngIf="mode === 'license-error'" class="error-page">
+  <div class="error-container">
+    <div class="error-icon">
+      <span class="material-icons">error</span>
+    </div>
+    <h2>License Request Error</h2>
+    <p class="error-message">
+      We encountered an error while processing your license request.
+    </p>
+    <div class="error-details">
+      <p *ngIf="requestId"><strong>Request ID:</strong> {{ requestId }}</p>
+      <p>
+        <strong>Error:</strong>
+        {{ errorMessage || "An unexpected error occurred" }}
+      </p>
+      <p class="error-help">
+        Please try again or contact support if this issue persists.
+      </p>
+    </div>
+    <div class="button-container">
+      <a href="/" class="btn btn-primary">Return to Dashboard</a>
+      <a routerLink="/purchase-requests" class="btn btn-secondary">Try Again</a>
+    </div>
+  </div>
+</div>
+
+<!-- Normal Mode: Regular purchase requests UI -->
+<div *ngIf="mode === 'normal'" class="purchase-requests-page">
+  <!-- Header Section -->
+  <div class="header-section">
+    <h1>License & Credits Management</h1>
+    <div class="company-info" *ngIf="userInfo">
+      <span
+        ><strong>Company:</strong> {{ userInfo?.company || "MyCLOUDMEN" }}</span
+      >
+    </div>
+  </div>
+
+  <!-- Loading state -->
+  <div class="loading-container" *ngIf="isLoading">
+    <div class="spinner"></div>
+    <p>Loading company subscription information...</p>
+  </div>
+
+  <!-- Error state -->
+  <div class="error-container" *ngIf="loadingError">
+    <div class="error-icon">
+      <span class="material-icons">error_outline</span>
+    </div>
+    <p>
+      Sorry, we couldn't load your license information at this time. Please try
+      again later.
+    </p>
+    <button class="btn btn-primary" (click)="ngOnInit()">Retry</button>
+  </div>
+
+  <div class="content-container" *ngIf="!isLoading && !loadingError">
+    <!-- Google Workspace Licenses Section -->
+    <section class="google-workspace-section card">
+      <div class="section-header">
+        <h2>
+          <span class="material-icons">business</span>
+          Google Workspace Licenses
+        </h2>
+        <p class="section-description">
+          Manage your Google Workspace licenses for your organization
+        </p>
+      </div>
+
+      <!-- Current Google Workspace Licenses -->
+      <div class="licenses-container">
+        <!-- Business Starter -->
+        <div
+          class="license-card"
+          [class.has-licenses]="hasLicenseType('Business Starter')"
+        >
+          <div class="license-header">
+            <h3>Business Starter</h3>
+            <div class="license-price">$7 USD per user/month</div>
+          </div>
+
+          <div class="license-features">
+            <ul>
+              <li>30 GB combined storage per user</li>
+              <li>
+                Business email: you{{ "@"
+                }}{{
+                  userInfo?.domain || userInfo?.primaryDomain || "example.com"
+                }}
+              </li>
+              <li>AI assistant Gemini in Gmail</li>
+              <li>Video meetings with up to 100 participants</li>
+            </ul>
+          </div>
+
+          <div class="license-count">
+            <span class="count-label">Current Licenses:</span>
+            <span class="count-value">{{
+              getLicenseCount("Business Starter")
+            }}</span>
+          </div>
+
+          <div class="license-actions">
+            <button
+              class="btn btn-primary"
+              (click)="openLicensePurchaseModal('Business Starter')"
+            >
+              <span class="material-icons">add</span>
+              Add Licenses
+            </button>
+          </div>
+        </div>
+
+        <!-- Business Standard -->
+        <div
+          class="license-card highlight-card"
+          [class.has-licenses]="hasLicenseType('Business Standard')"
+        >
+          <div class="popular-tag">Most Popular</div>
+          <div class="license-header">
+            <h3>Business Standard</h3>
+            <div class="license-price">$14 USD per user/month</div>
+          </div>
+
+          <div class="license-features">
+            <ul>
+              <li>2 TB combined storage per user</li>
+              <li>
+                Business email: you{{ "@"
+                }}{{
+                  userInfo?.domain || userInfo?.primaryDomain || "example.com"
+                }}
+              </li>
+              <li>AI assistant Gemini in Gmail, Docs and Meet</li>
+              <li>Video meetings with 150 participants</li>
+              <li>E-signatures in Documents and PDFs</li>
+            </ul>
+          </div>
+
+          <div class="license-count">
+            <span class="count-label">Current Licenses:</span>
+            <span class="count-value">{{
+              getLicenseCount("Business Standard")
+            }}</span>
+          </div>
+
+          <div class="license-actions">
+            <button
+              class="btn btn-primary"
+              (click)="openLicensePurchaseModal('Business Standard')"
+            >
+              <span class="material-icons">add</span>
+              Add Licenses
+            </button>
+          </div>
+        </div>
+
+        <!-- Business Plus -->
+        <div
+          class="license-card"
+          [class.has-licenses]="hasLicenseType('Business Plus')"
+        >
+          <div class="license-header">
+            <h3>Business Plus</h3>
+            <div class="license-price">$22 USD per user/month</div>
+          </div>
+
+          <div class="license-features">
+            <ul>
+              <li>5 TB combined storage per user</li>
+              <li>
+                Business email: you{{ "@"
+                }}{{
+                  userInfo?.domain || userInfo?.primaryDomain || "example.com"
+                }}
+              </li>
+              <li>Enhanced security and management features</li>
+              <li>Video meetings with 500 participants</li>
+              <li>Advanced endpoint management</li>
+            </ul>
+          </div>
+
+          <div class="license-count">
+            <span class="count-label">Current Licenses:</span>
+            <span class="count-value">{{
+              getLicenseCount("Business Plus")
+            }}</span>
+          </div>
+
+          <div class="license-actions">
+            <button
+              class="btn btn-primary"
+              (click)="openLicensePurchaseModal('Business Plus')"
+            >
+              <span class="material-icons">add</span>
+              Add Licenses
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Signature Satori Credits Section -->
+    <section class="credits-section card">
+      <div class="section-header">
+        <h2>
+          <span class="material-icons">verified</span>
+          Signature Satori Credits
+        </h2>
+        <p class="section-description">
+          Manage your Signature Satori credits for document processing
+        </p>
+      </div>
+
+      <div class="credits-container">
+        <div class="credits-info">
+          <div class="credits-balance">
+            <div class="balance-label">Current Balance:</div>
+            <div class="balance-value">{{ creditBalance }} credits</div>
+          </div>
+          <div class="credits-description">
+            <p>
+              Signature Satori credits are used for automated document
+              processing.
+            </p>
+            <p>
+              One credit is consumed for each document processed. Purchase
+              credits in bulk at $0.50 per credit.
+            </p>
+          </div>
+        </div>
+
+        <div class="credits-actions">
+          <button class="btn btn-primary" (click)="openCreditsPurchaseModal()">
+            <span class="material-icons">add</span>
+            Purchase Credits
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Recent Purchase Requests Section -->
+    <section class="purchase-requests-section card">
+      <div class="section-header">
+        <div class="header-with-actions">
+          <h2>
+            <span class="material-icons">receipt_long</span>
+            Recent Purchase Requests
+          </h2>
+          <button
+            class="btn btn-icon"
+            title="Refresh"
+            (click)="refreshPurchaseRequests()"
+          >
+            <span class="material-icons">refresh</span>
+          </button>
+        </div>
+        <p class="section-description">
+          Track the status of your recent purchase requests
+        </p>
+      </div>
+
+      <div class="table-container">
+        <table class="requests-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Quantity</th>
+              <th>Cost</th>
+              <th>Request Date</th>
+              <th>Confirmation Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let request of pendingRequests">
+              <td>{{ request.type }}</td>
+              <td>{{ request.quantity }}</td>
+              <td>{{ request.cost | currency }}</td>
+              <td>{{ request.requestDate }}</td>
+              <td>
+                <span
+                  class="badge"
+                  [ngClass]="getStatusBadgeClass(request.status)"
+                >
+                  {{ request.status }}
+                </span>
+              </td>
+            </tr>
+            <tr *ngIf="pendingRequests.length === 0">
+              <td colspan="5" class="empty-state">
+                No purchase requests found. Add licenses or credits to get
+                started.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- License Purchase Modal -->
+  <div class="modal-overlay" *ngIf="showLicenseModal" (click)="closeModals()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Purchase Google Workspace Licenses</h3>
+        <button class="close-button" (click)="closeModals()">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="license-type-display">
+          <h4>{{ selectedLicenseType }}</h4>
+          <div class="license-price">
+            {{ getLicensePrice(selectedLicenseType) }} per user/month
+          </div>
+        </div>
+
+        <div class="form-control">
+          <label for="licenseQuantity">Number of licenses to purchase:</label>
+          <input
+            type="number"
+            id="licenseQuantity"
+            [(ngModel)]="purchaseLicenseQuantity"
+            min="1"
+            max="100"
+            step="1"
+          />
+        </div>
+
+        <div class="cost-summary">
+          <div class="summary-row">
+            <span class="label">License type:</span>
+            <span class="value">{{ selectedLicenseType }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Price per license:</span>
+            <span class="value">{{
+              getLicensePrice(selectedLicenseType)
+            }}</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Quantity:</span>
+            <span class="value">{{ purchaseLicenseQuantity }} license(s)</span>
+          </div>
+          <div class="summary-row total">
+            <span class="label">Monthly cost:</span>
+            <span class="value">${{ calculateLicenseCost() }}</span>
+          </div>
+          <div class="summary-row total-year">
+            <span class="label">Yearly cost:</span>
+            <span class="value">${{ calculateLicenseCost() * 12 }}</span>
+          </div>
+        </div>
+
+        <div class="approval-notice">
+          <span class="material-icons">info</span>
+          <span>A confirmation email will be sent directly to you.</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn" (click)="closeModals()">Cancel</button>
+        <button class="btn btn-primary" (click)="purchaseLicenses()">
+          Submit License Request
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Credits Purchase Modal -->
+  <div class="modal-overlay" *ngIf="showCreditsModal" (click)="closeModals()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>Purchase Signature Satori Credits</h3>
+        <button class="close-button" (click)="closeModals()">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <p>Add Signature Satori credits to your account at $0.50 per credit.</p>
+
+        <div class="form-control">
+          <label for="creditsQuantity">Number of credits to purchase:</label>
+          <input
+            type="number"
+            id="creditsQuantity"
+            [(ngModel)]="purchaseQuantity"
+            min="100"
+            max="10000"
+            step="100"
+          />
+        </div>
+
+        <div class="cost-summary">
+          <div class="summary-row">
+            <span class="label">Unit price:</span>
+            <span class="value">$0.50/credit</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Quantity:</span>
+            <span class="value">{{ purchaseQuantity }} credits</span>
+          </div>
+          <div class="summary-row total">
+            <span class="label">Total cost:</span>
+            <span class="value">${{ calculateCreditsCost() }}</span>
+          </div>
+        </div>
+
+        <div class="approval-notice">
+          <span class="material-icons">info</span>
+          <span>A confirmation email will be sent directly to you.</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn" (click)="closeModals()">Cancel</button>
+        <button class="btn btn-primary" (click)="purchaseCredits()">
+          Submit Purchase Request
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Custom Toast Notification -->
+<div
+  class="custom-toast"
+  *ngIf="showNotification"
+  [ngClass]="{
+    'toast-success': notificationType === 'success',
+    'toast-error': notificationType === 'error'
+  }"
+>
+  <div class="toast-content">
+    <span class="material-icons">
+      {{ notificationType === "success" ? "check_circle" : "error" }}
+    </span>
+    <span class="toast-message">{{ notificationMessage }}</span>
+  </div>
+</div>
+
+<!-- Add styles for loading/error pages -->
+<style>
+  .confirm-page,
+  .error-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 80vh;
+    padding: 2rem;
+  }
+
+  .confirm-container,
+  .error-container {
+    text-align: center;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    padding: 2rem;
+    max-width: 600px;
+    width: 100%;
+  }
+
+  .spinner-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top-color: #2c3e50;
+    animation: spin 1s linear infinite;
+  }
+
+  .spinner-text {
+    margin-top: 0.75rem;
+    color: #2c3e50;
+    font-size: 0.9rem;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .error-icon {
+    margin: 0 auto 1.5rem;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: rgba(231, 76, 60, 0.1);
+    color: #e74c3c;
+  }
+
+  .error-icon .material-icons {
+    font-size: 2.5rem;
+  }
+
+  .confirm-details,
+  .error-details {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+    text-align: left;
+  }
+
+  .error-message {
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .error-help {
+    background-color: rgba(231, 76, 60, 0.1);
+    border-left: 3px solid #e74c3c;
+    padding: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  .button-container {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 2rem;
+  }
+
+  .btn-primary {
+    background-color: #2c3e50;
+    color: white;
+    border: none;
+    padding: 0.7rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .btn-primary:hover {
+    background-color: #1e2b38;
+  }
+
+  .btn-secondary {
+    background-color: #ecf0f1;
+    color: #2c3e50;
+    border: 1px solid #bdc3c7;
+    padding: 0.7rem 1.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+  }
+
+  .btn-secondary:hover {
+    background-color: #e2e6ea;
+  }
+</style>

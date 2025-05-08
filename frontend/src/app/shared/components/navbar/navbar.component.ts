@@ -43,11 +43,11 @@ export class NavbarComponent implements OnInit, OnDestroy {
   companyAdminNavItems = [
     { label: 'User management', route: '/company-admin/users', icon: 'people' },
     { label: 'Invoice management', route: '/company-admin/invoices', icon: 'receipt' },
-    { label: 'Requests', route: '/company-admin/requests', icon: 'assignment' }
+    { label: 'Purchase Requests', route: '/purchase-requests', icon: 'shopping_cart' }
   ];
   
   companyUserNavItems = [
-    { label: 'Requests', route: '/company-user/requests', icon: 'assignment' }
+    { label: 'Purchase Requests', route: '/purchase-requests', icon: 'shopping_cart' }
   ];
   
   navItems: any[] = [];

@@ -6,6 +6,9 @@ import { authGuard } from './core/auth/auth.guard';
 import { roleGuard } from './core/auth/role.guard';
 import { StatusGuard } from './core/auth/status.guard';
 
+// Import the PurchaseRequestsComponent directly here
+import { PurchaseRequestsComponent } from './features/shared/purchase-requests/purchase-requests.component';
+
 export const routes: Routes = [
   {
     path: '',
@@ -22,45 +25,55 @@ export const routes: Routes = [
         path: 'system-admin/companies',
         canActivate: [roleGuard],
         data: { requiredRoles: ['SYSTEM_ADMIN'] },
-        loadComponent: () => import('./features/system-admin/companies/companies.component').then(c => c.CompaniesComponent)
+        loadComponent: () => import('./features/system-admin/companies/companies.component')
+          .then(m => m.CompaniesComponent)
       },
       {
         path: 'system-admin/companies/:id',
         canActivate: [roleGuard],
         data: { requiredRoles: ['SYSTEM_ADMIN'] },
-        loadComponent: () => import('./features/system-admin/companies/company-detail/company-detail.component').then(c => c.CompanyDetailComponent)
+        loadComponent: () => import('./features/system-admin/companies/company-detail/company-detail.component')
+          .then(m => m.CompanyDetailComponent)
       },
       {
         path: 'system-admin/auth-logs',
         canActivate: [roleGuard],
         data: { requiredRoles: ['SYSTEM_ADMIN'] },
-        loadComponent: () => import('./features/system-admin/auth-logs/auth-logs.component').then(c => c.AuthLogsComponent)
+        loadComponent: () => import('./features/system-admin/auth-logs/auth-logs.component')
+          .then(m => m.AuthLogsComponent)
       },
       // Company Admin routes
       {
         path: 'company-admin/users',
         canActivate: [roleGuard],
         data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN'] },
-        loadComponent: () => import('./features/company-admin/users/users.component').then(c => c.UsersComponent)
+        loadComponent: () => import('./features/company-admin/users/users.component')
+          .then(m => m.UsersComponent)
       },
       {
         path: 'company-admin/invoices',
         canActivate: [roleGuard],
         data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN'] },
-        loadComponent: () => import('./features/company-admin/invoices/invoices.component').then(c => c.InvoicesComponent)
+        loadComponent: () => import('./features/company-admin/invoices/invoices.component')
+          .then(m => m.InvoicesComponent)
       },
+      // Redirects for old routes
       {
         path: 'company-admin/requests',
-        canActivate: [roleGuard],
-        data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN'] },
-        loadComponent: () => import('./features/company-admin/requests/requests.component').then(c => c.RequestsComponent)
+        redirectTo: 'purchase-requests',
+        pathMatch: 'full'
       },
-      // Company User routes
       {
         path: 'company-user/requests',
+        redirectTo: 'purchase-requests',
+        pathMatch: 'full'
+      },
+      // Shared routes
+      {
+        path: 'purchase-requests',
+        component: PurchaseRequestsComponent,
         canActivate: [roleGuard],
-        data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN', 'COMPANY_USER'] },
-        loadComponent: () => import('./features/company-user/requests/requests.component').then(c => c.RequestsComponent)
+        data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN', 'COMPANY_USER'] }
       }
     ]
   },
@@ -82,6 +95,48 @@ export const routes: Routes = [
         loadComponent: () => import('./core/auth/loading/loading.component').then(c => c.LoadingComponent)
       }
     ]
+  },
+  // Purchase handling routes (used in email links)
+  {
+    path: 'purchase/accept',
+    component: PurchaseRequestsComponent,
+    data: { mode: 'accept-purchase' }
+  },
+  // New purchase flow routes
+  {
+    path: 'confirm-purchase',
+    component: PurchaseRequestsComponent,
+    data: { mode: 'confirm' }
+  },
+  {
+    path: 'approve-license',
+    component: PurchaseRequestsComponent,
+    data: { mode: 'approve-license' }
+  },
+  {
+    path: 'purchase-success',
+    component: PurchaseRequestsComponent,
+    data: { mode: 'purchase-success' }
+  },
+  {
+    path: 'purchase-error',
+    component: PurchaseRequestsComponent,
+    data: { mode: 'purchase-error' }
+  },
+  {
+    path: 'license-success',
+    component: PurchaseRequestsComponent,
+    data: { mode: 'license-success' }
+  },
+  {
+    path: 'license-request-success',
+    component: PurchaseRequestsComponent,
+    data: { mode: 'license-success' }
+  },
+  {
+    path: 'license-request-error',
+    component: PurchaseRequestsComponent,
+    data: { mode: 'license-error' }
   },
   // Standalone routes outside of any layout
   {

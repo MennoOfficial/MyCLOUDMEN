@@ -46,11 +46,19 @@ export class StatusCheckerService implements OnDestroy {
       return;
     }
     
-    
     // Try to find user by email first
     this.http.get<UserDTO>(`${this.environmentService.apiUrl}/users/email/${encodeURIComponent(currentUser.email)}`)
+      .pipe(
+        catchError(error => {
+          console.error('Error fetching user by email:', error);
+          return of(null);
+        })
+      )
       .subscribe({
         next: (user) => {
+          if (!user) {
+            return; // Skip if no user is found
+          }
           
           // Check user status
           if (user.status !== 'ACTIVATED') {
@@ -78,17 +86,30 @@ export class StatusCheckerService implements OnDestroy {
       return;
     }
     
-    
-    // Fetch all companies and check for domain match
-    this.http.get<any>(`${this.environmentService.apiUrl}/companies`)
+    // Try fetching companies from domain-specific endpoint first
+    this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies/domain/${encodeURIComponent(emailDomain)}`)
       .pipe(
         catchError(error => {
-          console.error('Error fetching companies:', error);
-          return of(null);
+          console.error(`Error fetching company by domain ${emailDomain}:`, error);
+          
+          // Fallback to fetching all companies
+          return this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies`)
+            .pipe(
+              catchError(allError => {
+                console.error('Error fetching all companies:', allError);
+                return of(null);
+              })
+            );
         })
       )
       .subscribe(response => {
-        // Check if response is an array or has a companies property
+        // If domain-specific endpoint returned a single company
+        if (response && !Array.isArray(response)) {
+          this.handleCompanyResponse(response);
+          return;
+        }
+        
+        // Handle array response
         const companies = Array.isArray(response) ? response : response?.companies;
         
         if (!companies || companies.length === 0) {
@@ -99,18 +120,20 @@ export class StatusCheckerService implements OnDestroy {
         const matchingCompany = this.findCompanyByDomain(companies, emailDomain);
         
         if (matchingCompany) {
-          
-          // Get company status - either direct or from customFields
-          const status = matchingCompany.status || 
-            (matchingCompany.customFields && matchingCompany.customFields.status);
-          
-          // Redirect if company is not active
-          if (status === 'DEACTIVATED' || status === 'SUSPENDED') {
-            this.handleCompanyStatus(status, matchingCompany.name || 'Your company');
-          }
-          
+          this.handleCompanyResponse(matchingCompany);
         }
       });
+  }
+  
+  private handleCompanyResponse(company: any): void {
+    // Get company status - either direct or from customFields
+    const status = company.status || 
+      (company.customFields && company.customFields.status);
+    
+    // Redirect if company is not active
+    if (status === 'DEACTIVATED' || status === 'SUSPENDED') {
+      this.handleCompanyStatus(status, company.name || 'Your company');
+    }
   }
   
   // Helper method to find a company by domain
