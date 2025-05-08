@@ -4,11 +4,11 @@ import com.cloudmen.backend.api.controllers.PurchaseController;
 import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceLicenseRequestDTO;
 import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceSubscriptionDTO;
 import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceSubscriptionListResponseDTO;
+import com.cloudmen.backend.domain.models.PurchaseRequest;
 import com.cloudmen.backend.services.AuthenticationLogService;
 import com.cloudmen.backend.services.GoogleWorkspaceService;
 import com.cloudmen.backend.services.PurchaseEmailService;
-import com.cloudmen.backend.services.SignatureSatoriService;
-import com.cloudmen.backend.services.UserService;
+import com.cloudmen.backend.services.PurchaseRequestService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -23,203 +23,248 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.Optional;
 
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Integration tests for Google Workspace license purchase functionality.
+ * Integration tests for Google Workspace license purchase functionality
+ * in PurchaseController
  */
 @WebMvcTest(PurchaseController.class)
 @ActiveProfiles("test")
-@DisplayName("Google Workspace License Purchase Integration Tests")
+@DisplayName("Google Workspace Purchase Integration Tests")
 public class GoogleWorkspacePurchaseIntegrationTest {
 
-    @TestConfiguration
-    static class GoogleWorkspacePurchaseTestConfig {
-        @Bean
-        public AuthenticationLogService authenticationLogService() {
-            return mock(AuthenticationLogService.class);
+        @TestConfiguration
+        static class PurchaseControllerTestConfig {
+                @Bean
+                public PurchaseController purchaseController(
+                                PurchaseEmailService emailService,
+                                GoogleWorkspaceService googleWorkspaceService,
+                                PurchaseRequestService purchaseRequestService) {
+                        return new PurchaseController(emailService, googleWorkspaceService, purchaseRequestService);
+                }
+
+                @Bean
+                public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+                        http
+                                        .csrf(AbstractHttpConfigurer::disable)
+                                        .authorizeHttpRequests(auth -> auth
+                                                        .anyRequest().permitAll());
+                        return http.build();
+                }
+
+                @Bean
+                public WebClient webClient() {
+                        return mock(WebClient.class);
+                }
+
+                @Bean
+                public AuthenticationLogService authenticationLogService() {
+                        return mock(AuthenticationLogService.class);
+                }
         }
 
-        @Bean
-        public PurchaseController purchaseController(PurchaseEmailService emailService,
-                GoogleWorkspaceService googleWorkspaceService) {
-            PurchaseController controller = new PurchaseController(emailService, googleWorkspaceService);
+        @Autowired
+        private MockMvc mockMvc;
 
-            // Pre-populate the pendingGoogleWorkspaceRequests map with a test request
-            try {
-                // Create a test request
+        @MockBean
+        private PurchaseEmailService emailService;
+
+        @MockBean
+        private GoogleWorkspaceService googleWorkspaceService;
+
+        @MockBean
+        private PurchaseRequestService purchaseRequestService;
+
+        @Autowired
+        private ObjectMapper objectMapper;
+
+        @Test
+        @DisplayName("POST /api/purchase/google-workspace/request should create request when valid")
+        public void requestGoogleWorkspaceLicenses_shouldCreateRequestWhenValid() throws Exception {
+                // Arrange
+                String customerId = "cust-123";
+                String userEmail = "user@example.com";
+                String requestId = "license-req-123";
+
                 GoogleWorkspaceLicenseRequestDTO request = new GoogleWorkspaceLicenseRequestDTO();
                 request.setCount(5);
-                request.setLicenseType("Business Standard");
+                request.setLicenseType("Google Workspace Business Standard");
+                request.setDomain("example.com");
+                request.setCost(70.0); // $14 per license * 5 licenses
+
+                // Mock purchase request creation
+                PurchaseRequest mockPurchaseRequest = new PurchaseRequest(requestId, userEmail);
+                mockPurchaseRequest.setType("licenses");
+                mockPurchaseRequest.setLicenseType(request.getLicenseType());
+                mockPurchaseRequest.setQuantity(request.getCount());
+                mockPurchaseRequest.setDomain(request.getDomain());
+                mockPurchaseRequest.setCost(request.getCost());
+                mockPurchaseRequest.setStatus("PENDING");
+                mockPurchaseRequest.setRequestDate(new Date());
+
+                // Mock service response for checking existing licenses
+                GoogleWorkspaceSubscriptionListResponseDTO subscriptions = new GoogleWorkspaceSubscriptionListResponseDTO();
+                GoogleWorkspaceSubscriptionDTO subscription = new GoogleWorkspaceSubscriptionDTO();
+                subscription.setSkuName("Google Workspace Business Standard");
+                subscription.setStatus("ACTIVE");
+                subscription.setTotalLicenses(10);
+                subscriptions.setSubscriptions(Arrays.asList(subscription));
+
+                when(googleWorkspaceService.getCustomerSubscriptions(eq(customerId)))
+                                .thenReturn(Mono.just(subscriptions));
+
+                when(googleWorkspaceService.hasMatchingLicense(any(), eq(request.getLicenseType())))
+                                .thenReturn(true);
+
+                when(purchaseRequestService.createGoogleWorkspaceLicenseRequest(eq(userEmail),
+                                any(GoogleWorkspaceLicenseRequestDTO.class)))
+                                .thenReturn(mockPurchaseRequest);
+
+                doNothing().when(emailService).sendGoogleWorkspaceLicenseRequest(
+                                anyString(), anyString(), anyInt(), anyString(), anyString(), anyString(), anyString(),
+                                anyDouble(), anyString());
+
+                // Act & Assert
+                mockMvc.perform(post("/api/purchase/google-workspace/request")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .param("userEmail", userEmail)
+                                .param("customerId", customerId)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.status").value("PENDING"))
+                                .andExpect(jsonPath("$.count").value(5))
+                                .andExpect(jsonPath("$.licenseType").value("Google Workspace Business Standard"))
+                                .andExpect(jsonPath("$.domain").value("example.com"))
+                                .andExpect(jsonPath("$.requestId").value(requestId));
+
+                // Verify service calls
+                verify(googleWorkspaceService).getCustomerSubscriptions(customerId);
+                verify(googleWorkspaceService).hasMatchingLicense(any(), eq(request.getLicenseType()));
+                verify(purchaseRequestService).createGoogleWorkspaceLicenseRequest(eq(userEmail),
+                                any(GoogleWorkspaceLicenseRequestDTO.class));
+                verify(emailService).sendGoogleWorkspaceLicenseRequest(
+                                eq(userEmail), eq(requestId), eq(5), eq(request.getLicenseType()),
+                                eq(request.getDomain()), eq(userEmail), eq(customerId),
+                                eq(request.getCost()), anyString());
+        }
+
+        @Test
+        @DisplayName("POST /api/purchase/google-workspace/request should reject when no existing license")
+        public void requestGoogleWorkspaceLicenses_shouldRejectWhenNoExistingLicense() throws Exception {
+                // Arrange
+                String customerId = "cust-123";
+                String userEmail = "user@example.com";
+                GoogleWorkspaceLicenseRequestDTO request = new GoogleWorkspaceLicenseRequestDTO();
+                request.setCount(5);
+                request.setLicenseType("Google Workspace Business Plus");
                 request.setDomain("example.com");
 
-                // Get access to the private field
-                Field pendingRequestsField = PurchaseController.class
-                        .getDeclaredField("pendingGoogleWorkspaceRequests");
-                pendingRequestsField.setAccessible(true);
-                ConcurrentHashMap<String, GoogleWorkspaceLicenseRequestDTO> pendingRequests = (ConcurrentHashMap<String, GoogleWorkspaceLicenseRequestDTO>) pendingRequestsField
-                        .get(controller);
-                pendingRequests.put("gw-req-123", request);
+                // Mock service response with no matching license
+                GoogleWorkspaceSubscriptionListResponseDTO subscriptions = new GoogleWorkspaceSubscriptionListResponseDTO();
+                GoogleWorkspaceSubscriptionDTO subscription = new GoogleWorkspaceSubscriptionDTO();
+                subscription.setSkuName("Google Workspace Business Standard"); // Different type
+                subscription.setStatus("ACTIVE");
+                subscription.setTotalLicenses(10);
+                subscriptions.setSubscriptions(Arrays.asList(subscription));
 
-                // Set the user email mapping
-                Field requestUsersField = PurchaseController.class.getDeclaredField("requestUsers");
-                requestUsersField.setAccessible(true);
-                ConcurrentHashMap<String, String> requestUsers = (ConcurrentHashMap<String, String>) requestUsersField
-                        .get(controller);
-                requestUsers.put("gw-req-123", "user@example.com");
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to prepare test controller", e);
-            }
+                when(googleWorkspaceService.getCustomerSubscriptions(eq(customerId)))
+                                .thenReturn(Mono.just(subscriptions));
 
-            return controller;
+                when(googleWorkspaceService.hasMatchingLicense(any(), eq(request.getLicenseType())))
+                                .thenReturn(false); // No matching license
+
+                // Act & Assert
+                mockMvc.perform(post("/api/purchase/google-workspace/request")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .param("userEmail", userEmail)
+                                .param("customerId", customerId)
+                                .content(objectMapper.writeValueAsString(request)))
+                                .andExpect(status().isBadRequest())
+                                .andExpect(jsonPath("$.status").value("REJECTED"))
+                                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString(
+                                                "Company must have at least one license of type Google Workspace Business Plus")));
+
+                // Verify service calls
+                verify(googleWorkspaceService).getCustomerSubscriptions(customerId);
+                verify(googleWorkspaceService).hasMatchingLicense(any(), eq(request.getLicenseType()));
+                // Should not attempt to create a purchase request
+                verify(purchaseRequestService, never()).createGoogleWorkspaceLicenseRequest(anyString(), any());
         }
 
-        @Bean
-        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-            http
-                    .csrf(AbstractHttpConfigurer::disable)
-                    .authorizeHttpRequests(auth -> auth
-                            .anyRequest().permitAll());
-            return http.build();
+        @Test
+        @DisplayName("GET /api/purchase/google-workspace/accept should accept when request exists")
+        public void acceptGoogleWorkspaceLicenseRequest_shouldAcceptWhenRequestExists() throws Exception {
+                // Arrange
+                String requestId = "license-req-456";
+                String userEmail = "user@example.com";
+
+                // Create a mock license purchase request
+                PurchaseRequest mockRequest = new PurchaseRequest(requestId, userEmail);
+                mockRequest.setType("licenses");
+                mockRequest.setStatus("PENDING");
+                mockRequest.setQuantity(5);
+                mockRequest.setLicenseType("Google Workspace Business Standard");
+                mockRequest.setDomain("example.com");
+                mockRequest.setCost(70.0);
+
+                // Mock service behavior
+                when(purchaseRequestService.getPurchaseRequestById(requestId)).thenReturn(Optional.of(mockRequest));
+                when(purchaseRequestService.savePurchaseRequest(any(PurchaseRequest.class))).thenReturn(mockRequest);
+                doNothing().when(emailService).sendGoogleWorkspaceLicenseConfirmation(
+                                anyString(), anyInt(), anyString(), anyString(), anyDouble());
+
+                // Act & Assert
+                mockMvc.perform(get("/api/purchase/google-workspace/accept")
+                                .param("requestId", requestId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("success"))
+                                .andExpect(jsonPath("$.requestId").value(requestId))
+                                .andExpect(jsonPath("$.email").value(userEmail))
+                                .andExpect(jsonPath("$.licenseType").value("Google Workspace Business Standard"))
+                                .andExpect(jsonPath("$.count").value(5))
+                                .andExpect(jsonPath("$.domain").value("example.com"))
+                                .andExpect(jsonPath("$.type").value("license"));
+
+                // Verify service calls
+                verify(purchaseRequestService).getPurchaseRequestById(requestId);
+                verify(purchaseRequestService).savePurchaseRequest(any(PurchaseRequest.class));
+                verify(emailService).sendGoogleWorkspaceLicenseConfirmation(
+                                eq(userEmail), eq(5), eq("Google Workspace Business Standard"),
+                                eq("example.com"), eq(70.0));
         }
-    }
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Test
+        @DisplayName("GET /api/purchase/google-workspace/accept should return error when request doesn't exist")
+        public void acceptGoogleWorkspaceLicenseRequest_shouldReturnErrorWhenRequestDoesntExist() throws Exception {
+                // Arrange
+                String requestId = "non-existent-request";
 
-    @MockBean
-    private SignatureSatoriService signatureSatoriService;
+                // Mock service behavior
+                when(purchaseRequestService.getPurchaseRequestById(requestId)).thenReturn(Optional.empty());
 
-    @MockBean
-    private UserService userService;
+                // Act & Assert
+                mockMvc.perform(get("/api/purchase/google-workspace/accept")
+                                .param("requestId", requestId))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.status").value("error"))
+                                .andExpect(jsonPath("$.message").value("License request not found"))
+                                .andExpect(jsonPath("$.requestId").value(requestId));
 
-    @MockBean
-    private PurchaseEmailService emailService;
-
-    @MockBean
-    private GoogleWorkspaceService googleWorkspaceService;
-
-    @Autowired
-    private ObjectMapper objectMapper;
-
-    @Test
-    @DisplayName("POST /api/purchase/google-workspace/request should create request and return 201 when licenses exist")
-    public void requestGoogleWorkspaceLicenses_shouldCreateRequestAndReturn201_whenLicensesExist() throws Exception {
-        // Arrange
-        GoogleWorkspaceLicenseRequestDTO request = new GoogleWorkspaceLicenseRequestDTO();
-        request.setCount(10);
-        request.setLicenseType("Business Standard");
-        // Let domain be detected from email
-
-        // Mock existing subscription response
-        GoogleWorkspaceSubscriptionListResponseDTO subscriptionList = new GoogleWorkspaceSubscriptionListResponseDTO();
-        List<GoogleWorkspaceSubscriptionDTO> subscriptions = new ArrayList<>();
-
-        GoogleWorkspaceSubscriptionDTO subscription = new GoogleWorkspaceSubscriptionDTO();
-        subscription.setSkuName("Business Standard");
-        subscription.setStatus("ACTIVE");
-        subscription.setTotalLicenses(5);
-        subscriptions.add(subscription);
-
-        subscriptionList.setSubscriptions(subscriptions);
-
-        when(googleWorkspaceService.getCustomerSubscriptions(anyString()))
-                .thenReturn(Mono.just(subscriptionList));
-
-        doNothing().when(emailService).sendGoogleWorkspaceLicenseRequest(
-                anyString(), anyString(), anyInt(), anyString(), anyString(), anyString(), anyString());
-
-        // Act & Assert
-        mockMvc.perform(post("/api/purchase/google-workspace/request")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-                .param("userEmail", "user@example.com")
-                .param("customerId", "cust-123"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.count").value(10))
-                .andExpect(jsonPath("$.licenseType").value("Business Standard"))
-                .andExpect(jsonPath("$.domain").value("example.com")) // Extracted from email
-                .andExpect(jsonPath("$.status").value("PENDING"))
-                .andExpect(jsonPath("$.requestId").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("POST /api/purchase/google-workspace/request should return 400 when no licenses exist")
-    public void requestGoogleWorkspaceLicenses_shouldReturn400_whenNoLicensesExist() throws Exception {
-        // Arrange
-        GoogleWorkspaceLicenseRequestDTO request = new GoogleWorkspaceLicenseRequestDTO();
-        request.setCount(10);
-        request.setLicenseType("Business Standard");
-
-        // Mock empty subscription response
-        GoogleWorkspaceSubscriptionListResponseDTO subscriptionList = new GoogleWorkspaceSubscriptionListResponseDTO();
-        subscriptionList.setSubscriptions(new ArrayList<>());
-
-        when(googleWorkspaceService.getCustomerSubscriptions(anyString()))
-                .thenReturn(Mono.just(subscriptionList));
-
-        // Act & Assert
-        mockMvc.perform(post("/api/purchase/google-workspace/request")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request))
-                .param("userEmail", "user@example.com")
-                .param("customerId", "cust-123"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value("REJECTED"))
-                .andExpect(jsonPath("$.message")
-                        .value(org.hamcrest.Matchers.containsString("must have at least one license")));
-    }
-
-    @Test
-    @DisplayName("GET /api/purchase/google-workspace/accept should accept request and return 200")
-    public void acceptGoogleWorkspaceLicense_shouldAcceptRequestAndReturn200() throws Exception {
-        // Arrange
-        String requestId = "gw-req-123";
-
-        doNothing().when(emailService).sendGoogleWorkspaceLicenseConfirmation(
-                anyString(), anyInt(), anyString(), anyString());
-
-        // Act & Assert
-        mockMvc.perform(get("/api/purchase/google-workspace/accept")
-                .param("requestId", requestId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.count").value(5))
-                .andExpect(jsonPath("$.licenseType").value("Business Standard"))
-                .andExpect(jsonPath("$.domain").value("example.com"))
-                .andExpect(jsonPath("$.status").value("APPROVED"))
-                .andExpect(jsonPath("$.requestId").value(requestId));
-    }
-
-    @Test
-    @DisplayName("GET /api/purchase/google-workspace/accept should return 404 when request doesn't exist")
-    public void acceptGoogleWorkspaceLicense_shouldReturn404WhenRequestDoesntExist() throws Exception {
-        // Arrange
-        String requestId = "non-existent-request";
-
-        // Act & Assert
-        mockMvc.perform(get("/api/purchase/google-workspace/accept")
-                .param("requestId", requestId))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value("NOT_FOUND"))
-                .andExpect(jsonPath("$.message")
-                        .value(org.hamcrest.Matchers.containsString("not found or already processed")))
-                .andExpect(jsonPath("$.requestId").value(requestId));
-    }
+                // Verify service call
+                verify(purchaseRequestService).getPurchaseRequestById(requestId);
+                verify(emailService, never()).sendGoogleWorkspaceLicenseConfirmation(
+                                anyString(), anyInt(), anyString(), anyString(), anyDouble());
+        }
 }

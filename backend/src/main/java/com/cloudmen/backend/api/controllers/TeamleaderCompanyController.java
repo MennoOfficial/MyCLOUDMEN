@@ -26,7 +26,7 @@ import java.util.stream.StreamSupport;
  * Controller for exposing Teamleader company data
  */
 @RestController
-@RequestMapping("/api/teamleader/companies")
+@RequestMapping({ "/api/teamleader/companies" })
 public class TeamleaderCompanyController {
 
     private static final Logger logger = LoggerFactory.getLogger(TeamleaderCompanyController.class);
@@ -384,6 +384,87 @@ public class TeamleaderCompanyController {
             response.put("error", true);
             response.put("message", "Error retrieving companies: " + e.getMessage());
             return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * Find a company by domain
+     * 
+     * @param domain The domain to search for
+     * @return The company with the specified domain, if found
+     */
+    @GetMapping("/domain/{domain}")
+    public ResponseEntity<Object> getCompanyByDomain(@PathVariable("domain") String domain) {
+        logger.info("Finding company by domain: {}", domain);
+
+        try {
+            // Search all companies
+            List<TeamleaderCompany> allCompanies = companyService.getAllCompanies();
+
+            // Find first company where any of the emails contains the domain
+            Optional<TeamleaderCompany> companyWithDomain = allCompanies.stream()
+                    .filter(company -> {
+                        // Check all contact info for email type
+                        boolean emailMatch = false;
+                        if (company.getContactInfo() != null) {
+                            emailMatch = company.getContactInfo().stream()
+                                    .filter(contact -> "email".equalsIgnoreCase(contact.getType()))
+                                    .anyMatch(contact -> contact.getValue() != null &&
+                                            contact.getValue().contains("@" + domain));
+                        }
+
+                        // Check if we already found a match with email contacts
+                        if (emailMatch) {
+                            return true;
+                        }
+
+                        // Check website domain
+                        if (company.getWebsite() != null &&
+                                company.getWebsite().contains(domain)) {
+                            return true;
+                        }
+
+                        // Check custom emails if they exist
+                        if (company.getCustomFields() != null &&
+                                company.getCustomFields().containsKey("contacts")) {
+                            // Parse contacts as JSON array if possible
+                            try {
+                                JsonNode contacts = objectMapper.readTree(
+                                        company.getCustomFields().get("contacts").toString());
+
+                                if (contacts.isArray()) {
+                                    for (JsonNode contact : contacts) {
+                                        if (contact.has("email") &&
+                                                contact.get("email").asText().contains("@" + domain)) {
+                                            return true;
+                                        }
+                                    }
+                                }
+                            } catch (Exception e) {
+                                // Silently handle parsing errors
+                                logger.debug("Error parsing contacts for company {}: {}",
+                                        company.getName(), e.getMessage());
+                            }
+                        }
+
+                        return false;
+                    })
+                    .findFirst();
+
+            if (companyWithDomain.isPresent()) {
+                return ResponseEntity.ok(CompanyDetailDTO.fromEntity(companyWithDomain.get()));
+            } else {
+                Map<String, Object> response = new HashMap<>();
+                response.put("error", true);
+                response.put("message", "No company found with domain: " + domain);
+                return ResponseEntity.ok(response);
+            }
+        } catch (Exception e) {
+            logger.error("Error finding company by domain", e);
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", true);
+            response.put("message", "Error finding company by domain: " + e.getMessage());
+            return ResponseEntity.ok(response);
         }
     }
 
