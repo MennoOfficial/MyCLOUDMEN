@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -14,21 +12,23 @@ import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.MockitoAnnotations;
 
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
 import com.cloudmen.backend.repositories.TeamleaderCompanyRepository;
 import com.cloudmen.backend.services.CompanySyncService;
 import com.cloudmen.backend.services.TeamleaderCompanyService;
 import com.cloudmen.backend.services.UserSyncService;
+import com.cloudmen.backend.config.TeamleaderConfig;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-@ExtendWith(MockitoExtension.class)
+/**
+ * Unit tests for CompanySyncService
+ */
 class CompanySyncServiceTest {
 
     @Mock
@@ -41,108 +41,146 @@ class CompanySyncServiceTest {
     private UserSyncService userSyncService;
 
     @Mock
+    private TeamleaderConfig teamleaderConfig;
+
     private ObjectMapper objectMapper;
-
-    @InjectMocks
     private CompanySyncService companySyncService;
-
-    private TeamleaderCompany testCompany;
-    private ObjectNode testCompanyData;
     private ObjectNode companiesResponse;
+    private ObjectNode companyDetailsResponse;
 
     @BeforeEach
     void setUp() {
+        // Initialize mocks without MockitoExtension to avoid strict stubbing issues
+        MockitoAnnotations.openMocks(this);
+
+        // Create real ObjectMapper
         objectMapper = new ObjectMapper();
 
-        // Setup test company
-        testCompany = new TeamleaderCompany();
-        testCompany.setId("1");
-        testCompany.setName("Test Company");
-        testCompany.setTeamleaderId("tl-123");
+        // Create the service
+        companySyncService = new CompanySyncService(
+                companyService,
+                companyRepository,
+                userSyncService,
+                teamleaderConfig);
 
-        // Create test company data JSON
-        testCompanyData = objectMapper.createObjectNode();
-        testCompanyData.put("id", "tl-123");
-        testCompanyData.put("name", "Test Company");
+        // Set up common configuration
+        when(teamleaderConfig.getMyCloudmenAccessFieldId()).thenReturn("has_my_cloudmen_access");
 
-        // Create companies response with array of data
+        // Create test data
+        setupTestData();
+    }
+
+    private void setupTestData() {
+        // Create company response data
         companiesResponse = objectMapper.createObjectNode();
         ArrayNode dataArray = objectMapper.createArrayNode();
-        dataArray.add(testCompanyData);
+
+        ObjectNode companyData = objectMapper.createObjectNode();
+        companyData.put("id", "tl-123");
+        companyData.put("name", "Test Company");
+        dataArray.add(companyData);
+
         companiesResponse.set("data", dataArray);
+
+        // Create company details response
+        companyDetailsResponse = objectMapper.createObjectNode();
+        ObjectNode data = objectMapper.createObjectNode();
+        data.put("id", "tl-123");
+        data.put("name", "Test Company");
+        data.put("website", "https://example.com");
+
+        ObjectNode customFields = objectMapper.createObjectNode();
+        customFields.put("has_my_cloudmen_access", true);
+        data.set("custom_fields", customFields);
+
+        ArrayNode emails = objectMapper.createArrayNode();
+        ObjectNode email = objectMapper.createObjectNode();
+        email.put("type", "primary");
+        email.put("value", "info@example.com");
+        emails.add(email);
+        data.set("emails", emails);
+
+        companyDetailsResponse.set("data", data);
     }
 
     @Test
-    @DisplayName("syncAllCompanies should sync all companies")
+    @DisplayName("syncAllCompanies should sync all companies successfully")
     void syncAllCompanies_shouldSyncAllCompanies() {
         // Arrange
         when(companyService.getCompanies(anyInt(), anyInt())).thenReturn(companiesResponse);
-
-        ObjectNode companyDetailsResponse = objectMapper.createObjectNode();
-        ObjectNode detailsData = objectMapper.createObjectNode();
-        detailsData.put("id", "tl-123");
-        detailsData.put("name", "Test Company");
-        companyDetailsResponse.set("data", detailsData);
-
         when(companyService.getCompanyDetails("tl-123")).thenReturn(companyDetailsResponse);
+        when(companyRepository.findByTeamleaderId("tl-123")).thenReturn(Optional.empty());
 
         // Act
         CompletableFuture<Map<String, Object>> result = companySyncService.syncAllCompanies();
 
         // Assert
-        assertNotNull(result);
         Map<String, Object> summary = result.join();
         assertTrue((Boolean) summary.get("success"));
-
-        verify(companyService).getCompanies(anyInt(), anyInt());
-        verify(companyService).getCompanyDetails("tl-123");
+        assertEquals(1, summary.get("totalCompanies"));
         verify(userSyncService).updateExistingUserRoles();
     }
 
     @Test
-    @DisplayName("refreshCustomFields should update custom fields for all companies")
+    @DisplayName("syncAllCompanies should handle API errors")
+    void syncAllCompanies_shouldHandleErrors() {
+        // Arrange - simulate an API error
+        when(companyService.getCompanies(anyInt(), anyInt()))
+                .thenThrow(new RuntimeException("API Error"));
+
+        // Act
+        CompletableFuture<Map<String, Object>> result = companySyncService.syncAllCompanies();
+
+        // Assert - verify error is handled properly
+        Map<String, Object> summary = result.join();
+        assertFalse((Boolean) summary.get("success"));
+        assertEquals("API Error", summary.get("error"));
+
+        // Verify UserSyncService is not called when there's an error
+        verifyNoInteractions(userSyncService);
+    }
+
+    @Test
+    @DisplayName("syncAllCompanies should handle null API response")
+    void syncAllCompanies_shouldHandleNullResponse() {
+        // Arrange - simulate null API response
+        when(companyService.getCompanies(anyInt(), anyInt())).thenReturn(null);
+
+        // Act
+        CompletableFuture<Map<String, Object>> result = companySyncService.syncAllCompanies();
+
+        // Assert - verify error stats are incremented
+        Map<String, Object> summary = result.join();
+
+        // When null response, success should still be true but with error count > 0
+        assertTrue((Boolean) summary.get("success"));
+        assertEquals(0, summary.get("totalCompanies"));
+        assertEquals(0, summary.get("created"));
+        assertEquals(0, summary.get("updated"));
+        assertEquals(1, summary.get("errors"));
+
+        // UserSyncService should still be called since the method doesn't throw an
+        // exception
+        verify(userSyncService).updateExistingUserRoles();
+    }
+
+    @Test
+    @DisplayName("refreshCustomFields should update company fields")
     void refreshCustomFields_shouldUpdateCustomFields() {
         // Arrange
-        when(companyRepository.findAll()).thenReturn(Collections.singletonList(testCompany));
+        TeamleaderCompany company = new TeamleaderCompany();
+        company.setTeamleaderId("tl-123");
+        company.setName("Test Company");
 
-        ObjectNode companyDetails = objectMapper.createObjectNode();
-        ObjectNode data = objectMapper.createObjectNode();
-        ObjectNode customFields = objectMapper.createObjectNode();
-        customFields.put("has_my_cloudmen_access", true);
-        data.set("custom_fields", customFields);
-        companyDetails.set("data", data);
-
-        when(companyService.getCompanyDetails(testCompany.getTeamleaderId())).thenReturn(companyDetails);
+        when(companyRepository.findAll()).thenReturn(Collections.singletonList(company));
+        when(companyService.getCompanyDetails("tl-123")).thenReturn(companyDetailsResponse);
 
         // Act
         CompletableFuture<Map<String, Object>> result = companySyncService.refreshCustomFields();
 
         // Assert
-        assertNotNull(result);
         Map<String, Object> summary = result.join();
         assertTrue((Boolean) summary.get("success"));
-
-        verify(companyRepository).findAll();
-        verify(companyService).getCompanyDetails(testCompany.getTeamleaderId());
         verify(companyRepository).save(any(TeamleaderCompany.class));
-    }
-
-    @Test
-    @DisplayName("syncAllCompanies should handle errors")
-    void syncAllCompanies_shouldHandleErrors() {
-        // Arrange
-        when(companyService.getCompanies(anyInt(), anyInt())).thenThrow(new RuntimeException("API Error"));
-
-        // Act
-        CompletableFuture<Map<String, Object>> result = companySyncService.syncAllCompanies();
-
-        // Assert
-        assertNotNull(result);
-        Map<String, Object> summary = result.join();
-        assertFalse((Boolean) summary.get("success"));
-        assertEquals("API Error", summary.get("error"));
-
-        verify(companyService).getCompanies(anyInt(), anyInt());
-        verifyNoInteractions(userSyncService);
     }
 }

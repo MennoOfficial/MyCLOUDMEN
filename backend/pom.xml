@@ -86,6 +86,13 @@
             <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
         
+        <!-- Reactor test -->
+        <dependency>
+            <groupId>io.projectreactor</groupId>
+            <artifactId>reactor-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        
         <!-- JJWT for JWT creation -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

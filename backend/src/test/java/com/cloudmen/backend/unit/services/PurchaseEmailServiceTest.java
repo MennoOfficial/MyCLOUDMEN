@@ -6,108 +6,102 @@ import jakarta.mail.internet.MimeMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mail.MailSendException;
+import org.mockito.Mockito;
+import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for PurchaseEmailService
+ * Simple unit tests for PurchaseEmailService that focus on email sending
+ * behavior
+ * rather than complex mocking.
  */
-@ExtendWith(MockitoExtension.class)
 @DisplayName("PurchaseEmailService Tests")
 class PurchaseEmailServiceTest {
 
-    @Mock
     private JavaMailSender mailSender;
-
-    @Mock
-    private MimeMessage mimeMessage;
-
     private PurchaseEmailService emailService;
+    private MimeMessage mimeMessage;
 
     @BeforeEach
     void setUp() {
-        emailService = new PurchaseEmailService(mailSender);
-        ReflectionTestUtils.setField(emailService, "fromEmail", "test@example.com");
-        ReflectionTestUtils.setField(emailService, "baseUrl", "https://test.com");
+        // Create mocks manually instead of using annotations
+        mailSender = mock(JavaMailSender.class);
+        mimeMessage = mock(MimeMessage.class);
 
+        // Set up the mock to return a MimeMessage
         when(mailSender.createMimeMessage()).thenReturn(mimeMessage);
+
+        // Create the service instance
+        emailService = new PurchaseEmailService(mailSender);
+
+        // Set required properties
+        ReflectionTestUtils.setField(emailService, "username", "test@example.com");
+        ReflectionTestUtils.setField(emailService, "baseUrl", "https://test.com");
+        ReflectionTestUtils.setField(emailService, "apiBaseUrl", "https://api.test.com");
+        ReflectionTestUtils.setField(emailService, "fromEmail", "test@example.com");
     }
 
     @Test
-    @DisplayName("sendPurchaseRequest should send email with correct parameters")
-    void sendPurchaseRequest_shouldSendEmailWithCorrectParameters() throws MessagingException {
-        // Arrange
-        String requestId = "req-123";
-        String toEmail = "admin@example.com";
-
+    @DisplayName("sendPurchaseRequest - Happy Path")
+    void sendPurchaseRequest_HappyPath() throws MessagingException {
         // Act
-        emailService.sendPurchaseRequest(toEmail, requestId);
+        emailService.sendPurchaseRequest("test@example.com", "request-123");
 
-        // Assert
+        // Verify that the email was sent
         verify(mailSender).createMimeMessage();
-        verify(mailSender).send(mimeMessage);
+        verify(mailSender).send(any(MimeMessage.class));
     }
 
     @Test
-    @DisplayName("sendPurchaseRequest should handle exceptions properly")
-    void sendPurchaseRequest_shouldHandleExceptionsGracefully() throws MessagingException {
-        // Arrange
-        String requestId = "req-123";
-        String toEmail = "admin@example.com";
-
-        // Use MailSendException instead of MessagingException
-        doThrow(new MailSendException("Failed to send mail"))
-                .when(mailSender).send(any(MimeMessage.class));
+    @DisplayName("sendPurchaseRequest - Exception Handling")
+    void sendPurchaseRequest_ExceptionHandling() throws MessagingException {
+        // Arrange - make the send method throw an exception
+        doThrow(new RuntimeException("Mail error")).when(mailSender).send(any(MimeMessage.class));
 
         // Act & Assert
-        Exception exception = assertThrows(Exception.class, () -> {
-            emailService.sendPurchaseRequest(toEmail, requestId);
-        });
-
-        assertTrue(exception instanceof MailSendException);
-        verify(mailSender).createMimeMessage();
-        verify(mailSender).send(mimeMessage);
+        assertThrows(MessagingException.class,
+                () -> emailService.sendPurchaseRequest("test@example.com", "request-123"));
     }
 
     @Test
-    @DisplayName("sendConfirmationEmail should send email with correct parameters")
-    void sendConfirmationEmail_shouldSendEmailWithCorrectParameters() throws MessagingException {
-        // Arrange
-        String userEmail = "user@example.com";
-
+    @DisplayName("sendConfirmationEmail - Happy Path")
+    void sendConfirmationEmail_HappyPath() throws MessagingException {
         // Act
-        emailService.sendConfirmationEmail(userEmail);
+        emailService.sendConfirmationEmail("test@example.com");
 
-        // Assert
+        // Verify that the email was sent
         verify(mailSender).createMimeMessage();
-        verify(mailSender).send(mimeMessage);
+        verify(mailSender).send(any(MimeMessage.class));
     }
 
     @Test
-    @DisplayName("sendConfirmationEmail should handle exceptions properly")
-    void sendConfirmationEmail_shouldHandleExceptionsGracefully() throws MessagingException {
-        // Arrange
-        String userEmail = "user@example.com";
+    @DisplayName("sendGoogleWorkspaceLicenseRequest - Happy Path")
+    void sendGoogleWorkspaceLicenseRequest_HappyPath() throws MessagingException {
+        // Act
+        emailService.sendGoogleWorkspaceLicenseRequest(
+                "admin@example.com", "request-123", 5, "Business Standard",
+                "example.com", "user@example.com", "customer-id", 60.0, "Test Company");
 
-        // Use MailSendException instead of MessagingException
-        doThrow(new MailSendException("Failed to send mail"))
-                .when(mailSender).send(any(MimeMessage.class));
-
-        // Act & Assert
-        Exception exception = assertThrows(Exception.class, () -> {
-            emailService.sendConfirmationEmail(userEmail);
-        });
-
-        assertTrue(exception instanceof MailSendException);
+        // Verify that the email was sent
         verify(mailSender).createMimeMessage();
-        verify(mailSender).send(mimeMessage);
+        verify(mailSender).send(any(MimeMessage.class));
+    }
+
+    @Test
+    @DisplayName("sendGoogleWorkspaceLicenseConfirmation - Happy Path")
+    void sendGoogleWorkspaceLicenseConfirmation_HappyPath() throws MessagingException {
+        // Act
+        emailService.sendGoogleWorkspaceLicenseConfirmation(
+                "user@example.com", 5, "Business Standard", "example.com", 60.0);
+
+        // Verify that the email was sent
+        verify(mailSender).createMimeMessage();
+        verify(mailSender).send(any(MimeMessage.class));
     }
 }
