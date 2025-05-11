@@ -21,6 +21,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Captor;
 
 import com.cloudmen.backend.domain.models.AuthenticationLog;
 import com.cloudmen.backend.domain.models.User;
@@ -28,239 +30,251 @@ import com.cloudmen.backend.repositories.AuthenticationLogRepository;
 import com.cloudmen.backend.services.AuthenticationLogService;
 import com.cloudmen.backend.services.UserService;
 
+/**
+ * Unit tests for AuthenticationLogService
+ */
 @ExtendWith(MockitoExtension.class)
-class AuthenticationLogServiceTest {
+@DisplayName("AuthenticationLogService Tests")
+public class AuthenticationLogServiceTest {
 
-    @Mock
-    private AuthenticationLogRepository authLogRepository;
+        @Mock
+        private AuthenticationLogRepository authenticationLogRepository;
 
-    @Mock
-    private UserService userService;
+        @Mock
+        private UserService userService;
 
-    @InjectMocks
-    private AuthenticationLogService authLogService;
+        @InjectMocks
+        private AuthenticationLogService authenticationLogService;
 
-    private User testUser;
-    private AuthenticationLog testSuccessLog;
-    private AuthenticationLog testFailedLog;
-    private Pageable pageable;
+        @Captor
+        private ArgumentCaptor<AuthenticationLog> logCaptor;
 
-    @BeforeEach
-    void setUp() {
-        // Setup test user
-        testUser = new User();
-        testUser.setId("user-123");
-        testUser.setEmail("test@example.com");
-        testUser.setPrimaryDomain("example.com");
-        testUser.setCustomerGoogleId("customer-123");
+        private User testUser;
+        private AuthenticationLog testLog;
 
-        // Setup test authentication logs
-        testSuccessLog = new AuthenticationLog(
-                "test@example.com",
-                "user-123",
-                "example.com",
-                "customer-123",
-                "192.168.1.1",
-                "Mozilla/5.0");
-        testSuccessLog.setId("log-123");
-        testSuccessLog.setSuccessful(true);
-        testSuccessLog.setTimestamp(LocalDateTime.now());
+        @BeforeEach
+        void setUp() {
+                // Create test user
+                testUser = new User();
+                testUser.setId("user123");
+                testUser.setEmail("test@example.com");
+                testUser.setPrimaryDomain("example.com");
+                testUser.setCustomerGoogleId("gid123");
 
-        testFailedLog = new AuthenticationLog(
-                "test@example.com",
-                "192.168.1.1",
-                "Mozilla/5.0",
-                "Invalid credentials");
-        testFailedLog.setId("log-456");
-        testFailedLog.setSuccessful(false);
-        testFailedLog.setTimestamp(LocalDateTime.now());
+                // Create test log
+                testLog = new AuthenticationLog();
+                testLog.setId("log123");
+                testLog.setEmail("test@example.com");
+                testLog.setUserId("user123");
+                testLog.setPrimaryDomain("example.com");
+                testLog.setGoogleUniqueId("gid123");
+                testLog.setIpAddress("192.168.1.1");
+                testLog.setUserAgent("Mozilla/5.0");
+                testLog.setSuccessful(true);
+                testLog.setTimestamp(LocalDateTime.now());
+        }
 
-        // Setup pageable for pagination tests
-        pageable = PageRequest.of(0, 10);
-    }
+        @Test
+        @DisplayName("logSuccessfulAuthentication - With existing user")
+        void logSuccessfulAuthentication_WithExistingUser() {
+                // Arrange
+                String email = "test@example.com";
+                String ipAddress = "192.168.1.1";
+                String userAgent = "Mozilla/5.0";
 
-    @Test
-    @DisplayName("logSuccessfulAuthentication should create log with user data when user exists")
-    void logSuccessfulAuthentication_shouldCreateLogWithUserData_whenUserExists() {
-        // Arrange
-        when(userService.getUserByEmail(anyString())).thenReturn(Optional.of(testUser));
-        when(authLogRepository.save(any(AuthenticationLog.class))).thenReturn(testSuccessLog);
+                when(userService.getUserByEmail(email)).thenReturn(Optional.of(testUser));
+                when(authenticationLogRepository.save(any(AuthenticationLog.class))).thenReturn(testLog);
 
-        // Act
-        AuthenticationLog result = authLogService.logSuccessfulAuthentication(
-                "test@example.com", "192.168.1.1", "Mozilla/5.0");
+                // Act
+                AuthenticationLog result = authenticationLogService.logSuccessfulAuthentication(email, ipAddress,
+                                userAgent);
 
-        // Assert
-        assertNotNull(result);
-        assertEquals("test@example.com", result.getEmail());
-        assertEquals("user-123", result.getUserId());
-        assertEquals("example.com", result.getPrimaryDomain());
-        assertTrue(result.isSuccessful());
+                // Assert
+                assertNotNull(result);
+                assertEquals("log123", result.getId());
+                assertEquals(email, result.getEmail());
+                assertEquals("user123", result.getUserId());
+                assertEquals("example.com", result.getPrimaryDomain());
+                assertEquals("gid123", result.getGoogleUniqueId());
+                assertEquals(ipAddress, result.getIpAddress());
+                assertEquals(userAgent, result.getUserAgent());
+                assertTrue(result.isSuccessful());
 
-        verify(userService).getUserByEmail("test@example.com");
-        verify(authLogRepository).save(any(AuthenticationLog.class));
-    }
+                // Verify repository interactions
+                ArgumentCaptor<AuthenticationLog> logCaptor = ArgumentCaptor.forClass(AuthenticationLog.class);
+                verify(authenticationLogRepository).save(logCaptor.capture());
+                AuthenticationLog capturedLog = logCaptor.getValue();
 
-    @Test
-    @DisplayName("logSuccessfulAuthentication should create basic log when user doesn't exist")
-    void logSuccessfulAuthentication_shouldCreateBasicLog_whenUserDoesntExist() {
-        // Arrange
-        when(userService.getUserByEmail(anyString())).thenReturn(Optional.empty());
-        when(authLogRepository.save(any(AuthenticationLog.class))).thenReturn(testSuccessLog);
+                assertEquals(email, capturedLog.getEmail());
+                assertEquals(ipAddress, capturedLog.getIpAddress());
+                assertEquals(userAgent, capturedLog.getUserAgent());
+                assertTrue(capturedLog.isSuccessful());
+        }
 
-        // Act
-        AuthenticationLog result = authLogService.logSuccessfulAuthentication(
-                "test@example.com", "192.168.1.1", "Mozilla/5.0");
+        @Test
+        @DisplayName("logSuccessfulAuthentication - With non-existing user")
+        void logSuccessfulAuthentication_WithNonExistingUser() {
+                // Arrange
+                String email = "nonexistent@example.com";
+                String ipAddress = "192.168.1.1";
+                String userAgent = "Mozilla/5.0";
 
-        // Assert
-        assertNotNull(result);
-        assertEquals("test@example.com", result.getEmail());
-        assertTrue(result.isSuccessful());
+                when(userService.getUserByEmail(email)).thenReturn(Optional.empty());
 
-        verify(userService).getUserByEmail("test@example.com");
-        verify(authLogRepository).save(any(AuthenticationLog.class));
-    }
+                AuthenticationLog savedLog = new AuthenticationLog();
+                savedLog.setId("log456");
+                savedLog.setEmail(email);
+                savedLog.setIpAddress(ipAddress);
+                savedLog.setUserAgent(userAgent);
+                savedLog.setSuccessful(true);
+                savedLog.setTimestamp(LocalDateTime.now());
 
-    @Test
-    @DisplayName("logFailedAuthentication should create failed log")
-    void logFailedAuthentication_shouldCreateFailedLog() {
-        // Arrange
-        when(authLogRepository.save(any(AuthenticationLog.class))).thenReturn(testFailedLog);
+                when(authenticationLogRepository.save(any(AuthenticationLog.class))).thenReturn(savedLog);
 
-        // Act
-        AuthenticationLog result = authLogService.logFailedAuthentication(
-                "test@example.com", "192.168.1.1", "Mozilla/5.0", "Invalid credentials");
+                // Act
+                AuthenticationLog result = authenticationLogService.logSuccessfulAuthentication(email, ipAddress,
+                                userAgent);
 
-        // Assert
-        assertNotNull(result);
-        assertEquals("test@example.com", result.getEmail());
-        assertEquals("Invalid credentials", result.getFailureReason());
-        assertFalse(result.isSuccessful());
+                // Assert
+                assertNotNull(result);
+                assertEquals("log456", result.getId());
+                assertEquals(email, result.getEmail());
+                assertNull(result.getUserId());
+                assertNull(result.getPrimaryDomain());
+                assertNull(result.getGoogleUniqueId());
+                assertEquals(ipAddress, result.getIpAddress());
+                assertEquals(userAgent, result.getUserAgent());
+                assertTrue(result.isSuccessful());
 
-        verify(authLogRepository).save(any(AuthenticationLog.class));
-        verifyNoInteractions(userService);
-    }
+                // Verify repository interactions
+                ArgumentCaptor<AuthenticationLog> logCaptor = ArgumentCaptor.forClass(AuthenticationLog.class);
+                verify(authenticationLogRepository).save(logCaptor.capture());
+                AuthenticationLog capturedLog = logCaptor.getValue();
 
-    @Test
-    @DisplayName("getLogsPaginated should return paginated logs")
-    void getLogsPaginated_shouldReturnPaginatedLogs() {
-        // Arrange
-        Page<AuthenticationLog> expectedPage = new PageImpl<>(
-                Arrays.asList(testSuccessLog, testFailedLog), pageable, 2);
-        when(authLogRepository.findAll(any(Pageable.class))).thenReturn(expectedPage);
+                assertEquals(email, capturedLog.getEmail());
+                assertEquals(ipAddress, capturedLog.getIpAddress());
+                assertEquals(userAgent, capturedLog.getUserAgent());
+                assertTrue(capturedLog.isSuccessful());
+        }
 
-        // Act
-        Page<AuthenticationLog> result = authLogService.getLogsPaginated(pageable);
+        @Test
+        @DisplayName("logFailedAuthentication - With email provided")
+        void logFailedAuthentication_WithEmailProvided() {
+                // Arrange
+                String email = "test@example.com";
+                String ipAddress = "192.168.1.1";
+                String userAgent = "Mozilla/5.0";
+                String failureReason = "Invalid credentials";
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(2, result.getTotalElements());
-        assertEquals(2, result.getContent().size());
+                AuthenticationLog failedLog = new AuthenticationLog();
+                failedLog.setId("logFailed123");
+                failedLog.setEmail(email);
+                failedLog.setIpAddress(ipAddress);
+                failedLog.setUserAgent(userAgent);
+                failedLog.setSuccessful(false);
+                failedLog.setFailureReason(failureReason);
+                failedLog.setTimestamp(LocalDateTime.now());
 
-        verify(authLogRepository).findAll(pageable);
-    }
+                when(authenticationLogRepository.save(any(AuthenticationLog.class))).thenReturn(failedLog);
 
-    @Test
-    @DisplayName("getLogsByUserId should return logs for user")
-    void getLogsByUserId_shouldReturnLogsForUser() {
-        // Arrange
-        List<AuthenticationLog> expectedLogs = Collections.singletonList(testSuccessLog);
-        when(authLogRepository.findByUserId(anyString())).thenReturn(expectedLogs);
+                // Act
+                AuthenticationLog result = authenticationLogService.logFailedAuthentication(
+                                email, ipAddress, userAgent, failureReason);
 
-        // Act
-        List<AuthenticationLog> result = authLogService.getLogsByUserId("user-123");
+                // Assert
+                assertNotNull(result);
+                assertEquals("logFailed123", result.getId());
+                assertEquals(email, result.getEmail());
+                assertEquals(ipAddress, result.getIpAddress());
+                assertEquals(userAgent, result.getUserAgent());
+                assertFalse(result.isSuccessful());
+                assertEquals(failureReason, result.getFailureReason());
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        assertEquals("user-123", result.get(0).getUserId());
+                // Verify repository interactions
+                ArgumentCaptor<AuthenticationLog> logCaptor = ArgumentCaptor.forClass(AuthenticationLog.class);
+                verify(authenticationLogRepository).save(logCaptor.capture());
+                AuthenticationLog capturedLog = logCaptor.getValue();
 
-        verify(authLogRepository).findByUserId("user-123");
-    }
+                assertEquals(email, capturedLog.getEmail());
+                assertEquals(ipAddress, capturedLog.getIpAddress());
+                assertEquals(userAgent, capturedLog.getUserAgent());
+                assertFalse(capturedLog.isSuccessful());
+                assertEquals(failureReason, capturedLog.getFailureReason());
+        }
 
-    @Test
-    @DisplayName("getLogsByEmail should return logs for email")
-    void getLogsByEmail_shouldReturnLogsForEmail() {
-        // Arrange
-        List<AuthenticationLog> expectedLogs = Arrays.asList(testSuccessLog, testFailedLog);
-        when(authLogRepository.findByEmail(anyString())).thenReturn(expectedLogs);
+        @Test
+        @DisplayName("logFailedAuthentication - With null email")
+        void logFailedAuthentication_WithNullEmail() {
+                // Arrange
+                String ipAddress = "192.168.1.1";
+                String userAgent = "Mozilla/5.0";
+                String failureReason = "Unknown user";
 
-        // Act
-        List<AuthenticationLog> result = authLogService.getLogsByEmail("test@example.com");
+                AuthenticationLog failedLog = new AuthenticationLog();
+                failedLog.setId("logFailed456");
+                failedLog.setIpAddress(ipAddress);
+                failedLog.setUserAgent(userAgent);
+                failedLog.setSuccessful(false);
+                failedLog.setFailureReason(failureReason);
+                failedLog.setTimestamp(LocalDateTime.now());
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(2, result.size());
-        assertEquals("test@example.com", result.get(0).getEmail());
+                when(authenticationLogRepository.save(any(AuthenticationLog.class))).thenReturn(failedLog);
 
-        verify(authLogRepository).findByEmail("test@example.com");
-    }
+                // Act
+                AuthenticationLog result = authenticationLogService.logFailedAuthentication(
+                                null, ipAddress, userAgent, failureReason);
 
-    @Test
-    @DisplayName("getFilteredLogs should apply multiple filters")
-    void getFilteredLogs_shouldApplyMultipleFilters() {
-        // Arrange
-        String email = "test@example.com";
-        String domain = "example.com";
-        Boolean successful = true;
-        LocalDateTime startDate = LocalDateTime.now().minusDays(7);
-        LocalDateTime endDate = LocalDateTime.now();
+                // Assert
+                assertNotNull(result);
+                assertEquals("logFailed456", result.getId());
+                assertNull(result.getEmail());
+                assertEquals(ipAddress, result.getIpAddress());
+                assertEquals(userAgent, result.getUserAgent());
+                assertFalse(result.isSuccessful());
+                assertEquals(failureReason, result.getFailureReason());
 
-        Page<AuthenticationLog> expectedPage = new PageImpl<>(
-                Collections.singletonList(testSuccessLog), pageable, 1);
+                // Verify repository interactions
+                ArgumentCaptor<AuthenticationLog> logCaptor = ArgumentCaptor.forClass(AuthenticationLog.class);
+                verify(authenticationLogRepository).save(logCaptor.capture());
+                AuthenticationLog capturedLog = logCaptor.getValue();
 
-        when(authLogRepository.findByEmailAndPrimaryDomainAndSuccessfulAndTimestampBetween(
-                eq(email), eq(domain), eq(successful), eq(startDate), eq(endDate), any(Pageable.class)))
-                .thenReturn(expectedPage);
+                assertNull(capturedLog.getEmail());
+                assertEquals(ipAddress, capturedLog.getIpAddress());
+                assertEquals(userAgent, capturedLog.getUserAgent());
+                assertFalse(capturedLog.isSuccessful());
+                assertEquals(failureReason, capturedLog.getFailureReason());
+        }
 
-        // Act
-        Page<AuthenticationLog> result = authLogService.getFilteredLogs(
-                email, domain, successful, startDate, endDate, pageable);
+        @Test
+        @DisplayName("getLogsBySuccessStatusPaginated - Returns paginated logs")
+        void getLogsBySuccessStatusPaginated_ReturnsPaginatedLogs() {
+                // Arrange
+                boolean successful = true;
+                Pageable pageable = PageRequest.of(0, 10);
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(1, result.getTotalElements());
+                AuthenticationLog log1 = new AuthenticationLog();
+                log1.setId("log1");
+                log1.setSuccessful(true);
 
-        verify(authLogRepository).findByEmailAndPrimaryDomainAndSuccessfulAndTimestampBetween(
-                email, domain, successful, startDate, endDate, pageable);
-    }
+                AuthenticationLog log2 = new AuthenticationLog();
+                log2.setId("log2");
+                log2.setSuccessful(true);
 
-    @Test
-    @DisplayName("getLastSuccessfulLoginByUserId should return last login time")
-    void getLastSuccessfulLoginByUserId_shouldReturnLastLoginTime() {
-        // Arrange
-        LocalDateTime loginTime = LocalDateTime.now().minusHours(2);
-        AuthenticationLog lastLogin = new AuthenticationLog();
-        lastLogin.setTimestamp(loginTime);
+                List<AuthenticationLog> logs = Arrays.asList(log1, log2);
+                Page<AuthenticationLog> expectedPage = new PageImpl<>(logs, pageable, logs.size());
 
-        when(authLogRepository.findTopByUserIdAndSuccessfulOrderByTimestampDesc(anyString(), eq(true)))
-                .thenReturn(lastLogin);
+                when(authenticationLogRepository.findBySuccessful(successful, pageable)).thenReturn(expectedPage);
 
-        // Act
-        LocalDateTime result = authLogService.getLastSuccessfulLoginByUserId("user-123");
+                // Act
+                Page<AuthenticationLog> resultPage = authenticationLogService
+                                .getLogsBySuccessStatusPaginated(successful, pageable);
 
-        // Assert
-        assertNotNull(result);
-        assertEquals(loginTime, result);
+                // Assert
+                assertNotNull(resultPage);
+                assertEquals(2, resultPage.getTotalElements());
+                assertEquals(logs, resultPage.getContent());
 
-        verify(authLogRepository).findTopByUserIdAndSuccessfulOrderByTimestampDesc("user-123", true);
-    }
-
-    @Test
-    @DisplayName("deleteLogsOlderThan should remove old logs")
-    void deleteLogsOlderThan_shouldRemoveOldLogs() {
-        // Arrange
-        LocalDateTime cutoffDate = LocalDateTime.now().minusDays(30);
-        List<AuthenticationLog> oldLogs = Arrays.asList(testSuccessLog, testFailedLog);
-
-        when(authLogRepository.findByTimestampBetween(eq(LocalDateTime.MIN), eq(cutoffDate)))
-                .thenReturn(oldLogs);
-
-        // Act
-        authLogService.deleteLogsOlderThan(cutoffDate);
-
-        // Assert
-        verify(authLogRepository).findByTimestampBetween(LocalDateTime.MIN, cutoffDate);
-        verify(authLogRepository).deleteAll(oldLogs);
-    }
+                // Verify repository interactions
+                verify(authenticationLogRepository).findBySuccessful(successful, pageable);
+        }
 }

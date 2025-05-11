@@ -88,31 +88,31 @@ public class PurchaseController {
                 return ResponseEntity.ok(errorResponse);
             }
 
-            PurchaseRequest request = requestOpt.get();
+                PurchaseRequest request = requestOpt.get();
             String userEmail = request.getUserEmail();
-            String type = request.getType();
+                String type = request.getType();
 
             // Check request type and redirect to appropriate handler
-            if ("licenses".equals(type)) {
-                // This is a Google Workspace license request
-                log.info("Redirecting to Google Workspace license acceptance endpoint for request: {}", requestId);
-                return acceptGoogleWorkspaceLicenseRequest(requestId);
-            } else if ("credits".equals(type)) {
-                // This is a Signature Satori credits request
-                return acceptSignatureSatoriCreditsRequest(requestId);
-            } else {
-                // Generic purchase flow for other types
+                if ("licenses".equals(type)) {
+                    // This is a Google Workspace license request
+                    log.info("Redirecting to Google Workspace license acceptance endpoint for request: {}", requestId);
+                    return acceptGoogleWorkspaceLicenseRequest(requestId);
+                } else if ("credits".equals(type)) {
+                    // This is a Signature Satori credits request
+                    return acceptSignatureSatoriCreditsRequest(requestId);
+                } else {
+                    // Generic purchase flow for other types
                 // Update the request status
-                request.setStatus("APPROVED");
+                    request.setStatus("APPROVED");
                 purchaseRequestService.savePurchaseRequest(request);
 
-                // Send confirmation email to the user
-                try {
-                    emailService.sendConfirmationEmail(userEmail);
-                } catch (MessagingException e) {
-                    log.error("Failed to send confirmation email", e);
-                    // Continue processing even if email fails
-                }
+                    // Send confirmation email to the user
+                    try {
+                        emailService.sendConfirmationEmail(userEmail);
+                    } catch (MessagingException e) {
+                        log.error("Failed to send confirmation email", e);
+                        // Continue processing even if email fails
+                    }
 
                 // Return success response
                 Map<String, Object> response = new HashMap<>();
@@ -323,33 +323,33 @@ public class PurchaseController {
             }
 
             // Validate quantity
-            if (quantity == null || quantity < 100) {
-                Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("status", "ERROR");
-                errorResponse.put("message", "Quantity must be at least 100 credits");
-                return ResponseEntity.badRequest().body(errorResponse);
-            }
+        if (quantity == null || quantity < 100) {
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "ERROR");
+            errorResponse.put("message", "Quantity must be at least 100 credits");
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
 
             // Create and save purchase request
             PurchaseRequest purchaseRequest = purchaseRequestService.createSignatureSatoriCreditsRequest(
                     userEmail, quantity, cost);
 
-            // Create response
-            Map<String, Object> response = new HashMap<>();
+        // Create response
+        Map<String, Object> response = new HashMap<>();
             response.put("requestId", purchaseRequest.getId());
-            response.put("quantity", quantity);
-            response.put("cost", cost);
-            response.put("status", "PENDING");
-            response.put("message", "Signature Satori credits request has been submitted and is pending approval");
+        response.put("quantity", quantity);
+        response.put("cost", cost);
+        response.put("status", "PENDING");
+        response.put("message", "Signature Satori credits request has been submitted and is pending approval");
 
-            try {
-                // Send purchase request email to the user
+        try {
+            // Send purchase request email to the user
                 emailService.sendPurchaseRequest(userEmail, purchaseRequest.getId());
-                return ResponseEntity.status(HttpStatus.CREATED).body(response);
-            } catch (MessagingException e) {
-                log.error("Failed to send Signature Satori credits request email", e);
-                response.put("message", "Request created but failed to send notification email");
-                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (MessagingException e) {
+            log.error("Failed to send Signature Satori credits request email", e);
+            response.put("message", "Request created but failed to send notification email");
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
             }
         } catch (Exception e) {
             log.error("Error creating Signature Satori credits request: {}", e.getMessage(), e);
@@ -389,10 +389,10 @@ public class PurchaseController {
             purchaseRequestService.savePurchaseRequest(request);
 
             // Send confirmation email
-            try {
-                emailService.sendConfirmationEmail(userEmail);
-            } catch (MessagingException e) {
-                log.error("Failed to send credits confirmation email", e);
+                try {
+                    emailService.sendConfirmationEmail(userEmail);
+                } catch (MessagingException e) {
+                    log.error("Failed to send credits confirmation email", e);
             }
 
             // Return success response

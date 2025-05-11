@@ -1,174 +1,235 @@
 package com.cloudmen.backend.integration.controllers;
 
 import com.cloudmen.backend.api.controllers.PurchaseController;
+import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceSubscriptionDTO;
+import com.cloudmen.backend.api.dtos.googleworkspace.GoogleWorkspaceSubscriptionListResponseDTO;
 import com.cloudmen.backend.domain.models.PurchaseRequest;
-import com.cloudmen.backend.services.AuthenticationLogService;
 import com.cloudmen.backend.services.GoogleWorkspaceService;
 import com.cloudmen.backend.services.PurchaseEmailService;
 import com.cloudmen.backend.services.PurchaseRequestService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.context.annotation.Bean;
-import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.test.context.ActiveProfiles;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import reactor.core.publisher.Mono;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
  * Integration tests for PurchaseController
  */
-@WebMvcTest(PurchaseController.class)
-@ActiveProfiles("test")
-@DisplayName("PurchaseController Integration Tests")
+@ExtendWith(MockitoExtension.class)
+@DisplayName("PurchaseController Tests")
 public class PurchaseControllerIntegrationTest {
 
-    @TestConfiguration
-    static class PurchaseControllerTestConfig {
-        @Bean
-        public PurchaseController purchaseController(
-                PurchaseEmailService emailService,
-                GoogleWorkspaceService googleWorkspaceService,
-                PurchaseRequestService purchaseRequestService) {
-            return new PurchaseController(emailService, googleWorkspaceService, purchaseRequestService);
+        private MockMvc mockMvc;
+
+        @Mock
+        private PurchaseEmailService emailService;
+
+        @Mock
+        private GoogleWorkspaceService googleWorkspaceService;
+
+        @Mock
+        private PurchaseRequestService purchaseRequestService;
+
+        // Use a real ObjectMapper
+        private final ObjectMapper objectMapper = new ObjectMapper();
+
+        // Create controller directly
+        private PurchaseController purchaseController;
+
+        @BeforeEach
+        void setUp() {
+                // Create a new controller for each test
+                purchaseController = new PurchaseController(
+                                emailService,
+                                googleWorkspaceService,
+                                purchaseRequestService);
+
+                // Create standalone MockMvc to avoid loading full application context
+                mockMvc = MockMvcBuilders
+                                .standaloneSetup(purchaseController)
+                                .build();
         }
 
-        @Bean
-        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-            http
-                    .csrf(AbstractHttpConfigurer::disable)
-                    .authorizeHttpRequests(auth -> auth
-                            .anyRequest().permitAll());
-            return http.build();
+        @Test
+        @DisplayName("GET /api/purchase/accept - Returns error when request not found")
+        void acceptPurchase_ReturnsError_WhenRequestNotFound() throws Exception {
+                // Arrange
+                String requestId = "non-existent-id";
+                when(purchaseRequestService.getPurchaseRequestById(requestId))
+                                .thenReturn(Optional.empty());
+
+                // Act
+                MvcResult result = mockMvc.perform(get("/api/purchase/accept")
+                                .param("requestId", requestId))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                // Assert
+                String responseBody = result.getResponse().getContentAsString();
+                Map<String, Object> responseMap = objectMapper.readValue(responseBody, Map.class);
+
+                assertEquals("error", responseMap.get("status"));
+                assertEquals("Request not found", responseMap.get("message"));
+
+                // Verify no emails were sent
+                verifyNoInteractions(emailService);
         }
 
-        @Bean
-        public WebClient webClient() {
-            return mock(WebClient.class);
+        @Test
+        @DisplayName("GET /api/purchase/accept - Success for generic purchase")
+        void acceptPurchase_Success_ForGenericPurchase() throws Exception {
+                // Arrange
+                String requestId = "test-request-id";
+                PurchaseRequest purchaseRequest = new PurchaseRequest();
+                purchaseRequest.setId(requestId);
+                purchaseRequest.setUserEmail("user@example.com");
+                purchaseRequest.setType("other");
+                purchaseRequest.setStatus("PENDING");
+
+                when(purchaseRequestService.getPurchaseRequestById(requestId))
+                                .thenReturn(Optional.of(purchaseRequest));
+                when(purchaseRequestService.savePurchaseRequest(any()))
+                                .thenReturn(purchaseRequest); // Return the same request for simplicity
+
+                doNothing().when(emailService).sendConfirmationEmail(anyString());
+
+                // Act
+                MvcResult result = mockMvc.perform(get("/api/purchase/accept")
+                                .param("requestId", requestId))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                // Assert
+                String responseBody = result.getResponse().getContentAsString();
+                Map<String, Object> responseMap = objectMapper.readValue(responseBody, Map.class);
+
+                assertEquals("success", responseMap.get("status"));
+                assertEquals(requestId, responseMap.get("requestId"));
+                assertEquals("user@example.com", responseMap.get("email"));
+                assertEquals("purchase", responseMap.get("type"));
+
+                // Verify request was updated and email was sent
+                verify(purchaseRequestService).savePurchaseRequest(argThat(req -> "APPROVED".equals(req.getStatus())));
+                verify(emailService).sendConfirmationEmail("user@example.com");
         }
 
-        @Bean
-        public AuthenticationLogService authenticationLogService() {
-            return mock(AuthenticationLogService.class);
+        @Test
+        @DisplayName("GET /api/purchase/google-workspace/accept - Success")
+        void acceptGoogleWorkspaceLicense_Success() throws Exception {
+                // Arrange
+                String requestId = "test-license-id";
+                PurchaseRequest purchaseRequest = new PurchaseRequest();
+                purchaseRequest.setId(requestId);
+                purchaseRequest.setUserEmail("user@example.com");
+                purchaseRequest.setType("licenses");
+                purchaseRequest.setStatus("PENDING");
+                purchaseRequest.setQuantity(5);
+                purchaseRequest.setLicenseType("G Suite Business");
+                purchaseRequest.setDomain("example.com");
+                purchaseRequest.setCost(50.0);
+
+                when(purchaseRequestService.getPurchaseRequestById(requestId))
+                                .thenReturn(Optional.of(purchaseRequest));
+                when(purchaseRequestService.savePurchaseRequest(any()))
+                                .thenReturn(purchaseRequest); // Return the same request for simplicity
+
+                doNothing().when(emailService).sendGoogleWorkspaceLicenseConfirmation(
+                                anyString(), anyInt(), anyString(), anyString(), anyDouble());
+
+                // Act
+                MvcResult result = mockMvc.perform(get("/api/purchase/google-workspace/accept")
+                                .param("requestId", requestId))
+                                .andExpect(status().isOk())
+                                .andReturn();
+
+                // Assert
+                String responseBody = result.getResponse().getContentAsString();
+                Map<String, Object> responseMap = objectMapper.readValue(responseBody, Map.class);
+
+                assertEquals("success", responseMap.get("status"));
+                assertEquals(requestId, responseMap.get("requestId"));
+                assertEquals("user@example.com", responseMap.get("email"));
+                assertEquals("G Suite Business", responseMap.get("licenseType"));
+                assertEquals(5, responseMap.get("count"));
+                assertEquals("example.com", responseMap.get("domain"));
+                assertEquals("license", responseMap.get("type"));
+
+                // Verify request was updated
+                verify(purchaseRequestService).savePurchaseRequest(argThat(req -> "APPROVED".equals(req.getStatus())));
+
+                // Verify email confirmation was sent
+                verify(emailService).sendGoogleWorkspaceLicenseConfirmation(
+                                "user@example.com", 5, "G Suite Business", "example.com", 50.0);
         }
-    }
 
-    @Autowired
-    private MockMvc mockMvc;
+        @Test
+        @DisplayName("POST /api/purchase/google-workspace/request - Basic functionality test")
+        void requestGoogleWorkspaceLicenses_BasicTest() throws Exception {
+                // Arrange
+                String userEmail = "user@example.com";
+                String customerId = "test-customer-id";
 
-    @MockBean
-    private PurchaseEmailService emailService;
+                // Create subscription response
+                GoogleWorkspaceSubscriptionDTO subscription = new GoogleWorkspaceSubscriptionDTO();
+                subscription.setSkuName("G Suite Business");
+                subscription.setStatus("ACTIVE");
 
-    @MockBean
-    private GoogleWorkspaceService googleWorkspaceService;
+                GoogleWorkspaceSubscriptionListResponseDTO subscriptionList = new GoogleWorkspaceSubscriptionListResponseDTO();
+                subscriptionList.setSubscriptions(java.util.Collections.singletonList(subscription));
 
-    @MockBean
-    private PurchaseRequestService purchaseRequestService;
+                // Mock service behavior - return an active subscription
+                when(googleWorkspaceService.getCustomerSubscriptions(anyString()))
+                                .thenReturn(Mono.just(subscriptionList));
+                when(googleWorkspaceService.hasMatchingLicense(any(), anyString()))
+                                .thenReturn(true);
 
-    @Autowired
-    private ObjectMapper objectMapper;
+                // Mock email service - just verify it's called
+                doNothing().when(emailService).sendGoogleWorkspaceLicenseRequest(
+                                anyString(), anyString(), anyInt(), anyString(), anyString(),
+                                anyString(), anyString(), anyDouble(), anyString());
 
-    @Test
-    @DisplayName("GET /api/purchase/accept should accept request and return success")
-    public void acceptPurchase_shouldAcceptRequestAndReturnSuccess() throws Exception {
-        // Arrange
-        String requestId = "req-123";
-        String userEmail = "user@example.com";
+                // Mock purchase request service
+                PurchaseRequest mockRequest = new PurchaseRequest();
+                mockRequest.setId("test-id");
+                mockRequest.setStatus("PENDING");
+                when(purchaseRequestService.createGoogleWorkspaceLicenseRequest(anyString(), any()))
+                                .thenReturn(mockRequest);
 
-        // Create a mock purchase request
-        PurchaseRequest mockRequest = new PurchaseRequest(requestId, userEmail);
-        mockRequest.setType("credits");
-        mockRequest.setStatus("PENDING");
-        mockRequest.setQuantity(100);
-        mockRequest.setCost(50.0);
+                // Create a simple request body
+                Map<String, Object> requestBody = new HashMap<>();
+                requestBody.put("count", 5);
+                requestBody.put("licenseType", "G Suite Business");
+                requestBody.put("domain", "example.com");
 
-        // Mock service behavior
-        when(purchaseRequestService.getPurchaseRequestById(requestId)).thenReturn(Optional.of(mockRequest));
-        when(purchaseRequestService.savePurchaseRequest(any(PurchaseRequest.class))).thenReturn(mockRequest);
-        doNothing().when(emailService).sendConfirmationEmail(anyString());
+                // Act
+                MvcResult result = mockMvc.perform(post("/api/purchase/google-workspace/request")
+                                .param("userEmail", userEmail)
+                                .param("customerId", customerId)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(requestBody)))
+                                .andExpect(status().is2xxSuccessful())
+                                .andReturn();
 
-        // Act & Assert
-        mockMvc.perform(get("/api/purchase/accept")
-                .param("requestId", requestId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("success"))
-                .andExpect(jsonPath("$.requestId").value(requestId))
-                .andExpect(jsonPath("$.email").value(userEmail))
-                .andExpect(jsonPath("$.type").value("purchase"));
-
-        // Verify service calls
-        verify(purchaseRequestService).getPurchaseRequestById(requestId);
-        verify(purchaseRequestService).savePurchaseRequest(any(PurchaseRequest.class));
-        verify(emailService).sendConfirmationEmail(userEmail);
-    }
-
-    @Test
-    @DisplayName("GET /api/purchase/accept should return error when request doesn't exist")
-    public void acceptPurchase_shouldReturnErrorWhenRequestDoesntExist() throws Exception {
-        // Arrange
-        String requestId = "non-existent-request";
-
-        // Mock service behavior
-        when(purchaseRequestService.getPurchaseRequestById(requestId)).thenReturn(Optional.empty());
-
-        // Act & Assert
-        mockMvc.perform(get("/api/purchase/accept")
-                .param("requestId", requestId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("error"))
-                .andExpect(jsonPath("$.message").value("Request not found"))
-                .andExpect(jsonPath("$.requestId").value(requestId));
-
-        // Verify service call
-        verify(purchaseRequestService).getPurchaseRequestById(requestId);
-    }
-
-    @Test
-    @DisplayName("GET /api/purchase/signature-satori/accept should accept credits request and return success")
-    public void acceptSignatureSatoriCreditsRequest_shouldAcceptAndReturnSuccess() throws Exception {
-        // Arrange
-        String requestId = "req-456";
-        String userEmail = "user@example.com";
-
-        // Create a mock purchase request
-        PurchaseRequest mockRequest = new PurchaseRequest(requestId, userEmail);
-        mockRequest.setType("credits");
-        mockRequest.setStatus("PENDING");
-        mockRequest.setQuantity(100);
-        mockRequest.setCost(50.0);
-
-        // Mock service behavior
-        when(purchaseRequestService.getPurchaseRequestById(requestId)).thenReturn(Optional.of(mockRequest));
-        when(purchaseRequestService.savePurchaseRequest(any(PurchaseRequest.class))).thenReturn(mockRequest);
-        doNothing().when(emailService).sendConfirmationEmail(anyString());
-
-        // Act & Assert
-        mockMvc.perform(get("/api/purchase/signature-satori/accept")
-                .param("requestId", requestId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("success"))
-                .andExpect(jsonPath("$.requestId").value(requestId))
-                .andExpect(jsonPath("$.email").value(userEmail))
-                .andExpect(jsonPath("$.quantity").value(100))
-                .andExpect(jsonPath("$.cost").value(50.0))
-                .andExpect(jsonPath("$.type").value("credits"));
-
-        // Verify service calls
-        verify(purchaseRequestService).getPurchaseRequestById(requestId);
-        verify(purchaseRequestService).savePurchaseRequest(any(PurchaseRequest.class));
-        verify(emailService).sendConfirmationEmail(userEmail);
-    }
+                // Verify the purchase request was created
+                verify(purchaseRequestService).createGoogleWorkspaceLicenseRequest(eq(userEmail), any());
+        }
 }

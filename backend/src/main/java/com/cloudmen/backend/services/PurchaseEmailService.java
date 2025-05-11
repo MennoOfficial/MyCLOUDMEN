@@ -41,6 +41,11 @@ public class PurchaseEmailService {
      * Get the from email address ensuring it's a valid email format
      */
     private String getFromEmail() {
+        // If fromEmail was already set, use it
+        if (fromEmail != null && !fromEmail.isEmpty()) {
+            return fromEmail;
+        }
+
         // If username already contains @ symbol, use it directly
         if (username != null && username.contains("@")) {
             return username;
@@ -122,10 +127,20 @@ public class PurchaseEmailService {
 
             helper.setText(htmlContent, true);
 
-            log.debug("About to send email with subject: '{}' from: '{}' to: '{}'",
-                    helper.getMimeMessage().getSubject(),
-                    helper.getMimeMessage().getFrom()[0],
-                    helper.getMimeMessage().getAllRecipients()[0]);
+            // Add null check before accessing getFrom() - a common issue in tests
+            try {
+                if (helper.getMimeMessage().getFrom() != null && helper.getMimeMessage().getAllRecipients() != null) {
+                    log.debug("About to send email with subject: '{}' from: '{}' to: '{}'",
+                            helper.getMimeMessage().getSubject(),
+                            helper.getMimeMessage().getFrom()[0],
+                            helper.getMimeMessage().getAllRecipients()[0]);
+                } else {
+                    log.debug("About to send email with subject: '{}' (from/to info not available in test environment)",
+                            helper.getMimeMessage().getSubject());
+                }
+            } catch (Exception e) {
+                log.debug("Could not log email details: {}", e.getMessage());
+            }
 
             mailSender.send(message);
             log.info("Purchase request email sent successfully to: {}", to);
@@ -175,6 +190,21 @@ public class PurchaseEmailService {
                     "</div></body></html>";
 
             helper.setText(htmlContent, true);
+
+            // Add null check before accessing getFrom() - a common issue in tests
+            try {
+                if (helper.getMimeMessage().getFrom() != null && helper.getMimeMessage().getAllRecipients() != null) {
+                    log.debug("About to send email with subject: '{}' from: '{}' to: '{}'",
+                            helper.getMimeMessage().getSubject(),
+                            helper.getMimeMessage().getFrom()[0],
+                            helper.getMimeMessage().getAllRecipients()[0]);
+                } else {
+                    log.debug("About to send email with subject: '{}' (from/to info not available in test environment)",
+                            helper.getMimeMessage().getSubject());
+                }
+            } catch (Exception e) {
+                log.debug("Could not log email details: {}", e.getMessage());
+            }
 
             mailSender.send(message);
             log.info("Purchase confirmation email sent successfully to: {}", to);
@@ -287,6 +317,21 @@ public class PurchaseEmailService {
 
             helper.setText(htmlContent, true);
 
+            // Add null check before accessing getFrom() - a common issue in tests
+            try {
+                if (helper.getMimeMessage().getFrom() != null && helper.getMimeMessage().getAllRecipients() != null) {
+                    log.debug("About to send email with subject: '{}' from: '{}' to: '{}'",
+                            helper.getMimeMessage().getSubject(),
+                            helper.getMimeMessage().getFrom()[0],
+                            helper.getMimeMessage().getAllRecipients()[0]);
+                } else {
+                    log.debug("About to send email with subject: '{}' (from/to info not available in test environment)",
+                            helper.getMimeMessage().getSubject());
+                }
+            } catch (Exception e) {
+                log.debug("Could not log email details: {}", e.getMessage());
+            }
+
             mailSender.send(message);
             log.info("Google Workspace license request email sent successfully to: {}", to);
         } catch (MailException e) {
@@ -377,6 +422,11 @@ public class PurchaseEmailService {
                     "</div></body></html>";
 
             helper.setText(htmlContent, true);
+
+            // Just log that we're sending an email, no need to try to access potentially
+            // null fields
+            log.debug(
+                    "Sending Google Workspace license confirmation email with subject: 'Google Workspace License Purchase Confirmation'");
 
             mailSender.send(message);
             log.info("Google Workspace license confirmation email sent successfully to: {}", to);
