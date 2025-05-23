@@ -922,41 +922,39 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     // Create the credits request - format exactly as the backend expects
     const creditsRequest = {
       quantity: this.purchaseQuantity,
-      cost: this.calculateCreditsCost(),
-      type: 'credits' // Add type to match backend expectation
+      cost: this.calculateCreditsCost()
     };
     
     console.log('Sending credits request:', creditsRequest);
     
-    // Send the purchase request
-    this.http.post(
+    // Send the purchase request to the correct purchase request endpoint (with email confirmation)
+    this.http.post<any>(
       `${this.environmentService.apiUrl}/purchase/signature-satori/request?userEmail=${encodeURIComponent(currentUser.email)}&customerId=${customerId}`,
       creditsRequest
     ).subscribe({
       next: (response: any) => {
         console.log('Credits request sent successfully:', response);
-        // Refresh purchase requests list
+        
+        // Show success message
+        if (response.status === 'PENDING') {
+          this.showToast('Purchase request submitted! Check your email to confirm the purchase.', 'success');
+        } else {
+          this.showToast('Purchase request submitted successfully!', 'success');
+        }
+        
+        // Refresh purchase requests list (don't refresh credits as purchase is not completed yet)
         this.fetchPendingRequests();
       },
       error: (error) => {
         console.error('Error sending credits request:', error);
-        // Log detailed error information
-        console.error('Status:', error.status);
-        console.error('Error body:', error.error);
         
-        if (error.status === 200) {
-          // If somehow we got a 200 status as an error, treat it as success
-          this.fetchPendingRequests();
+        // Handle different error scenarios
+        if (error.status === 400 && error.error?.message) {
+          this.showToast(error.error.message, 'error');
+        } else if (error.status === 500) {
+          this.showToast('Server error processing request. Please try again later.', 'error');
         } else {
-          // Handle validation errors (400 Bad Request)
-          if (error.status === 400 && error.error?.message) {
-            this.showToast(error.error.message, 'error');
-          } else if (error.status === 500) {
-            // Special handling for 500 errors - likely backend issue
-            this.showToast('Server error processing credits request. Please try again later or contact support.', 'error');
-          } else {
-            this.showToast('Error sending credits request. Please try again.', 'error');
-          }
+          this.showToast('Error sending purchase request. Please try again.', 'error');
         }
       }
     });

@@ -41,6 +41,12 @@ export class AuthService {
   // Define status constants
   private readonly INACTIVE_STATUSES = ['DEACTIVATED', 'SUSPENDED'];
   
+  private isRedirectInProgress = false;
+  
+  // Cache for company domain status to prevent repeated API calls
+  private companyStatusCache: Map<string, CompanyStatusResult> = new Map();
+  private cacheTTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+  
   constructor(
     @Inject(DOCUMENT) private document: Document,
     private router: Router,
@@ -252,12 +258,8 @@ export class AuthService {
       user.roles = [];
     }
     
-    // Only add default COMPANY_USER role if there are no roles and not pending
-    if (user.roles.length === 0 && user.status !== 'PENDING') {
-      console.log(`[Auth] Adding default COMPANY_USER role to user with no roles`);
-      user.roles = ['COMPANY_USER'];
-    }
-      
+    // Do not automatically add roles - respect what comes from the backend
+    // Only log the user status for debugging
     console.log(`[Auth] User profile processed: ${user.email}, Status: ${user.status}, Roles: ${user.roles.join(', ') || 'none'}`);
     
     // Update state and storage
@@ -305,7 +307,17 @@ export class AuthService {
       return;
     }
 
+    // Add debounce mechanism to prevent multiple redirects
+    if (this.isRedirectInProgress) {
+      console.log('[Auth] Redirect already in progress, skipping additional checks');
+      return;
+    }
+
+    this.isRedirectInProgress = true;
+    
     this.determineUserRedirect(user).then(redirectResult => {
+      this.isRedirectInProgress = false;
+      
       if (!redirectResult) {
         console.log('[Auth] No redirection needed for user');
         return;
@@ -322,6 +334,9 @@ export class AuthService {
         queryParams: redirectResult.queryParams,
         replaceUrl: redirectResult.replaceUrl ?? true
       });
+    }).catch(error => {
+      console.error('[Auth] Error during redirect check:', error);
+      this.isRedirectInProgress = false;
     });
   }
 
@@ -391,23 +406,49 @@ export class AuthService {
     const domain = this.getEmailDomain(user.email);
     if (!domain) return null;
     
+    // Add a timestamp check to prevent frequent rechecks
+    const lastCheckKey = `company_status_check_${domain}`;
+    const lastCheckTime = parseInt(sessionStorage.getItem(lastCheckKey) || '0', 10);
+    const currentTime = Date.now();
+    const checkThreshold = 30000; // 30 seconds
+    
+    if (currentTime - lastCheckTime < checkThreshold) {
+      console.log(`[Auth] Skipping company status check for ${domain} - checked recently`);
+      // Return the cached redirect if available
+      const cachedRedirectKey = `company_redirect_${domain}`;
+      const cachedRedirect = sessionStorage.getItem(cachedRedirectKey);
+      if (cachedRedirect) {
+        try {
+          return JSON.parse(cachedRedirect);
+        } catch (e) {
+          // If parsing fails, continue with the check
+          console.error('[Auth] Error parsing cached redirect:', e);
+        }
+      }
+    }
+    
+    // Update the last check timestamp
+    sessionStorage.setItem(lastCheckKey, currentTime.toString());
+    
     console.log(`[Auth] Checking company status for domain: ${domain}`);
     
     try {
       // First check if user has already been identified as part of an unregistered company
       if (user.companyStatus === 'NOT_FOUND' || user.companyInfo?.status === 'NOT_FOUND') {
         console.log(`[Auth] User already identified as having no registered company`);
-        return {
+        const redirect = {
           path: '/company-not-registered',
           queryParams: { domain },
           replaceUrl: true
         };
+        sessionStorage.setItem(`company_redirect_${domain}`, JSON.stringify(redirect));
+        return redirect;
       }
       
       // Next check if user has an inactive company
       if (this.hasInactiveCompany(user)) {
         console.log(`[Auth] User company is inactive`);
-        return {
+        const redirect = {
           path: '/company-inactive',
           queryParams: { 
             status: user.company?.status || user.companyStatus || 'DEACTIVATED',
@@ -415,6 +456,8 @@ export class AuthService {
           },
           replaceUrl: true
         };
+        sessionStorage.setItem(`company_redirect_${domain}`, JSON.stringify(redirect));
+        return redirect;
       }
       
       // If no status found on user object, fetch company by domain
@@ -427,16 +470,18 @@ export class AuthService {
       
       if (companyInfo.status === 'NOT_FOUND') {
         console.log(`[Auth] No company found for domain: ${domain}`);
-        return {
+        const redirect = {
           path: '/company-not-registered',
           queryParams: { domain },
           replaceUrl: true
         };
+        sessionStorage.setItem(`company_redirect_${domain}`, JSON.stringify(redirect));
+        return redirect;
       }
       
       if (this.INACTIVE_STATUSES.includes(companyInfo.status)) {
         console.log(`[Auth] Company is inactive with status: ${companyInfo.status}`);
-        return {
+        const redirect = {
           path: '/company-inactive',
           queryParams: { 
             status: companyInfo.status,
@@ -444,7 +489,12 @@ export class AuthService {
           },
           replaceUrl: true
         };
+        sessionStorage.setItem(`company_redirect_${domain}`, JSON.stringify(redirect));
+        return redirect;
       }
+      
+      // Company is active, clear any cached redirect
+      sessionStorage.removeItem(`company_redirect_${domain}`);
     } catch (error) {
       console.error('[Auth] Error checking company status:', error);
     }
@@ -505,6 +555,13 @@ export class AuthService {
     
     console.log(`[Auth] Fetching company info for domain: ${domain}`);
     
+    // Check cache first
+    const cachedResult = this.companyStatusCache.get(domain);
+    if (cachedResult) {
+      console.log(`[Auth] Using cached company info for domain: ${domain}`);
+      return cachedResult;
+    }
+    
     try {
       // Try primary endpoint
       const response = await firstValueFrom(
@@ -522,7 +579,9 @@ export class AuthService {
       
       if (!response) {
         console.log(`[Auth] No response from company endpoints`);
-        return { status: 'NOT_FOUND', name: '', domain };
+        const result = { status: 'NOT_FOUND', name: '', domain };
+        this.cacheCompanyStatus(domain, result);
+        return result;
       }
       
       // Extract companies array
@@ -532,7 +591,9 @@ export class AuthService {
       
       if (!companies || companies.length === 0) {
         console.log(`[Auth] No companies found in the response`);
-        return { status: 'NOT_FOUND', name: '', domain };
+        const result = { status: 'NOT_FOUND', name: '', domain };
+        this.cacheCompanyStatus(domain, result);
+        return result;
       }
       
       // Find matching company
@@ -544,14 +605,19 @@ export class AuthService {
                       'ACTIVE';
         
         console.log(`[Auth] Found company for domain ${domain} with status: ${status}`);
-        return {
+        const result = {
           status: status,
           name: company.name || ''
         };
+        
+        this.cacheCompanyStatus(domain, result);
+        return result;
       }
       
       console.log(`[Auth] No matching company found for domain: ${domain}`);
-      return { status: 'NOT_FOUND', name: '', domain };
+      const notFoundResult = { status: 'NOT_FOUND', name: '', domain };
+      this.cacheCompanyStatus(domain, notFoundResult);
+      return notFoundResult;
     } catch (error) {
       console.error('[Auth] Error fetching company by domain:', error);
       // If there's an error, don't assume company is not found, just return null
@@ -618,6 +684,19 @@ export class AuthService {
     });
     
     return match;
+  }
+  
+  /**
+   * Cache company status result for a domain
+   */
+  private cacheCompanyStatus(domain: string, result: CompanyStatusResult): void {
+    this.companyStatusCache.set(domain, result);
+    
+    // Set expiration for cache entry
+    setTimeout(() => {
+      this.companyStatusCache.delete(domain);
+      console.log(`[Auth] Expired cache for domain: ${domain}`);
+    }, this.cacheTTL);
   }
   
   /* PUBLIC API METHODS */
