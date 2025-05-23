@@ -61,4 +61,5 @@ public class SignatureSatoriController {
                 .defaultIfEmpty(ResponseEntity.badRequest().build())
                 .doOnError(e -> logger.error("Error processing purchase credits request: {}", e.getMessage()));
     }
+
 }
