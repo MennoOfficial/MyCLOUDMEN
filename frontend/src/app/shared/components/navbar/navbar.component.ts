@@ -36,18 +36,18 @@ export class NavbarComponent implements OnInit, OnDestroy {
   
   // Navigation items based on user role
   systemAdminNavItems = [
-    { label: 'Companies', route: '/system-admin/companies', icon: 'business' },
-    { label: 'User logs', route: '/system-admin/auth-logs', icon: 'security' }
+    { label: 'Companies', route: '/companies', icon: 'business' },
+    { label: 'User logs', route: '/auth-logs', icon: 'security' }
   ];
   
   companyAdminNavItems = [
-    { label: 'User management', route: '/company-admin/users', icon: 'people' },
-    { label: 'Invoice management', route: '/company-admin/invoices', icon: 'receipt' },
-    { label: 'Purchase Requests', route: '/purchase-requests', icon: 'shopping_cart' }
+    { label: 'User management', route: '/users', icon: 'people' },
+    { label: 'Invoice management', route: '/invoices', icon: 'receipt' },
+    { label: 'Purchase Requests', route: '/requests', icon: 'shopping_cart' }
   ];
   
   companyUserNavItems = [
-    { label: 'Purchase Requests', route: '/purchase-requests', icon: 'shopping_cart' }
+    { label: 'Purchase Requests', route: '/requests', icon: 'shopping_cart' }
   ];
   
   navItems: any[] = [];

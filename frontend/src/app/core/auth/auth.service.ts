@@ -131,11 +131,54 @@ export class AuthService {
       console.log(`[Auth] Restored user from session: ${user.email}`);
         this.userSubject.next(user);
         
-      // Check if redirection is needed (on app startup)
-      this.checkUserStatus(user);
+      // DON'T check status on session restore - let them stay where they are
+      // Only do critical status checks, not convenience redirects
+      this.checkCriticalStatusOnly(user);
     } catch (error) {
       console.error('[Auth] Failed to restore user from session:', error);
         sessionStorage.removeItem('user_profile');
+    }
+  }
+  
+  /**
+   * Check only critical status issues without any convenience redirects
+   */
+  private async checkCriticalStatusOnly(user: User): Promise<void> {
+    // Only check for truly critical issues that require immediate action
+    try {
+      // 1. Critical user status issues
+      if (user.status === 'PENDING') {
+        console.log('[Auth] User is PENDING, redirecting to pending account page');
+        this.router.navigate(['/pending-account'], { replaceUrl: true });
+        return;
+      }
+      
+      if (user.status === 'DEACTIVATED') {
+        console.log('[Auth] User is DEACTIVATED, redirecting to account deactivated page');
+        this.router.navigate(['/account-deactivated'], { 
+          queryParams: { status: user.status },
+          replaceUrl: true 
+        });
+        return;
+      }
+
+      // 2. Critical company status issues
+      if (user.email) {
+        const companyStatus = await this.checkCompanyStatus(user);
+        if (companyStatus) {
+          console.log(`[Auth] Redirecting based on critical company status to: ${companyStatus.path}`);
+          this.router.navigate([companyStatus.path], {
+            queryParams: companyStatus.queryParams,
+            replaceUrl: companyStatus.replaceUrl ?? true
+          });
+          return;
+        }
+      }
+
+      // No critical issues - let user stay where they are
+      console.log('[Auth] No critical issues found on session restore, user can stay on current page');
+    } catch (error) {
+      console.error('[Auth] Error checking critical status on session restore:', error);
     }
   }
   
@@ -266,8 +309,38 @@ export class AuthService {
     this.userSubject.next(user);
     this.saveUserToSession(user);
     
-    // Check if redirection is needed
-    this.checkUserStatus(user);
+    // Handle post-authentication navigation
+    this.handlePostAuthNavigation(user);
+  }
+  
+  /**
+   * Handle navigation after successful authentication
+   */
+  private handlePostAuthNavigation(user: User): void {
+    // Check if there's a stored target URL from the auth guard
+    const targetUrl = sessionStorage.getItem('auth_target_url');
+    if (targetUrl) {
+      console.log(`[Auth] Found stored target URL after authentication: ${targetUrl}`);
+      sessionStorage.removeItem('auth_target_url');
+      
+      // Don't redirect to auth-related or status pages
+      if (!this.isExcludedPath(targetUrl)) {
+        console.log(`[Auth] Redirecting to stored target URL: ${targetUrl}`);
+        this.router.navigate([targetUrl], { replaceUrl: true });
+        return;
+      }
+    }
+    
+    // Check for critical status issues first
+    this.checkCriticalStatusOnly(user).then(() => {
+      // If no critical issues, check if we need role-based navigation
+      const currentPath = this.router.url;
+      if (currentPath === '/' || currentPath === '' || currentPath === '/auth/loading') {
+        console.log('[Auth] User is on landing page after auth, providing role-based redirect');
+        const roleRedirect = this.getRoleBasedRedirect(user.roles);
+        this.router.navigate([roleRedirect.path], { replaceUrl: true });
+      }
+    });
   }
   
   /**
@@ -297,7 +370,7 @@ export class AuthService {
   }
   
   /**
-   * Check user status and handle redirects if needed
+   * Check user status and handle redirects ONLY for critical issues
    */
   private checkUserStatus(user: User): void {
     // Skip checks for specific paths
@@ -315,29 +388,72 @@ export class AuthService {
 
     this.isRedirectInProgress = true;
     
-    this.determineUserRedirect(user).then(redirectResult => {
+    // Only check for CRITICAL redirects (status/company issues) - NO role-based redirects
+    this.checkCriticalUserIssues(user).then(redirectResult => {
       this.isRedirectInProgress = false;
       
       if (!redirectResult) {
-        console.log('[Auth] No redirection needed for user');
+        console.log('[Auth] No critical issues found, user stays on current page');
         return;
       }
       
       // If already on the correct page, don't redirect
       if (currentPath === redirectResult.path) {
-        console.log(`[Auth] User already on correct path: ${redirectResult.path}`);
+        console.log(`[Auth] User already on correct status page: ${redirectResult.path}`);
         return;
       }
       
-      console.log(`[Auth] Redirecting user to: ${redirectResult.path}`);
+      console.log(`[Auth] Redirecting user due to critical issue: ${redirectResult.path}`);
       this.router.navigate([redirectResult.path], {
         queryParams: redirectResult.queryParams,
         replaceUrl: redirectResult.replaceUrl ?? true
       });
     }).catch(error => {
-      console.error('[Auth] Error during redirect check:', error);
+      console.error('[Auth] Error during critical status check:', error);
       this.isRedirectInProgress = false;
     });
+  }
+
+  /**
+   * Check ONLY for critical issues that require immediate redirection
+   */
+  private async checkCriticalUserIssues(user: User): Promise<RedirectResult | null> {
+    if (!user) return null;
+    
+    console.log(`[Auth] Checking for critical issues for user: ${user.email}, Status: ${user.status}`);
+    
+    try {
+      // 1. Critical user status issues
+      if (user.status === 'PENDING') {
+        console.log('[Auth] User is PENDING, redirecting to pending account page');
+        return { path: '/pending-account', replaceUrl: true };
+      }
+      
+      if (user.status === 'DEACTIVATED') {
+        console.log('[Auth] User is DEACTIVATED, redirecting to account deactivated page');
+        return { 
+          path: '/account-deactivated', 
+          queryParams: { status: user.status },
+          replaceUrl: true 
+        };
+      }
+
+      // 2. Critical company status issues
+      if (user.email) {
+        const companyStatus = await this.checkCompanyStatus(user);
+        if (companyStatus) {
+          console.log(`[Auth] Redirecting based on company status to: ${companyStatus.path}`);
+          return companyStatus;
+        }
+      }
+
+      // No critical issues found
+      console.log('[Auth] No critical issues found');
+      return null;
+    } catch (error) {
+      console.error('[Auth] Error checking critical user issues:', error);
+      return null;
+    }
   }
 
   /**
@@ -528,15 +644,16 @@ export class AuthService {
    * Get default redirect based on user role
    */
   private getRoleBasedRedirect(roles: UserRole[] = []): RedirectResult {
+    // Provide role-based defaults
     if (roles.includes('SYSTEM_ADMIN')) {
-      return { path: '/system-admin/companies' };
+      return { path: '/companies' };
     } 
     
     if (roles.includes('COMPANY_ADMIN')) {
-      return { path: '/company-admin/users' };
+      return { path: '/users' };
     }
     
-    return { path: '/company-user/requests' };
+    return { path: '/requests' };
   }
   
   /**
@@ -935,27 +1052,30 @@ export class AuthService {
           return of(true);
         }
         
-        // Check if user needs to be redirected
-        return from(this.determineUserRedirect(user)).pipe(
+        // Only check for CRITICAL redirects (not convenience redirects)
+        // This prevents unwanted redirects on page refresh
+        return from(this.checkCriticalUserIssues(user)).pipe(
           map(redirectResult => {
             if (!redirectResult) {
-              // No redirect needed
+              // No critical issues - allow navigation
+              console.log(`[Auth] No critical issues for URL ${url}, allowing navigation`);
               return true;
             }
             
-            // If the URL matches the target redirect, allow it
+            // If the URL matches the critical redirect target, allow it
             if (url === redirectResult.path) {
-          return true;
+              console.log(`[Auth] User is on critical status page ${url}, allowing`);
+              return true;
             }
             
-            // Redirect to appropriate path
-            console.log(`[Auth] Redirecting from ${url} to ${redirectResult.path}`);
+            // Critical issue found - redirect to appropriate status page
+            console.log(`[Auth] Critical issue found, redirecting from ${url} to ${redirectResult.path}`);
             this.router.navigate([redirectResult.path], {
               queryParams: redirectResult.queryParams,
               replaceUrl: redirectResult.replaceUrl ?? true
             });
       
-      return false;
+            return false;
           })
         );
       })

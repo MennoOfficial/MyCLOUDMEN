@@ -5,6 +5,7 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
 import { Router } from '@angular/router';
 import { filter, first, switchMap, take, tap, timeout } from 'rxjs/operators';
 import { of, timer } from 'rxjs';
+import { User } from '../../models/auth.model';
 
 @Component({
   selector: 'app-callback',
@@ -57,27 +58,32 @@ export class CallbackComponent implements OnInit {
     ).subscribe({
       next: (user) => {
         // Navigate based on roles once we have a proper user
-        if (user && user.roles) {
-          this.navigateBasedOnRoles(user.roles);
-        } else {
-          // Fallback to default page
-          this.router.navigate(['/company-user/requests']);
-        }
+        this.navigateBasedOnRoles(user);
       },
       error: () => {
         // Fallback on timeout or error
-        this.router.navigate(['/company-user/requests']);
+        this.router.navigate(['/purchase-requests']);
       }
     });
   }
 
-  private navigateBasedOnRoles(roles: string[]): void {
-    if (roles.includes('SYSTEM_ADMIN')) {
-      this.router.navigate(['/system-admin/companies']);
-    } else if (roles.includes('COMPANY_ADMIN')) {
-      this.router.navigate(['/company-admin/users']);
+  private navigateBasedOnRoles(user: User): void {
+    if (user.roles.includes('SYSTEM_ADMIN')) {
+      this.router.navigate(['/companies']);
+    } else if (user.roles.includes('COMPANY_ADMIN')) {
+      this.router.navigate(['/users']);
     } else {
-      this.router.navigate(['/company-user/requests']);
+      this.router.navigate(['/requests']);
+    }
+  }
+
+  private redirectToDefaultPage(user: User): void {
+    if (user.roles.includes('SYSTEM_ADMIN')) {
+      this.router.navigate(['/companies']);
+    } else if (user.roles.includes('COMPANY_ADMIN')) {
+      this.router.navigate(['/users']);
+    } else {
+      this.router.navigate(['/requests']);
     }
   }
 }
