@@ -98,9 +98,35 @@ export class CompaniesComponent implements OnInit {
   }
 
   navigateToCompanyDetails(company: CompanyListItem): void {
+    console.log('Navigating to company details:', company);
+    console.log('Available IDs - teamleaderId:', company.teamleaderId, 'id:', company.id);
+    
+    // Use teamleaderId if available, otherwise fall back to id
+    const companyId = company.teamleaderId || company.id;
+    
+    if (!companyId) {
+      console.error('No valid company ID found for navigation');
+      this.showToastMessage(`Error: No valid ID found for ${company.name}`);
+      return;
+    }
+    
+    console.log('Using company ID for navigation:', companyId);
+    
     // Navigate to the company details page with the company ID
-    this.router.navigate(['/system-admin/companies', company.teamleaderId]);
-    this.showToastMessage(`Navigating to ${company.name} details`);
+    this.router.navigate(['/system-admin/companies', companyId]).then(
+      (navigated: boolean) => {
+        if (navigated) {
+          console.log('Navigation successful');
+          this.showToastMessage(`Opening ${company.name} details`);
+        } else {
+          console.error('Navigation failed');
+          this.showToastMessage(`Navigation to ${company.name} details failed`);
+        }
+      }
+    ).catch(error => {
+      console.error('Navigation error:', error);
+      this.showToastMessage(`Error navigating to ${company.name} details`);
+    });
   }
 
   searchCompanies(): void {

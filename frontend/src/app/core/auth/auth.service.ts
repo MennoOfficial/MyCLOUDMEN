@@ -309,8 +309,48 @@ export class AuthService {
     this.userSubject.next(user);
     this.saveUserToSession(user);
     
+    // Log successful authentication to backend
+    this.logAuthentication(user);
+    
     // Handle post-authentication navigation
     this.handlePostAuthNavigation(user);
+  }
+  
+  /**
+   * Log successful authentication to backend
+   */
+  private logAuthentication(user: User): void {
+    try {
+      const authData = {
+        email: user.email,
+        auth0Id: user.auth0Id,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        picture: user.picture,
+        roles: user.roles,
+        status: user.status,
+        companyId: user.companyId,
+        companyStatus: user.companyStatus,
+        companyName: user.companyName
+      };
+      
+      console.log(`[Auth] Logging authentication for user: ${user.email}`);
+      
+      this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication`, authData)
+        .subscribe({
+          next: () => {
+            console.log(`[Auth] Successfully logged authentication for: ${user.email}`);
+          },
+          error: (error) => {
+            console.error('[Auth] Failed to log authentication:', error);
+            // Don't throw error - authentication logging failure shouldn't break the auth flow
+          }
+        });
+    } catch (error) {
+      console.error('[Auth] Error preparing authentication log data:', error);
+      // Don't throw error - authentication logging failure shouldn't break the auth flow
+    }
   }
   
   /**
@@ -350,7 +390,39 @@ export class AuthService {
     console.error(`[Auth] ${message}:`, error);
     this.authErrorSubject.next(message);
     this.authLoadingSubject.next(false);
+    
+    // Log failed authentication attempt
+    this.logAuthenticationFailure(message, error);
+    
     this.clearUserState();
+  }
+
+  /**
+   * Log failed authentication to backend
+   */
+  private logAuthenticationFailure(reason: string, error: any): void {
+    try {
+      const failureData = {
+        email: null, // We might not have email on failure
+        reason: `${reason}: ${error?.message || 'Unknown error'}`
+      };
+      
+      console.log(`[Auth] Logging authentication failure: ${reason}`);
+      
+      this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication-failure`, failureData)
+        .subscribe({
+          next: () => {
+            console.log(`[Auth] Successfully logged authentication failure`);
+          },
+          error: (logError) => {
+            console.error('[Auth] Failed to log authentication failure:', logError);
+            // Don't throw error - logging failure shouldn't break anything
+          }
+        });
+    } catch (error) {
+      console.error('[Auth] Error preparing authentication failure log data:', error);
+      // Don't throw error - logging failure shouldn't break anything
+    }
   }
   
   /**
