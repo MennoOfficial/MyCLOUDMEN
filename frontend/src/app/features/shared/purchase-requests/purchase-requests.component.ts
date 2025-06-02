@@ -128,6 +128,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   notificationMessage = '';
   notificationType = 'success';
 
+  // New properties for enhanced UI
+  showAllRequests = false;
+  hasMoreRequests = false;
+  private readonly RECENT_DAYS_LIMIT = 30;
+  private readonly PAGE_SIZE = 10;
+  private currentPage = 0;
+
   constructor(
     private renderer: Renderer2,
     private el: ElementRef,
@@ -552,29 +559,72 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       
       // Extract email domain
       const emailDomain = this.extractDomainFromEmail(currentUser.email || '');
+      console.log('Extracted email domain:', emailDomain);
       
       // First try to get the company information from TeamLeader
       if (emailDomain) {
+        console.log(`[DEBUG] Making API call to: ${this.environmentService.apiUrl}/teamleader/companies/domain/${emailDomain}`);
+        
         this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies/domain/${emailDomain}`)
           .pipe(
             catchError(error => {
               console.error(`Error fetching company by domain ${emailDomain}:`, error);
+              console.error('API response:', error.error);
+              console.error('Full error object:', error);
+              
+              // Add debugging: try to fetch all companies to see what's available
+              console.log('[DEBUG] Domain lookup failed, fetching all companies for debugging...');
+              this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies`)
+                .subscribe({
+                  next: (allCompanies) => {
+                    console.log('[DEBUG] All companies in database:', allCompanies);
+                    if (allCompanies.companies && Array.isArray(allCompanies.companies)) {
+                      console.log(`[DEBUG] Found ${allCompanies.companies.length} companies total`);
+                      allCompanies.companies.forEach((company: any, index: number) => {
+                        console.log(`[DEBUG] Company ${index + 1}:`, {
+                          name: company.name,
+                          teamleaderId: company.teamleaderId,
+                          contactInfo: company.contactInfo || 'No contact info',
+                          website: company.website || 'No website'
+                        });
+                      });
+                    }
+                  },
+                  error: (debugError) => {
+                    console.error('[DEBUG] Failed to fetch all companies:', debugError);
+                  }
+                });
+              
               return of(null);
             })
           )
           .subscribe(companyInfo => {
+            console.log('Company domain lookup response:', companyInfo);
+            
+            // Check if the response indicates an error
+            if (companyInfo && companyInfo.error) {
+              console.log('Company not found for domain:', emailDomain, 'Error:', companyInfo.message);
+              this.setupUserInfoWithFallback(currentUser, emailDomain, null);
+              return;
+            }
+            
             // If company info was found, use it
             if (companyInfo && companyInfo.name) {
+              console.log('Found company:', companyInfo.name, 'for domain:', emailDomain);
+              
+              // Extract customer IDs from company data if available
+              const customerIds = this.extractCustomerIds(companyInfo, emailDomain);
+              
               // Map user info with company details
               this.userInfo = {
                 ...currentUser,
                 // Use the found company name
                 company: companyInfo.name,
+                companyData: companyInfo, // Store full company data for debugging
                 // Add domain from email
                 domain: emailDomain || 'example.com',
-                // Add customer IDs
-                customerId: '535354', // For Signature Satori
-                googleWorkspaceCustomerId: '363466' // For Google Workspace
+                // Use extracted or fallback customer IDs
+                ...customerIds
               };
               
               console.log('User info prepared with company data:', this.userInfo);
@@ -584,45 +634,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
               this.fetchSignatureSatoriCredits();
               this.fetchPendingRequests();
             } else {
-              // Fallback to using the domain if no company was found
-              this.userInfo = {
-                ...currentUser,
-                // Use default company name
-                company: 'MyCLOUDMEN',
-                // Add domain from email
-                domain: emailDomain || 'example.com',
-                // Add customer IDs
-                customerId: '535354', // For Signature Satori
-                googleWorkspaceCustomerId: '363466' // For Google Workspace
-              };
-              
-              console.log('User info prepared with default company:', this.userInfo);
-              
-              // After getting user info, fetch licenses and credits
-              this.fetchGoogleWorkspaceLicenses();
-              this.fetchSignatureSatoriCredits();
-              this.fetchPendingRequests();
+              console.log('No valid company data found in response, using fallback');
+              this.setupUserInfoWithFallback(currentUser, emailDomain, companyInfo);
             }
           });
       } else {
-        // If no domain could be extracted, use defaults
-        this.userInfo = {
-          ...currentUser,
-          // Use default company name
-          company: 'MyCLOUDMEN',
-          // Add default domain
-          domain: 'example.com',
-          // Add customer IDs
-          customerId: '535354', // For Signature Satori
-          googleWorkspaceCustomerId: '363466' // For Google Workspace
-        };
-        
-        console.log('User info prepared with defaults (no domain):', this.userInfo);
-        
-        // After getting user info, fetch licenses and credits
-        this.fetchGoogleWorkspaceLicenses();
-        this.fetchSignatureSatoriCredits();
-        this.fetchPendingRequests();
+        console.log('No email domain could be extracted, using fallback');
+        this.setupUserInfoWithFallback(currentUser, null, null);
       }
     } else {
       console.error('No user logged in or user info not available');
@@ -632,7 +650,152 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     }
   }
   
-  // Helper function to extract domain from email
+  /**
+   * Extract customer IDs from company data or provide fallbacks based on domain
+   */
+  private extractCustomerIds(companyInfo: any, emailDomain: string | null): any {
+    // Try to extract customer IDs from company custom fields or other properties
+    let customerId = null;
+    let googleWorkspaceCustomerId = null;
+    
+    // Check if company has custom fields with customer IDs
+    if (companyInfo.customFields) {
+      customerId = companyInfo.customFields.signatureSatoriCustomerId || 
+                   companyInfo.customFields.satoriCustomerId ||
+                   companyInfo.customFields.customerId;
+      
+      googleWorkspaceCustomerId = companyInfo.customFields.googleWorkspaceCustomerId ||
+                                  companyInfo.customFields.googleCustomerId ||
+                                  companyInfo.customFields.workspaceCustomerId;
+    }
+    
+    // If no customer IDs found in company data, use domain-based fallbacks
+    if (!customerId || !googleWorkspaceCustomerId) {
+      console.log('No customer IDs found in company data, using domain-based fallbacks');
+      
+      // Domain-specific customer ID mapping (you may need to adjust these based on your actual data)
+      const domainCustomerMapping = this.getDomainCustomerMapping(emailDomain);
+      
+      if (!customerId) {
+        customerId = domainCustomerMapping.signatureSatori;
+      }
+      
+      if (!googleWorkspaceCustomerId) {
+        googleWorkspaceCustomerId = domainCustomerMapping.googleWorkspace;
+      }
+    }
+    
+    console.log('Extracted customer IDs:', {
+      customerId,
+      googleWorkspaceCustomerId,
+      source: companyInfo.customFields ? 'company_data' : 'domain_mapping'
+    });
+    
+    return {
+      customerId,
+      googleWorkspaceCustomerId
+    };
+  }
+
+  /**
+   * Get customer ID mapping based on email domain
+   * This is a fallback when company data doesn't contain customer IDs
+   */
+  private getDomainCustomerMapping(emailDomain: string | null): any {
+    // Default fallback customer IDs
+    const defaultMapping = {
+      signatureSatori: '535354',
+      googleWorkspace: '363466'
+    };
+    
+    // Add domain-specific mappings here if you have them
+    const domainMappings: { [key: string]: any } = {
+      'cloudmen.net': {
+        signatureSatori: '535354',
+        googleWorkspace: '363466'
+      },
+      // Add more domain mappings as needed
+      // 'example.com': {
+      //   signatureSatori: 'customer_id_for_example',
+      //   googleWorkspace: 'workspace_id_for_example'
+      // }
+    };
+    
+    if (emailDomain && domainMappings[emailDomain.toLowerCase()]) {
+      return domainMappings[emailDomain.toLowerCase()];
+    }
+    
+    return defaultMapping;
+  }
+
+  /**
+   * Setup user info with fallback data when company lookup fails
+   */
+  private setupUserInfoWithFallback(currentUser: any, emailDomain: string | null, companyInfo: any): void {
+    console.log('Setting up user info with fallback data');
+    
+    // Use domain-based customer IDs as fallback
+    const customerIds = this.getDomainCustomerMapping(emailDomain);
+    
+    // For gmail.com users, show a more helpful message
+    let companyDisplayName = 'MyCLOUDMEN';
+    let isGmailUser = emailDomain?.toLowerCase() === 'gmail.com';
+    
+    if (isGmailUser) {
+      companyDisplayName = 'Your Organization';
+    } else if (emailDomain) {
+      // Try to create a reasonable company name from domain
+      const derivedName = this.getCompanyNameFromDomain(emailDomain);
+      if (derivedName && derivedName !== emailDomain) {
+        companyDisplayName = derivedName;
+      }
+    }
+    
+    this.userInfo = {
+      ...currentUser,
+      // Use the appropriate fallback company name
+      company: companyDisplayName,
+      // Add domain from email
+      domain: emailDomain || 'example.com',
+      displayDomain: isGmailUser ? 'your-domain.com' : (emailDomain || 'your-domain.com'),
+      isPublicEmail: isGmailUser,
+      // Use fallback customer IDs
+      customerId: customerIds.signatureSatori,
+      googleWorkspaceCustomerId: customerIds.googleWorkspace,
+      // Mark as fallback for debugging and UI hints
+      _fallback: true,
+      _reason: companyInfo ? 'invalid_company_data' : 'no_domain_or_lookup_failed',
+      _isGmailUser: isGmailUser
+    };
+    
+    console.log('User info prepared with fallback:', this.userInfo);
+    
+    // Show a helpful message for Gmail users
+    if (isGmailUser) {
+      this.showToast('Using personal email account. If you have a business account, please contact support to set up your organization.', 'success');
+    }
+    
+    // After getting user info, fetch licenses and credits
+    this.fetchGoogleWorkspaceLicenses();
+    this.fetchSignatureSatoriCredits();
+    this.fetchPendingRequests();
+  }
+
+  /**
+   * Generate a reasonable company name from domain
+   */
+  private getCompanyNameFromDomain(domain: string | null): string | null {
+    if (!domain) return null;
+    
+    // Convert domain to a reasonable company name
+    // Remove common TLDs and convert to title case
+    const baseName = domain.replace(/\.(com|net|org|io|co|uk|de|fr|nl|be)$/i, '');
+    return baseName.charAt(0).toUpperCase() + baseName.slice(1);
+  }
+
+  /**
+   * Helper function to extract domain from email
+   */
   private extractDomainFromEmail(email: string): string | null {
     if (!email || !email.includes('@')) return null;
     return email.split('@')[1];
@@ -922,41 +1085,39 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     // Create the credits request - format exactly as the backend expects
     const creditsRequest = {
       quantity: this.purchaseQuantity,
-      cost: this.calculateCreditsCost(),
-      type: 'credits' // Add type to match backend expectation
+      cost: this.calculateCreditsCost()
     };
     
     console.log('Sending credits request:', creditsRequest);
     
-    // Send the purchase request
-    this.http.post(
+    // Send the purchase request to the correct purchase request endpoint (with email confirmation)
+    this.http.post<any>(
       `${this.environmentService.apiUrl}/purchase/signature-satori/request?userEmail=${encodeURIComponent(currentUser.email)}&customerId=${customerId}`,
       creditsRequest
     ).subscribe({
       next: (response: any) => {
         console.log('Credits request sent successfully:', response);
-        // Refresh purchase requests list
+        
+        // Show success message
+        if (response.status === 'PENDING') {
+          this.showToast('Purchase request submitted! Check your email to confirm the purchase.', 'success');
+        } else {
+          this.showToast('Purchase request submitted successfully!', 'success');
+        }
+        
+        // Refresh purchase requests list (don't refresh credits as purchase is not completed yet)
         this.fetchPendingRequests();
       },
       error: (error) => {
         console.error('Error sending credits request:', error);
-        // Log detailed error information
-        console.error('Status:', error.status);
-        console.error('Error body:', error.error);
         
-        if (error.status === 200) {
-          // If somehow we got a 200 status as an error, treat it as success
-          this.fetchPendingRequests();
+        // Handle different error scenarios
+        if (error.status === 400 && error.error?.message) {
+          this.showToast(error.error.message, 'error');
+        } else if (error.status === 500) {
+          this.showToast('Server error processing request. Please try again later.', 'error');
         } else {
-          // Handle validation errors (400 Bad Request)
-          if (error.status === 400 && error.error?.message) {
-            this.showToast(error.error.message, 'error');
-          } else if (error.status === 500) {
-            // Special handling for 500 errors - likely backend issue
-            this.showToast('Server error processing credits request. Please try again later or contact support.', 'error');
-          } else {
-            this.showToast('Error sending credits request. Please try again.', 'error');
-          }
+          this.showToast('Error sending purchase request. Please try again.', 'error');
         }
       }
     });
@@ -1068,5 +1229,192 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     console.log('Manually refreshing purchase requests');
     this.showToast('Refreshing purchase requests...', 'success');
     this.fetchPendingRequests();
+  }
+
+  /**
+   * Get displayed requests based on current filter
+   */
+  getDisplayedRequests(): PurchaseRequest[] {
+    if (!this.pendingRequests || this.pendingRequests.length === 0) {
+      return [];
+    }
+
+    if (this.showAllRequests) {
+      // Show paginated results
+      const startIndex = 0;
+      const endIndex = (this.currentPage + 1) * this.PAGE_SIZE;
+      return this.pendingRequests.slice(startIndex, endIndex);
+    } else {
+      // Show only recent (last 30 days)
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - this.RECENT_DAYS_LIMIT);
+      
+      return this.pendingRequests.filter(request => {
+        const requestDate = new Date(request.requestDate);
+        return requestDate >= thirtyDaysAgo;
+      }).slice(0, this.PAGE_SIZE);
+    }
+  }
+
+  /**
+   * Track by function for ngFor performance
+   */
+  trackByRequestId(index: number, request: PurchaseRequest): string {
+    return request.id;
+  }
+
+  /**
+   * Get CSS class based on request type
+   */
+  getRequestTypeClass(type: string): string {
+    if (type.toLowerCase().includes('google') || type.toLowerCase().includes('workspace') || type.toLowerCase().includes('license')) {
+      return 'google-request';
+    }
+    if (type.toLowerCase().includes('signature') || type.toLowerCase().includes('satori') || type.toLowerCase().includes('credit')) {
+      return 'satori-request';
+    }
+    return 'general-request';
+  }
+
+  /**
+   * Get icon for request type
+   */
+  getRequestIcon(type: string): string {
+    if (type.toLowerCase().includes('google') || type.toLowerCase().includes('workspace') || type.toLowerCase().includes('license')) {
+      return 'business';
+    }
+    if (type.toLowerCase().includes('signature') || type.toLowerCase().includes('satori') || type.toLowerCase().includes('credit')) {
+      return 'verified';
+    }
+    return 'receipt';
+  }
+
+  /**
+   * Format activity title
+   */
+  formatActivityTitle(request: PurchaseRequest): string {
+    if (request.type.toLowerCase().includes('license')) {
+      return `Google Workspace ${request.type} Request`;
+    }
+    if (request.type.toLowerCase().includes('credit')) {
+      return 'Signature Satori Credits Purchase';
+    }
+    return request.type;
+  }
+
+  /**
+   * Format date for display
+   */
+  formatDate(dateString: string): string {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 1) {
+      return 'Yesterday';
+    } else if (diffDays < 7) {
+      return `${diffDays} days ago`;
+    } else {
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+      });
+    }
+  }
+
+  /**
+   * Get status icon
+   */
+  getStatusIcon(status: string): string {
+    switch (status?.toUpperCase()) {
+      case 'PENDING':
+        return 'schedule';
+      case 'AWAITING_CONFIRMATION':
+        return 'mail_outline';
+      case 'APPROVED':
+        return 'check_circle';
+      case 'REJECTED':
+        return 'cancel';
+      default:
+        return 'help_outline';
+    }
+  }
+
+  /**
+   * Format status for display
+   */
+  formatStatus(status: string): string {
+    switch (status?.toUpperCase()) {
+      case 'PENDING':
+        return 'Pending';
+      case 'AWAITING_CONFIRMATION':
+        return 'Awaiting Confirmation';
+      case 'APPROVED':
+        return 'Approved';
+      case 'REJECTED':
+        return 'Rejected';
+      default:
+        return status;
+    }
+  }
+
+  /**
+   * Get quantity unit based on request type
+   */
+  getQuantityUnit(type: string): string {
+    if (type.toLowerCase().includes('license')) {
+      return 'licenses';
+    }
+    if (type.toLowerCase().includes('credit')) {
+      return 'credits';
+    }
+    return 'items';
+  }
+
+  /**
+   * View request details
+   */
+  viewRequestDetails(request: PurchaseRequest): void {
+    // TODO: Implement request details modal or navigation
+    console.log('View request details:', request);
+    this.showToast(`Request details for ${request.id}`, 'success');
+  }
+
+  /**
+   * Load more requests
+   */
+  loadMoreRequests(): void {
+    this.currentPage++;
+    // Update hasMoreRequests based on whether there are more items
+    const totalDisplayed = (this.currentPage + 1) * this.PAGE_SIZE;
+    this.hasMoreRequests = totalDisplayed < this.pendingRequests.length;
+  }
+
+  /**
+   * Get service logo URL based on request type
+   */
+  getServiceLogo(type: string): string {
+    if (type.toLowerCase().includes('google') || type.toLowerCase().includes('workspace') || type.toLowerCase().includes('license')) {
+      return 'https://static.dezeen.com/uploads/2025/05/sq-google-g-logo-update_dezeen_2364_col_0.jpg';
+    }
+    if (type.toLowerCase().includes('signature') || type.toLowerCase().includes('satori') || type.toLowerCase().includes('credit')) {
+      return 'https://signaturesatori.com/wp-content/uploads/SignatureSatori_Logo_for_Google.png';
+    }
+    return 'https://static.dezeen.com/uploads/2025/05/sq-google-g-logo-update_dezeen_2364_col_0.jpg'; // Default to Google logo
+  }
+
+  /**
+   * Get service name based on request type
+   */
+  getServiceName(type: string): string {
+    if (type.toLowerCase().includes('google') || type.toLowerCase().includes('workspace') || type.toLowerCase().includes('license')) {
+      return 'Google Workspace';
+    }
+    if (type.toLowerCase().includes('signature') || type.toLowerCase().includes('satori') || type.toLowerCase().includes('credit')) {
+      return 'Signature Satori';
+    }
+    return 'Google Workspace'; // Default
   }
 } 

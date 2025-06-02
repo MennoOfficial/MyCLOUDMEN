@@ -166,39 +166,25 @@ public class UserSyncService {
             newUser.setCustomerGoogleId(sub.substring("google-oauth2|".length()));
         }
 
-        // First check if user is a system admin
+        // DEFAULT: Set all users to PENDING with no roles
+        newUser.setStatus(StatusType.PENDING);
+        newUser.setRoles(new ArrayList<>());
+
+        // First check if user is a system admin - only case that gets SYSTEM_ADMIN role
         if (isSystemAdmin(email, domain)) {
             logger.info("New user {} is recognized as a system admin", email);
             newUser.setRoles(List.of(RoleType.SYSTEM_ADMIN));
             newUser.setStatus(StatusType.ACTIVATED);
         }
-        // Check if user's email exactly matches a company contact email (highest
-        // priority for company admin)
+        // Check if user's email exactly matches a company contact email - only case
+        // that gets COMPANY_ADMIN role
         else if (isExactCompanyContactMatch(email)) {
             logger.info("New user {} is an exact match for a company primary contact, setting as COMPANY_ADMIN", email);
             newUser.setRoles(List.of(RoleType.COMPANY_ADMIN));
             newUser.setStatus(StatusType.ACTIVATED);
         }
-        // Check if user is a company contact (based on domain)
-        else if (isCompanyContactEmail(email)) {
-            logger.info("New user {} is recognized as a company contact", email);
-            newUser.setRoles(List.of(RoleType.COMPANY_ADMIN));
-            newUser.setStatus(StatusType.ACTIVATED);
-        }
-        // Otherwise check company domain match
-        else {
-            TeamleaderCompany matchingCompany = findCompanyByDomain(domain);
-            if (matchingCompany != null) {
-                logger.info("New user {} matches company domain for: {}",
-                        email, matchingCompany.getName());
-                newUser.setRoles(List.of(RoleType.COMPANY_USER));
-                newUser.setStatus(StatusType.PENDING);
-            } else {
-                logger.info("New user {} has no company match, setting as PENDING with no roles", email);
-                newUser.setRoles(new ArrayList<>());
-                newUser.setStatus(StatusType.PENDING);
-            }
-        }
+        // All other users stay PENDING with no roles - they need to be approved by an
+        // admin
 
         newUser.setDateTimeAdded(LocalDateTime.now());
 
@@ -246,64 +232,37 @@ public class UserSyncService {
      * Assign appropriate role to user based on email and domain
      */
     public void assignUserRole(User user) {
-        // Preserve existing roles for updates unless explicitly changed
+        // Initialize empty roles list if null
         List<RoleType> roles = user.getRoles() != null ? new ArrayList<>(user.getRoles()) : new ArrayList<>();
         String email = user.getEmail();
         String domain = user.getPrimaryDomain();
 
-        // Check if user should be a system admin
+        // DEFAULT: Most users should be PENDING with no roles until approved
+        if (user.getStatus() == null) {
+            user.setStatus(StatusType.PENDING);
+        }
+
+        // Only assign roles for specific cases:
+
+        // 1. System admins - automatically assigned and activated
         if (isSystemAdmin(email, domain)) {
             logger.info("Assigning SYSTEM_ADMIN role to user: {}", email);
             if (!roles.contains(RoleType.SYSTEM_ADMIN)) {
+                roles.clear(); // Clear other roles
                 roles.add(RoleType.SYSTEM_ADMIN);
             }
             user.setStatus(StatusType.ACTIVATED);
         }
-        // Check if user's email exactly matches a company contact email (highest
-        // priority)
+        // 2. Exact company contact matches - automatically assigned and activated
         else if (isExactCompanyContactMatch(email)) {
             logger.info("User {} is an exact match for company contact, assigning COMPANY_ADMIN role", email);
             if (!roles.contains(RoleType.COMPANY_ADMIN)) {
+                roles.clear(); // Clear other roles
                 roles.add(RoleType.COMPANY_ADMIN);
             }
             user.setStatus(StatusType.ACTIVATED);
         }
-        // Check if user is a company contact which should be an admin (domain-based
-        // match)
-        else if (isCompanyContactEmail(email)) {
-            logger.info("Assigning COMPANY_ADMIN role to contact: {}", email);
-            if (!roles.contains(RoleType.COMPANY_ADMIN)) {
-                roles.add(RoleType.COMPANY_ADMIN);
-            }
-            user.setStatus(StatusType.ACTIVATED);
-        }
-        // Check if domain matches a company
-        else {
-            TeamleaderCompany matchingCompany = findCompanyByDomain(domain);
-            if (matchingCompany != null) {
-                logger.info("Assigning COMPANY_USER role to domain match: {} for company: {}",
-                        email, matchingCompany.getName());
-                // Only add COMPANY_USER role if no roles exist
-                if (roles.isEmpty() && !roles.contains(RoleType.COMPANY_USER)) {
-                    roles.add(RoleType.COMPANY_USER);
-                }
-
-                // For new users, set to PENDING
-                if (user.getStatus() == null) {
-                    user.setStatus(StatusType.PENDING);
-                }
-            } else {
-                logger.info("No matching company found for user: {}", email);
-                // If no roles already exist and no company match, don't assign roles
-                if (roles.isEmpty()) {
-                    logger.info("No role assigned for user: {}", email);
-                    // Only set PENDING if status is not already set
-                    if (user.getStatus() == null) {
-                        user.setStatus(StatusType.PENDING);
-                    }
-                }
-            }
-        }
+        // All other users require manual approval
 
         user.setRoles(roles);
     }

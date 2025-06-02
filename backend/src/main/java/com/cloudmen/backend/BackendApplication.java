@@ -51,6 +51,19 @@ public class BackendApplication {
             System.setProperty("MAIL_PORT", dotenv.get("MAIL_PORT", "587"));
             System.setProperty("MAIL_USERNAME", dotenv.get("MAIL_USERNAME", "mycloudmen@gmail.com"));
             System.setProperty("MAIL_PASSWORD", dotenv.get("MAIL_PASSWORD", "your-app-password-here"));
+
+            // Application URLs
+            // Set APP_BASE_URL directly from .env
+            String appBaseUrl = dotenv.get("APP_BASE_URL", "");
+            if (!appBaseUrl.isEmpty()) {
+                System.setProperty("APP_BASE_URL", appBaseUrl);
+            }
+
+            // Set API_BASE_URL if provided in .env
+            String apiBaseUrl = dotenv.get("API_BASE_URL", "");
+            if (!apiBaseUrl.isEmpty()) {
+                System.setProperty("API_BASE_URL", apiBaseUrl);
+            }
         }
 
         SpringApplication.run(BackendApplication.class, args);

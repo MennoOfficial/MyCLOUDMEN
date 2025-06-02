@@ -920,4 +920,19 @@ export class CompanyDetailComponent implements OnInit {
       default: return '';
     }
   }
+
+  /**
+   * Format website URL to ensure it has a proper protocol
+   */
+  formatWebsiteUrl(website: string | undefined): string {
+    if (!website) return '';
+    
+    // If the URL already has a protocol, return as is
+    if (website.startsWith('http://') || website.startsWith('https://')) {
+      return website;
+    }
+    
+    // Default to https for secure connections
+    return `https://${website}`;
+  }
 } 

@@ -27,11 +27,11 @@ export class NotFoundComponent {
     
     // Use role-based navigation
     if (userRoles.includes('SYSTEM_ADMIN')) {
-      this.router.navigate(['/system-admin/companies']);
+      this.router.navigate(['/companies']);
     } else if (userRoles.includes('COMPANY_ADMIN')) {
-      this.router.navigate(['/company-admin/users']);
+      this.router.navigate(['/users']);
     } else {
-      this.router.navigate(['/company-user/requests']);
+      this.router.navigate(['/requests']);
     }
   }
 } 

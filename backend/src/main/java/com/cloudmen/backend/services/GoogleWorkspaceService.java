@@ -126,7 +126,7 @@ public class GoogleWorkspaceService {
     /**
      * Converts the Google API response to our simplified subscription list DTO
      */
-    private GoogleWorkspaceSubscriptionListResponseDTO convertToSimplifiedSubscriptionList(
+    public GoogleWorkspaceSubscriptionListResponseDTO convertToSimplifiedSubscriptionList(
             JsonNode jsonNode) {
         GoogleWorkspaceSubscriptionListResponseDTO response = new GoogleWorkspaceSubscriptionListResponseDTO();
         List<GoogleWorkspaceSubscriptionDTO> subscriptions = new ArrayList<>();
@@ -144,7 +144,11 @@ public class GoogleWorkspaceService {
     /**
      * Converts a single subscription from the API response to our simplified DTO
      */
-    private GoogleWorkspaceSubscriptionDTO convertToSimplifiedSubscription(JsonNode jsonNode) {
+    public GoogleWorkspaceSubscriptionDTO convertToSimplifiedSubscription(JsonNode jsonNode) {
+        if (jsonNode == null) {
+            return null;
+        }
+
         GoogleWorkspaceSubscriptionDTO dto = new GoogleWorkspaceSubscriptionDTO();
 
         if (jsonNode.has("skuId")) {
@@ -228,31 +232,33 @@ public class GoogleWorkspaceService {
     }
 
     /**
-     * Normalize Google Workspace license types to handle various naming formats.
-     * Extracts the core license tier (e.g., "Business Standard") from various
-     * formats.
-     * 
-     * @param licenseType The license type string to normalize
-     * @return Normalized license type string
+     * Standardize license type names for comparison.
+     * This strips "Google Workspace" prefix and normalizes case.
      */
-    private String normalizeGoogleLicenseType(String licenseType) {
+    public String normalizeGoogleLicenseType(String licenseType) {
         if (licenseType == null) {
             return "";
         }
 
         // Remove "Google Workspace" prefix if present
-        String normalized = licenseType.replaceAll("(?i)^google\\s+workspace\\s+", "");
+        String normalized = licenseType.replaceAll("(?i)Google\\s+Workspace\\s+", "");
 
-        // Extract core tier name (Business Starter, Business Standard, Business Plus)
-        if (normalized.contains("Starter") || normalized.contains("starter")) {
+        // For common license types, standardize capitalization
+        if (normalized.equalsIgnoreCase("business starter")) {
             return "Business Starter";
-        } else if (normalized.contains("Standard") || normalized.contains("standard")) {
+        } else if (normalized.equalsIgnoreCase("business standard")) {
             return "Business Standard";
-        } else if (normalized.contains("Plus") || normalized.contains("plus")) {
+        } else if (normalized.equalsIgnoreCase("business plus")) {
             return "Business Plus";
+        } else if (normalized.equalsIgnoreCase("enterprise essentials")) {
+            return "Enterprise Essentials";
+        } else if (normalized.equalsIgnoreCase("enterprise standard")) {
+            return "Enterprise Standard";
+        } else if (normalized.equalsIgnoreCase("enterprise plus")) {
+            return "Enterprise Plus";
         }
 
-        // If no specific tier found, return the original normalized string
+        // Return as-is for custom license types
         return normalized;
     }
 }

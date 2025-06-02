@@ -42,10 +42,10 @@ export const roleGuard: CanActivateFn = (route, state) => {
 
 function redirectBasedOnUserRole(roles: UserRole[], router: Router): void {
   if (roles.includes('SYSTEM_ADMIN')) {
-    router.navigate(['/system-admin/companies']);
+    router.navigate(['/companies']);
   } else if (roles.includes('COMPANY_ADMIN')) {
-    router.navigate(['/company-admin/users']);
+    router.navigate(['/users']);
   } else {
-    router.navigate(['/company-user/requests']);
+    router.navigate(['/requests']);
   }
 } 

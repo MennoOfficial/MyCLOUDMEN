@@ -5,6 +5,7 @@ import com.cloudmen.backend.api.dtos.users.UserResponseDTO;
 import com.cloudmen.backend.domain.enums.RoleType;
 import com.cloudmen.backend.domain.enums.StatusType;
 import com.cloudmen.backend.domain.models.User;
+import com.cloudmen.backend.services.UserEmailService;
 import com.cloudmen.backend.services.UserService;
 import com.cloudmen.backend.services.UserSyncService;
 import org.springframework.http.HttpStatus;
@@ -30,17 +31,20 @@ import org.slf4j.LoggerFactory;
 public class UserController {
     private final UserService userService;
     private final UserSyncService userSyncService;
+    private final UserEmailService userEmailService;
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
     /**
      * Constructor with dependency injection for UserService and UserSyncService
      * 
-     * @param userService     The service for user operations
-     * @param userSyncService The service for user synchronization
+     * @param userService      The service for user operations
+     * @param userSyncService  The service for user synchronization
+     * @param userEmailService The service for sending user-related emails
      */
-    public UserController(UserService userService, UserSyncService userSyncService) {
+    public UserController(UserService userService, UserSyncService userSyncService, UserEmailService userEmailService) {
         this.userService = userService;
         this.userSyncService = userSyncService;
+        this.userEmailService = userEmailService;
     }
 
     /**
@@ -217,6 +221,17 @@ public class UserController {
 
                         User updatedUser = userService.updateUser(user.getId(), user)
                                 .orElse(user); // Fall back to original user if update fails
+
+                        // Send approval email
+                        try {
+                            userEmailService.sendUserApprovalEmail(updatedUser);
+                            logger.info("Approval email sent to user: {}", updatedUser.getEmail());
+                        } catch (Exception e) {
+                            // Log the error but don't fail the approval process
+                            logger.error("Failed to send approval email to {}: {}",
+                                    updatedUser.getEmail(), e.getMessage(), e);
+                        }
+
                         return ResponseEntity.ok(updatedUser);
                     } else {
                         return ResponseEntity.badRequest()
@@ -301,7 +316,9 @@ public class UserController {
 
     /**
      * Register a new user in the system
-     * This endpoint is called when a new user logs in via Auth0 for the first time
+     * This endpoint is called when a new user logs in via Auth0 for the first time.
+     * By default, users are created with PENDING status and no roles.
+     * Only system admins and company primary contacts are auto-activated.
      * 
      * @param userDTO Data Transfer Object containing the user information from
      *                Auth0
@@ -358,7 +375,7 @@ public class UserController {
         }
 
         try {
-            // Create user
+            // Create user - with default PENDING status
             User newUser = new User();
             newUser.setAuth0Id(userDTO.getAuth0Id());
             newUser.setEmail(userDTO.getEmail());
@@ -369,6 +386,7 @@ public class UserController {
             newUser.setStatus(StatusType.PENDING); // Default status, may be changed by UserSyncService
             newUser.setPrimaryDomain(domain);
             newUser.setDateTimeAdded(LocalDateTime.now());
+            newUser.setRoles(new ArrayList<>()); // Default to no roles
 
             // Handle Google integration if applicable
             if (userDTO.getProvider() != null && userDTO.getProvider().equals("Google")
@@ -377,16 +395,24 @@ public class UserController {
                 logger.info("Set Google ID for user: {}", userDTO.getCustomerGoogleId());
             }
 
-            // Let UserSyncService determine the appropriate role
-            logger.info("Assigning role for user: {}", userDTO.getAuth0Id());
+            // Let UserSyncService determine if this user qualifies for special role
+            // assignment
+            logger.info("Checking role eligibility for user: {}", userDTO.getAuth0Id());
             userSyncService.assignUserRole(newUser);
-            logger.info("Role assigned for user: {}. Roles: {}, Status: {}",
-                    userDTO.getAuth0Id(), newUser.getRoles(), newUser.getStatus());
+            logger.info("Role assignment complete for user: {}. Roles: {}, Status: {}",
+                    userDTO.getAuth0Id(),
+                    newUser.getRoles() != null && !newUser.getRoles().isEmpty() ? newUser.getRoles() : "none",
+                    newUser.getStatus());
 
             // Log special situations for debugging
-            if (newUser.getStatus() == StatusType.ACTIVATED &&
-                    newUser.getRoles().contains(RoleType.COMPANY_ADMIN)) {
-                logger.info("User {} was automatically activated as COMPANY_ADMIN", email);
+            if (newUser.getStatus() == StatusType.ACTIVATED) {
+                if (newUser.getRoles() != null && newUser.getRoles().contains(RoleType.SYSTEM_ADMIN)) {
+                    logger.info("User {} was automatically activated as SYSTEM_ADMIN", email);
+                } else if (newUser.getRoles() != null && newUser.getRoles().contains(RoleType.COMPANY_ADMIN)) {
+                    logger.info("User {} was automatically activated as COMPANY_ADMIN", email);
+                }
+            } else {
+                logger.info("User {} was created with PENDING status and requires admin approval", email);
             }
 
             // Saves the user via UserService

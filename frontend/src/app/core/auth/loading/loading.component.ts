@@ -81,11 +81,11 @@ export class LoadingComponent implements OnInit {
         // Default redirects based on role if nothing else matches
         console.log(`[Loading] Using role-based redirect`);
         if (user.roles.includes('SYSTEM_ADMIN')) {
-          this.router.navigate(['/system-admin/companies'], { replaceUrl: true });
+          this.router.navigate(['/companies'], { replaceUrl: true });
         } else if (user.roles.includes('COMPANY_ADMIN')) {
-          this.router.navigate(['/company-admin/users'], { replaceUrl: true });
+          this.router.navigate(['/users'], { replaceUrl: true });
         } else {
-          this.router.navigate(['/company-user/requests'], { replaceUrl: true });
+          this.router.navigate(['/requests'], { replaceUrl: true });
         }
       } else {
         // No user available, redirect to home
