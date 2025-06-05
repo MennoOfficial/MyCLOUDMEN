@@ -67,12 +67,14 @@ public class PurchaseController {
 
     /**
      * Endpoint to accept a purchase request.
+     * Simplified approach - just update status to APPROVED directly.
      * 
      * @param requestId The ID of the purchase request to accept
      * @return A success or error message
      */
     @GetMapping("/purchase/accept")
     public ResponseEntity<Map<String, Object>> acceptPurchase(@RequestParam String requestId) {
+        log.info("=== PURCHASE ACCEPTANCE START ===");
         log.info("Processing purchase acceptance for request ID: {}", requestId);
 
         try {
@@ -80,6 +82,7 @@ public class PurchaseController {
             Optional<PurchaseRequest> requestOpt = purchaseRequestService.getPurchaseRequestById(requestId);
 
             if (requestOpt.isEmpty()) {
+                log.error("Request with ID {} not found in database", requestId);
                 // Return error response
                 Map<String, Object> errorResponse = new HashMap<>();
                 errorResponse.put("status", "error");
@@ -88,47 +91,71 @@ public class PurchaseController {
                 return ResponseEntity.ok(errorResponse);
             }
 
-                PurchaseRequest request = requestOpt.get();
-            String userEmail = request.getUserEmail();
-                String type = request.getType();
+            PurchaseRequest request = requestOpt.get();
+            log.info("Found request - ID: {}, Current Status: {}, Type: {}, User: {}",
+                    request.getId(), request.getStatus(), request.getType(), request.getUserEmail());
 
-            // Check request type and redirect to appropriate handler
-                if ("licenses".equals(type)) {
-                    // This is a Google Workspace license request
-                    log.info("Redirecting to Google Workspace license acceptance endpoint for request: {}", requestId);
-                    return acceptGoogleWorkspaceLicenseRequest(requestId);
-                } else if ("credits".equals(type)) {
-                    // This is a Signature Satori credits request
-                    return acceptSignatureSatoriCreditsRequest(requestId);
-                } else {
-                    // Generic purchase flow for other types
-                // Update the request status
-                    request.setStatus("APPROVED");
-                purchaseRequestService.savePurchaseRequest(request);
+            // **SIMPLIFIED APPROACH - DIRECT STATUS UPDATE**
+            // Set status to APPROVED regardless of type
+            String oldStatus = request.getStatus();
+            request.setStatus("APPROVED");
+            request.setProcessedDate(new Date());
 
-                    // Send confirmation email to the user
-                    try {
-                        emailService.sendConfirmationEmail(userEmail);
-                    } catch (MessagingException e) {
-                        log.error("Failed to send confirmation email", e);
-                        // Continue processing even if email fails
-                    }
+            log.info("Updating status from '{}' to 'APPROVED' for request ID: {}", oldStatus, requestId);
 
-                // Return success response
-                Map<String, Object> response = new HashMap<>();
-                response.put("status", "success");
-                response.put("requestId", requestId);
-                response.put("email", userEmail);
-                response.put("type", "purchase");
-                return ResponseEntity.ok(response);
+            // Save the request using the service
+            PurchaseRequest savedRequest = purchaseRequestService.savePurchaseRequest(request);
+
+            // **CRITICAL - Verify the save worked by fetching the request again**
+            Optional<PurchaseRequest> verificationOpt = purchaseRequestService.getPurchaseRequestById(requestId);
+            if (verificationOpt.isPresent()) {
+                PurchaseRequest verifiedRequest = verificationOpt.get();
+                log.info("VERIFICATION: Request ID {} now has status: '{}'", requestId, verifiedRequest.getStatus());
+
+                if (!"APPROVED".equals(verifiedRequest.getStatus())) {
+                    log.error("STATUS UPDATE FAILED! Expected 'APPROVED' but found '{}'", verifiedRequest.getStatus());
+                    Map<String, Object> errorResponse = new HashMap<>();
+                    errorResponse.put("status", "error");
+                    errorResponse.put("message", "Failed to update request status");
+                    errorResponse.put("requestId", requestId);
+                    return ResponseEntity.ok(errorResponse);
+                }
+            } else {
+                log.error("VERIFICATION FAILED - Could not re-fetch request after save");
             }
+
+            // Send confirmation email to the user
+            try {
+                emailService.sendConfirmationEmail(request.getUserEmail());
+                log.info("Confirmation email sent to: {}", request.getUserEmail());
+            } catch (MessagingException e) {
+                log.error("Failed to send confirmation email to {}: {}", request.getUserEmail(), e.getMessage());
+                // Continue processing even if email fails
+            }
+
+            // Return success response
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("requestId", requestId);
+            response.put("email", request.getUserEmail());
+            response.put("type", request.getType());
+            response.put("previousStatus", oldStatus);
+            response.put("newStatus", "APPROVED");
+            response.put("message", "Request has been successfully approved");
+
+            log.info("=== PURCHASE ACCEPTANCE SUCCESS ===");
+            log.info("Request ID {} successfully approved. Response: {}", requestId, response);
+
+            return ResponseEntity.ok(response);
+
         } catch (Exception e) {
-            log.error("Error processing purchase acceptance: {}", e.getMessage(), e);
+            log.error("=== PURCHASE ACCEPTANCE ERROR ===");
+            log.error("Error processing purchase acceptance for request ID {}: {}", requestId, e.getMessage(), e);
 
             // Return error response
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("status", "error");
-            errorResponse.put("message", e.getMessage());
+            errorResponse.put("message", "Failed to process request: " + e.getMessage());
             errorResponse.put("requestId", requestId);
             return ResponseEntity.ok(errorResponse);
         }
@@ -220,68 +247,6 @@ public class PurchaseController {
     }
 
     /**
-     * Endpoint to accept a Google Workspace license purchase request.
-     * 
-     * @param requestId The ID of the purchase request to accept
-     * @return ResponseEntity with the result
-     */
-    @GetMapping("/purchase/google-workspace/accept")
-    public ResponseEntity<Map<String, Object>> acceptGoogleWorkspaceLicenseRequest(@RequestParam String requestId) {
-        try {
-            // Check if the request exists in the database
-            Optional<PurchaseRequest> requestOpt = purchaseRequestService.getPurchaseRequestById(requestId);
-
-            if (requestOpt.isEmpty()) {
-                // Return error response
-                Map<String, Object> errorResponse = new HashMap<>();
-                errorResponse.put("status", "error");
-                errorResponse.put("message", "License request not found");
-                errorResponse.put("requestId", requestId);
-                return ResponseEntity.ok(errorResponse);
-            }
-
-            PurchaseRequest request = requestOpt.get();
-            String userEmail = request.getUserEmail();
-
-            // Update the request status
-            request.setStatus("APPROVED");
-            purchaseRequestService.savePurchaseRequest(request);
-
-            // Send confirmation email
-            try {
-                emailService.sendGoogleWorkspaceLicenseConfirmation(
-                        userEmail,
-                        request.getQuantity(),
-                        request.getLicenseType(),
-                        request.getDomain(),
-                        request.getCost());
-            } catch (MessagingException e) {
-                log.error("Failed to send Google Workspace license confirmation email", e);
-            }
-
-            // Return success response
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("requestId", requestId);
-            response.put("email", userEmail);
-            response.put("licenseType", request.getLicenseType());
-            response.put("count", request.getQuantity());
-            response.put("domain", request.getDomain());
-            response.put("type", "license");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("Error processing Google Workspace license request acceptance: {}", e.getMessage(), e);
-
-            // Return error response
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "error");
-            errorResponse.put("message", e.getMessage());
-            errorResponse.put("requestId", requestId);
-            return ResponseEntity.ok(errorResponse);
-        }
-    }
-
-    /**
      * Endpoint to request Signature Satori credits.
      * 
      * @param request    The credits request details
@@ -323,33 +288,33 @@ public class PurchaseController {
             }
 
             // Validate quantity
-        if (quantity == null || quantity < 100) {
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("status", "ERROR");
-            errorResponse.put("message", "Quantity must be at least 100 credits");
-            return ResponseEntity.badRequest().body(errorResponse);
-        }
+            if (quantity == null || quantity < 10) {
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("status", "ERROR");
+                errorResponse.put("message", "Quantity must be at least 10 credits");
+                return ResponseEntity.badRequest().body(errorResponse);
+            }
 
             // Create and save purchase request
             PurchaseRequest purchaseRequest = purchaseRequestService.createSignatureSatoriCreditsRequest(
                     userEmail, quantity, cost);
 
-        // Create response
-        Map<String, Object> response = new HashMap<>();
+            // Create response
+            Map<String, Object> response = new HashMap<>();
             response.put("requestId", purchaseRequest.getId());
-        response.put("quantity", quantity);
-        response.put("cost", cost);
-        response.put("status", "PENDING");
-        response.put("message", "Signature Satori credits request has been submitted and is pending approval");
+            response.put("quantity", quantity);
+            response.put("cost", cost);
+            response.put("status", "PENDING");
+            response.put("message", "Signature Satori credits request has been submitted and is pending approval");
 
-        try {
-            // Send purchase request email to the user
+            try {
+                // Send purchase request email to the user
                 emailService.sendPurchaseRequest(userEmail, purchaseRequest.getId());
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (MessagingException e) {
-            log.error("Failed to send Signature Satori credits request email", e);
-            response.put("message", "Request created but failed to send notification email");
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
+            } catch (MessagingException e) {
+                log.error("Failed to send Signature Satori credits request email", e);
+                response.put("message", "Request created but failed to send notification email");
+                return ResponseEntity.status(HttpStatus.CREATED).body(response);
             }
         } catch (Exception e) {
             log.error("Error creating Signature Satori credits request: {}", e.getMessage(), e);
@@ -385,14 +350,19 @@ public class PurchaseController {
             String userEmail = request.getUserEmail();
 
             // Update the request status
+            log.info("Updating credits request status to APPROVED for request ID: {}", requestId);
             request.setStatus("APPROVED");
-            purchaseRequestService.savePurchaseRequest(request);
+            PurchaseRequest savedRequest = purchaseRequestService.savePurchaseRequest(request);
+            log.info("Credits request status updated. New status: {}", savedRequest.getStatus());
+
+            // Verify that the status was properly saved by querying the database directly
+            purchaseRequestService.verifyStatusUpdate(requestId, "APPROVED");
 
             // Send confirmation email
-                try {
-                    emailService.sendConfirmationEmail(userEmail);
-                } catch (MessagingException e) {
-                    log.error("Failed to send credits confirmation email", e);
+            try {
+                emailService.sendConfirmationEmail(userEmail);
+            } catch (MessagingException e) {
+                log.error("Failed to send credits confirmation email", e);
             }
 
             // Return success response
@@ -470,5 +440,139 @@ public class PurchaseController {
 
         // Fallback to domain name if company wasn't found
         return "Company for " + domain;
+    }
+
+    /**
+     * Endpoint to check the status of a purchase request.
+     * 
+     * @param requestId The ID of the purchase request to check
+     * @return ResponseEntity with the current status of the request
+     */
+    @GetMapping("/purchase/status")
+    public ResponseEntity<Map<String, Object>> getPurchaseStatus(@RequestParam String requestId) {
+        log.info("Checking status for purchase request ID: {}", requestId);
+
+        try {
+            // Get the request from the database
+            Optional<PurchaseRequest> requestOpt = purchaseRequestService.getPurchaseRequestById(requestId);
+
+            if (requestOpt.isEmpty()) {
+                // Return error response
+                Map<String, Object> errorResponse = new HashMap<>();
+                errorResponse.put("status", "error");
+                errorResponse.put("message", "Request not found");
+                errorResponse.put("requestId", requestId);
+                return ResponseEntity.ok(errorResponse);
+            }
+
+            PurchaseRequest request = requestOpt.get();
+
+            // Create response with request details
+            Map<String, Object> response = new HashMap<>();
+            response.put("id", request.getId());
+            response.put("status", request.getStatus());
+            response.put("type", request.getType());
+            response.put("quantity", request.getQuantity());
+            response.put("userEmail", request.getUserEmail());
+
+            // Include license-specific fields if this is a license request
+            if ("licenses".equals(request.getType())) {
+                response.put("licenseType", request.getLicenseType());
+                response.put("domain", request.getDomain());
+            }
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error checking purchase status: {}", e.getMessage(), e);
+
+            // Return error response
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("status", "error");
+            errorResponse.put("message", e.getMessage());
+            errorResponse.put("requestId", requestId);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse);
+        }
+    }
+
+    /**
+     * Endpoint to check the status of a license request.
+     * This is an alias for /purchase/status that returns the same response
+     * but is called by the frontend with a different URL for semantic purposes.
+     * 
+     * @param requestId The ID of the license request to check
+     * @return ResponseEntity with the current status of the request
+     */
+    @GetMapping("/license/status")
+    public ResponseEntity<Map<String, Object>> getLicenseStatus(@RequestParam String requestId) {
+        // Simply delegate to the purchase status endpoint as the logic is the same
+        log.info("Checking status for license request ID: {}", requestId);
+        return getPurchaseStatus(requestId);
+    }
+
+    /**
+     * TEST ENDPOINT - Simple status update test for debugging
+     * This endpoint allows manual testing of the status update mechanism
+     * 
+     * @param requestId The ID of the purchase request to test
+     * @param status    The status to set (PENDING, APPROVED, REJECTED)
+     * @return ResponseEntity with the test result
+     */
+    @GetMapping("/purchase/test-status-update")
+    public ResponseEntity<Map<String, Object>> testStatusUpdate(
+            @RequestParam String requestId,
+            @RequestParam(defaultValue = "APPROVED") String status) {
+
+        log.info("=== TEST STATUS UPDATE ===");
+        log.info("Testing status update for request ID: {} to status: {}", requestId, status);
+
+        try {
+            // Get the request from the database
+            Optional<PurchaseRequest> requestOpt = purchaseRequestService.getPurchaseRequestById(requestId);
+
+            if (requestOpt.isEmpty()) {
+                Map<String, Object> response = new HashMap<>();
+                response.put("test", "FAILED");
+                response.put("error", "Request not found");
+                response.put("requestId", requestId);
+                return ResponseEntity.ok(response);
+            }
+
+            PurchaseRequest request = requestOpt.get();
+            String oldStatus = request.getStatus();
+
+            log.info("TEST: Found request - Current status: '{}', changing to: '{}'", oldStatus, status);
+
+            // Update status
+            request.setStatus(status);
+
+            // Save using service
+            PurchaseRequest savedRequest = purchaseRequestService.savePurchaseRequest(request);
+
+            // Immediate verification
+            Optional<PurchaseRequest> verifyOpt = purchaseRequestService.getPurchaseRequestById(requestId);
+            String finalStatus = verifyOpt.isPresent() ? verifyOpt.get().getStatus() : "NOT_FOUND";
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("test", "SUCCESS");
+            response.put("requestId", requestId);
+            response.put("oldStatus", oldStatus);
+            response.put("requestedStatus", status);
+            response.put("savedStatus", savedRequest.getStatus());
+            response.put("verifiedStatus", finalStatus);
+            response.put("statusUpdateWorked", status.equals(finalStatus));
+
+            log.info("TEST RESULT: {}", response);
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("TEST FAILED with exception: {}", e.getMessage(), e);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("test", "FAILED");
+            response.put("error", e.getMessage());
+            response.put("requestId", requestId);
+            return ResponseEntity.ok(response);
+        }
     }
 }

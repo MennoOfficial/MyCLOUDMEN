@@ -68,16 +68,21 @@ export class CallbackComponent implements OnInit {
   }
 
   private navigateBasedOnRoles(user: User): void {
-    if (user.roles.includes('SYSTEM_ADMIN')) {
-      this.router.navigate(['/companies']);
-    } else if (user.roles.includes('COMPANY_ADMIN')) {
-      this.router.navigate(['/users']);
-    } else {
-      this.router.navigate(['/requests']);
+    // **IMPORTANT: Check if there's a target URL stored from before login**
+    const targetUrl = sessionStorage.getItem('auth_target_url');
+    
+    if (targetUrl) {
+      // Clear the stored URL
+      sessionStorage.removeItem('auth_target_url');
+      console.log(`[DEBUG] Redirecting to stored target URL: ${targetUrl}`);
+      
+      // Navigate to the stored URL
+      this.router.navigateByUrl(targetUrl);
+      return;
     }
-  }
-
-  private redirectToDefaultPage(user: User): void {
+    
+    // Default navigation based on roles if no target URL
+    console.log(`[DEBUG] No target URL found, navigating based on roles`);
     if (user.roles.includes('SYSTEM_ADMIN')) {
       this.router.navigate(['/companies']);
     } else if (user.roles.includes('COMPANY_ADMIN')) {

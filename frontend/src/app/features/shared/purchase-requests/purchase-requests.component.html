@@ -46,7 +46,7 @@
         You will be redirected automatically in a moment...
       </p>
       <button
-        (click)="mode = 'normal'; router.navigate(['/purchase-requests'])"
+        (click)="mode = 'normal'; router.navigate(['/requests'])"
         class="btn btn-primary"
       >
         Go to Purchase Requests
@@ -61,7 +61,7 @@
       <h2>Something Went Wrong</h2>
       <p class="message">{{ message }}</p>
       <button
-        (click)="mode = 'normal'; router.navigate(['/purchase-requests'])"
+        (click)="mode = 'normal'; router.navigate(['/requests'])"
         class="btn btn-primary"
       >
         Go to Purchase Requests
@@ -213,7 +213,7 @@
     </div>
     <div class="button-container">
       <a href="/" class="btn btn-primary">Return to Dashboard</a>
-      <a routerLink="/purchase-requests" class="btn btn-secondary">Try Again</a>
+      <a routerLink="/requests" class="btn btn-secondary">Try Again</a>
     </div>
   </div>
 </div>
@@ -240,60 +240,65 @@
     </div>
     <div class="button-container">
       <a href="/" class="btn btn-primary">Return to Dashboard</a>
-      <a routerLink="/purchase-requests" class="btn btn-secondary">Try Again</a>
+      <a routerLink="/requests" class="btn btn-secondary">Try Again</a>
     </div>
   </div>
 </div>
 
-<!-- Normal Mode: Regular purchase requests UI -->
-<div *ngIf="mode === 'normal'" class="purchase-requests-page">
-  <!-- Enhanced Header Section -->
-  <div class="hero-header">
-    <div class="hero-content">
-      <div class="hero-icon">
-        <span class="material-icons">business_center</span>
-      </div>
-      <h1 class="hero-title">License & Credits Management</h1>
-      <p class="hero-subtitle">
-        Streamline your Google Workspace licenses and Signature Satori credits
-      </p>
-    </div>
-
-    <!-- Company Info Card - Enhanced -->
-    <div class="company-info-card" *ngIf="userInfo">
-      <div class="company-card-header">
-        <div class="company-icon">
-          <span class="material-icons">domain</span>
+<!-- Normal Mode: Professional purchase requests UI with standardized components -->
+<div *ngIf="mode === 'normal'" class="page-container">
+  <!-- Standardized Page Header -->
+  <app-page-header
+    title="License & Credits Management"
+    description="Manage your Google Workspace licenses and Signature Satori credits efficiently"
+    icon="business_center"
+    [actions]="headerActions"
+    (actionClick)="onHeaderAction($event)"
+  >
+    <!-- Company Info in Header Stats -->
+    <div slot="stats" class="company-info-stats" *ngIf="userInfo">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon">
+            <span class="material-icons">domain</span>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">Organization</div>
+            <div class="stat-value">
+              {{ userInfo?.company || "Your Organization" }}
+            </div>
+          </div>
         </div>
-        <div class="company-info">
-          <h3 class="company-name">
-            {{ userInfo?.company || "Your Organization" }}
-          </h3>
-          <div class="company-meta">
-            <div class="meta-item" *ngIf="!userInfo?.isPublicEmail">
-              <span class="material-icons">language</span>
-              <span>{{ userInfo?.domain }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="material-icons">person</span>
-              <span>{{ userInfo?.email }}</span>
-            </div>
+        <div class="stat-card" *ngIf="!userInfo?.isPublicEmail">
+          <div class="stat-icon">
+            <span class="material-icons">language</span>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">Domain</div>
+            <div class="stat-value">{{ userInfo?.domain }}</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon">
+            <span class="material-icons">person</span>
+          </div>
+          <div class="stat-content">
+            <div class="stat-label">Account</div>
+            <div class="stat-value">{{ userInfo?.email }}</div>
           </div>
         </div>
       </div>
     </div>
-  </div>
+  </app-page-header>
 
-  <!-- Loading & Error States -->
-  <div class="loading-container" *ngIf="isLoading">
-    <div class="loading-content">
-      <div class="spinner-modern"></div>
-      <h3>Loading your subscription information</h3>
-      <p>Please wait while we gather your license and credit details...</p>
-    </div>
-  </div>
+  <!-- Loading State -->
+  <app-loading-spinner
+    *ngIf="isLoading"
+    text="Loading your subscription information..."
+  ></app-loading-spinner>
 
-  <div class="error-container" *ngIf="loadingError">
+  <!-- Error State -->
+  <div *ngIf="loadingError" class="error-container">
     <div class="error-content">
       <div class="error-icon">
         <span class="material-icons">cloud_off</span>
@@ -303,7 +308,7 @@
         We're having trouble connecting to our services. Please try again in a
         moment.
       </p>
-      <button class="btn btn-primary retry-btn" (click)="ngOnInit()">
+      <button class="btn btn-primary" (click)="ngOnInit()">
         <span class="material-icons">refresh</span>
         Retry
       </button>
@@ -312,261 +317,263 @@
 
   <!-- Main Content -->
   <div class="content-container" *ngIf="!isLoading && !loadingError">
-    <!-- Google Workspace Section - Enhanced -->
-    <section class="google-workspace-section">
-      <div class="section-header">
-        <div class="section-title-group">
-          <div class="logo-container google-logo">
+    <!-- Service Cards Grid -->
+    <div class="services-grid">
+      <!-- Google Workspace Card -->
+      <div class="service-card google-workspace-card">
+        <div class="service-header">
+          <div class="service-logo">
             <img
-              src="https://static.dezeen.com/uploads/2025/05/sq-google-g-logo-update_dezeen_2364_col_0.jpg"
-              alt="Google"
-              class="service-logo"
+              src="https://crystalpng.com/wp-content/uploads/2025/05/google-logo.png"
+              alt="Google Workspace"
+              class="logo-img"
             />
           </div>
-          <div class="title-content">
-            <h2>Google Workspace Licenses</h2>
-            <p>
-              Professional email, cloud storage, and productivity tools for your
-              team
+          <div class="service-info">
+            <h2 class="service-title">Google Workspace</h2>
+            <p class="service-description">
+              Professional email, cloud storage, and productivity tools
             </p>
           </div>
         </div>
+
+        <div class="license-types-grid">
+          <!-- Business Starter -->
+          <div
+            class="license-type-card starter-card"
+            [class.has-licenses]="hasLicenseType('Business Starter')"
+          >
+            <div class="license-header">
+              <h3 class="plan-name">Business Starter</h3>
+              <div class="plan-price">
+                <span class="currency">$</span>
+                <span class="amount">7</span>
+                <span class="period">/month</span>
+              </div>
+              <div class="plan-commitment">1-year commitment per user</div>
+            </div>
+
+            <div class="license-features">
+              <div class="feature-item">
+                <span class="material-icons">cloud</span>
+                <span>30 GB pooled storage per user</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">email</span>
+                <span>Custom business email &#64;your-company.com</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">psychology</span>
+                <span>Gemini AI assistant in Gmail</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">videocam</span>
+                <span>100-participant video meetings</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">movie_creation</span>
+                <span>Google Vids AI-powered video creator</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">security</span>
+                <span>Security and management controls</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">support</span>
+                <span>Standard support</span>
+              </div>
+            </div>
+
+            <div class="license-status">
+              <div class="current-licenses">
+                <span class="count">{{
+                  getLicenseCount("Business Starter")
+                }}</span>
+                <span class="label">Active</span>
+              </div>
+              <button
+                class="btn-add-license"
+                (click)="openLicensePurchaseModal('Business Starter')"
+              >
+                <span class="material-icons">add</span>
+                Add Licenses
+              </button>
+            </div>
+          </div>
+
+          <!-- Business Standard -->
+          <div
+            class="license-type-card standard-card featured"
+            [class.has-licenses]="hasLicenseType('Business Standard')"
+          >
+            <div class="popular-badge">Most Popular</div>
+            <div class="license-header">
+              <h3 class="plan-name">Business Standard</h3>
+              <div class="plan-price">
+                <span class="currency">$</span>
+                <span class="amount">14</span>
+                <span class="period">/month</span>
+              </div>
+              <div class="plan-commitment">1-year commitment per user</div>
+            </div>
+
+            <div class="license-features">
+              <div class="feature-item">
+                <span class="material-icons">cloud</span>
+                <span>2 TB pooled storage per user</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">email</span>
+                <span>Custom business email &#64;your-company.com</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">psychology</span>
+                <span>Gemini AI in Gmail, Docs, Meet & more</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">videocam</span>
+                <span>150-participant meetings + recording</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">edit</span>
+                <span>eSignature with Docs and PDFs</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">schedule</span>
+                <span>Appointment booking pages</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">support</span>
+                <span>Standard support + AI research assistant</span>
+              </div>
+            </div>
+
+            <div class="license-status">
+              <div class="current-licenses">
+                <span class="count">{{
+                  getLicenseCount("Business Standard")
+                }}</span>
+                <span class="label">Active</span>
+              </div>
+              <button
+                class="btn-add-license featured"
+                (click)="openLicensePurchaseModal('Business Standard')"
+              >
+                <span class="material-icons">add</span>
+                Add Licenses
+              </button>
+            </div>
+          </div>
+
+          <!-- Business Plus -->
+          <div
+            class="license-type-card plus-card"
+            [class.has-licenses]="hasLicenseType('Business Plus')"
+          >
+            <div class="license-header">
+              <h3 class="plan-name">Business Plus</h3>
+              <div class="plan-price">
+                <span class="currency">$</span>
+                <span class="amount">22</span>
+                <span class="period">/month</span>
+              </div>
+              <div class="plan-commitment">1-year commitment per user</div>
+            </div>
+
+            <div class="license-features">
+              <div class="feature-item">
+                <span class="material-icons">cloud</span>
+                <span>5 TB pooled storage per user</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">email</span>
+                <span>Business email + eDiscovery & retention</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">psychology</span>
+                <span>Full Gemini AI + team of AI experts</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">videocam</span>
+                <span>500-participant meetings + tracking</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">edit</span>
+                <span>Advanced eSignature capabilities</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">admin_panel_settings</span>
+                <span>Enhanced security + Vault + endpoint mgmt</span>
+              </div>
+              <div class="feature-item">
+                <span class="material-icons">support</span>
+                <span>Standard support + AI research assistant</span>
+              </div>
+            </div>
+
+            <div class="license-status">
+              <div class="current-licenses">
+                <span class="count">{{
+                  getLicenseCount("Business Plus")
+                }}</span>
+                <span class="label">Active</span>
+              </div>
+              <button
+                class="btn-add-license"
+                (click)="openLicensePurchaseModal('Business Plus')"
+              >
+                <span class="material-icons">add</span>
+                Add Licenses
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="licenses-grid">
-        <!-- Business Starter -->
-        <div
-          class="license-card starter-card"
-          [class.has-licenses]="hasLicenseType('Business Starter')"
-        >
-          <div class="card-header">
-            <div class="plan-badge starter-badge">Essential</div>
-            <h3>Business Starter</h3>
-            <div class="price">
-              <span class="currency">$</span>
-              <span class="amount">7</span>
-              <span class="period">per user/month</span>
-            </div>
-          </div>
-
-          <div class="features-list">
-            <div class="feature-item">
-              <span class="material-icons">cloud</span>
-              <span>30 GB storage per user</span>
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">email</span>
-              <span
-                >Professional email {{ "@"
-                }}{{ userInfo?.displayDomain || "your-domain.com" }}</span
-              >
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">psychology</span>
-              <span>AI assistant Gemini in Gmail</span>
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">videocam</span>
-              <span>Video meetings (100 participants)</span>
-            </div>
-          </div>
-
-          <div class="license-status">
-            <div class="current-count">
-              <span class="count-label">Active Licenses</span>
-              <span class="count-number">{{
-                getLicenseCount("Business Starter")
-              }}</span>
-            </div>
-          </div>
-
-          <button
-            class="add-license-btn"
-            (click)="openLicensePurchaseModal('Business Starter')"
-          >
-            <span class="material-icons">add</span>
-            Add Licenses
-          </button>
-        </div>
-
-        <!-- Business Standard -->
-        <div
-          class="license-card standard-card featured-card"
-          [class.has-licenses]="hasLicenseType('Business Standard')"
-        >
-          <div class="popular-ribbon">Most Popular</div>
-          <div class="card-header">
-            <div class="plan-badge standard-badge">Recommended</div>
-            <h3>Business Standard</h3>
-            <div class="price">
-              <span class="currency">$</span>
-              <span class="amount">14</span>
-              <span class="period">per user/month</span>
-            </div>
-          </div>
-
-          <div class="features-list">
-            <div class="feature-item">
-              <span class="material-icons">cloud</span>
-              <span>2 TB storage per user</span>
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">email</span>
-              <span
-                >Professional email {{ "@"
-                }}{{ userInfo?.displayDomain || "your-domain.com" }}</span
-              >
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">psychology</span>
-              <span>Enhanced AI in Gmail, Docs, Meet</span>
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">videocam</span>
-              <span>Video meetings (150 participants)</span>
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">edit</span>
-              <span>E-signatures & advanced features</span>
-            </div>
-          </div>
-
-          <div class="license-status">
-            <div class="current-count">
-              <span class="count-label">Active Licenses</span>
-              <span class="count-number">{{
-                getLicenseCount("Business Standard")
-              }}</span>
-            </div>
-          </div>
-
-          <button
-            class="add-license-btn featured"
-            (click)="openLicensePurchaseModal('Business Standard')"
-          >
-            <span class="material-icons">add</span>
-            Add Licenses
-          </button>
-        </div>
-
-        <!-- Business Plus -->
-        <div
-          class="license-card plus-card"
-          [class.has-licenses]="hasLicenseType('Business Plus')"
-        >
-          <div class="card-header">
-            <div class="plan-badge plus-badge">Advanced</div>
-            <h3>Business Plus</h3>
-            <div class="price">
-              <span class="currency">$</span>
-              <span class="amount">22</span>
-              <span class="period">per user/month</span>
-            </div>
-          </div>
-
-          <div class="features-list">
-            <div class="feature-item">
-              <span class="material-icons">cloud</span>
-              <span>5 TB storage per user</span>
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">email</span>
-              <span
-                >Professional email {{ "@"
-                }}{{ userInfo?.displayDomain || "your-domain.com" }}</span
-              >
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">security</span>
-              <span>Enhanced security & management</span>
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">videocam</span>
-              <span>Video meetings (500 participants)</span>
-            </div>
-            <div class="feature-item">
-              <span class="material-icons">admin_panel_settings</span>
-              <span>Advanced endpoint management</span>
-            </div>
-          </div>
-
-          <div class="license-status">
-            <div class="current-count">
-              <span class="count-label">Active Licenses</span>
-              <span class="count-number">{{
-                getLicenseCount("Business Plus")
-              }}</span>
-            </div>
-          </div>
-
-          <button
-            class="add-license-btn"
-            (click)="openLicensePurchaseModal('Business Plus')"
-          >
-            <span class="material-icons">add</span>
-            Add Licenses
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Signature Satori Section - Enhanced -->
-    <section class="signature-satori-section">
-      <div class="section-header">
-        <div class="section-title-group">
-          <div class="logo-container satori-logo">
+      <!-- Signature Satori Card -->
+      <div class="service-card satori-card">
+        <div class="service-header">
+          <div class="service-logo">
             <img
               src="https://signaturesatori.com/wp-content/uploads/SignatureSatori_Logo_for_Google.png"
               alt="Signature Satori"
-              class="service-logo"
+              class="logo-img"
             />
           </div>
-          <div class="title-content">
-            <h2>Signature Satori Credits</h2>
-            <p>
-              Automated document processing and signature management solutions
+          <div class="service-info">
+            <h2 class="service-title">Signature Satori</h2>
+            <p class="service-description">
+              Automated document processing and signature management
             </p>
           </div>
         </div>
-      </div>
 
-      <div class="credits-dashboard">
-        <div class="credits-info-card">
-          <div class="balance-display">
-            <div class="balance-icon">
-              <span class="material-icons">account_balance_wallet</span>
-            </div>
-            <div class="balance-content">
-              <div class="balance-label">Current Balance</div>
-              <div class="balance-value">
-                <span class="amount">{{
-                  creditBalance | number : "1.0-0"
-                }}</span>
-                <span class="unit">credits</span>
+        <div class="credits-dashboard">
+          <div class="credits-balance-card">
+            <div class="balance-header">
+              <div class="balance-icon">
+                <span class="material-icons">account_balance_wallet</span>
+              </div>
+              <div class="balance-content">
+                <div class="balance-label">Current Balance</div>
+                <div class="balance-value">
+                  <span class="amount">{{
+                    creditBalance | number : "1.0-0"
+                  }}</span>
+                  <span class="unit">credits</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="credits-info">
-            <div class="info-item">
-              <span class="material-icons">info</span>
-              <span>One credit per document processed</span>
+            <div class="credits-info">
+              <div class="info-item">
+                <span class="material-icons">info</span>
+                <span>€1.00 per credit · One credit per document</span>
+              </div>
             </div>
-            <div class="info-item">
-              <span class="material-icons">attach_money</span>
-              <span>$0.50 per credit when purchasing in bulk</span>
-            </div>
-          </div>
-        </div>
 
-        <div class="credits-action-card">
-          <div class="action-content">
-            <h3>Need more credits?</h3>
-            <p>
-              Purchase credits in bulk to process more documents efficiently
-            </p>
             <button
-              class="purchase-credits-btn"
+              class="btn-purchase-credits"
               (click)="openCreditsPurchaseModal()"
             >
               <span class="material-icons">add_circle</span>
@@ -575,279 +582,249 @@
           </div>
         </div>
       </div>
-    </section>
+    </div>
 
-    <!-- Recent Activity Section - Enhanced -->
-    <section class="recent-activity-section">
+    <!-- Activity Section with Data Table -->
+    <div class="activity-section">
       <div class="section-header">
-        <div class="section-title-group">
-          <div class="icon-container">
-            <span class="material-icons">receipt_long</span>
-          </div>
-          <div class="title-content">
-            <h2>Recent Activity</h2>
-            <p>Track your license and credit requests from the last 30 days</p>
-          </div>
-        </div>
-        <div class="header-actions">
-          <button
-            class="btn btn-icon refresh-btn"
-            (click)="refreshPurchaseRequests()"
-            title="Refresh"
-          >
-            <span class="material-icons">refresh</span>
-          </button>
-          <button
-            class="btn btn-outline view-all-btn"
-            (click)="showAllRequests = !showAllRequests"
-          >
-            <span class="material-icons">{{
-              showAllRequests ? "visibility_off" : "visibility"
-            }}</span>
-            {{ showAllRequests ? "Show Recent" : "View All" }}
-          </button>
-        </div>
-      </div>
-
-      <div
-        class="activity-container"
-        *ngIf="pendingRequests.length > 0; else noActivity"
-      >
-        <div class="activity-list">
-          <div
-            class="activity-item"
-            *ngFor="
-              let request of getDisplayedRequests();
-              trackBy: trackByRequestId
-            "
-            [class]="getRequestTypeClass(request.type)"
-          >
-            <!-- Service Logo -->
-            <img
-              [src]="getServiceLogo(request.type)"
-              [alt]="getServiceName(request.type)"
-              class="service-logo"
-            />
-
-            <div class="activity-content">
-              <div class="activity-header">
-                <h4>{{ formatActivityTitle(request) }}</h4>
-                <div
-                  class="status-badge"
-                  [class]="getStatusBadgeClass(request.status)"
-                >
-                  <span class="status-text">{{
-                    formatStatus(request.status)
-                  }}</span>
-                </div>
-              </div>
-
-              <div class="activity-details">
-                <div class="detail-item">
-                  <span class="detail-label">Quantity</span>
-                  <span class="detail-value"
-                    >{{ request.quantity }}
-                    {{ getQuantityUnit(request.type) }}</span
-                  >
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">Cost</span>
-                  <span class="detail-value">{{
-                    request.cost | currency : "USD" : "symbol" : "1.2-2"
-                  }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="activity-date">
-              {{ formatDate(request.requestDate) }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Load More Button -->
-        <div
-          class="load-more-container"
-          *ngIf="hasMoreRequests && showAllRequests"
-        >
-          <button
-            class="btn btn-outline load-more-btn"
-            (click)="loadMoreRequests()"
-          >
-            <span class="material-icons">expand_more</span>
-            Load More Requests
-          </button>
-        </div>
-      </div>
-
-      <ng-template #noActivity>
-        <div class="no-activity-state">
-          <div class="no-activity-icon">
-            <span class="material-icons">inbox</span>
-          </div>
-          <h3>No recent activity</h3>
-          <p>
-            Your license and credit requests will appear here once you start
-            making purchases.
+        <div class="section-info">
+          <h2 class="section-title">Recent Activity</h2>
+          <p class="section-description">
+            Track your license and credit requests
           </p>
-          <div class="quick-actions">
-            <button
-              class="btn btn-primary"
-              (click)="openLicensePurchaseModal('Business Standard')"
-            >
-              <span class="material-icons">business</span>
-              Add Google Licenses
-            </button>
-            <button
-              class="btn btn-secondary"
-              (click)="openCreditsPurchaseModal()"
-            >
-              <span class="material-icons">verified</span>
-              Purchase Satori Credits
-            </button>
-          </div>
         </div>
-      </ng-template>
-    </section>
+      </div>
+
+      <!-- Standardized Data Table -->
+      <app-data-table
+        *ngIf="pendingRequests.length > 0"
+        [data]="displayedRequests"
+        [columns]="activityTableColumns"
+        [loading]="false"
+        [rowClickable]="true"
+        [showPagination]="false"
+        emptyIcon="receipt_long"
+        emptyTitle="No recent activity"
+        emptyMessage="Your license and credit requests will appear here"
+        (rowClick)="viewRequestDetails($event)"
+      ></app-data-table>
+
+      <!-- Empty State -->
+      <div *ngIf="pendingRequests.length === 0" class="empty-state">
+        <div class="empty-icon">
+          <span class="material-icons">receipt_long</span>
+        </div>
+        <h3>No recent activity</h3>
+        <p>
+          Your license and credit requests will appear here once you start
+          making purchases.
+        </p>
+        <div class="quick-actions">
+          <button
+            class="btn btn-primary"
+            (click)="openLicensePurchaseModal('Business Standard')"
+          >
+            <span class="material-icons">business</span>
+            Add Google Licenses
+          </button>
+          <button
+            class="btn btn-secondary"
+            (click)="openCreditsPurchaseModal()"
+          >
+            <span class="material-icons">verified</span>
+            Purchase Satori Credits
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- License Purchase Modal - Enhanced -->
+  <!-- Enhanced License Purchase Modal -->
   <div class="modal-overlay" *ngIf="showLicenseModal" (click)="closeModals()">
-    <div class="modal-content" (click)="$event.stopPropagation()">
+    <div
+      class="modal-content enhanced-modal"
+      (click)="$event.stopPropagation()"
+    >
       <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon google-modal">
+        <div class="modal-title-section">
+          <div class="modal-icon">
             <img
-              src="https://static.dezeen.com/uploads/2025/05/sq-google-g-logo-update_dezeen_2364_col_0.jpg"
+              src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Google_%22G%22_Logo.svg/512px-Google_%22G%22_Logo.svg.png"
               alt="Google"
-              class="modal-logo"
+              class="modal-service-logo"
             />
           </div>
-          <h3>Purchase Google Workspace Licenses</h3>
+          <h3 class="modal-title">Purchase Google Workspace Licenses</h3>
         </div>
-        <button class="close-button" (click)="closeModals()">
+        <button class="modal-close-btn" (click)="closeModals()">
           <span class="material-icons">close</span>
         </button>
       </div>
 
       <div class="modal-body">
-        <div class="license-type-display">
-          <h4>{{ selectedLicenseType }}</h4>
-          <div class="license-price">
-            {{ getLicensePrice(selectedLicenseType) }} per user/month
+        <div class="license-selection-display">
+          <div class="selected-plan">
+            <h4 class="plan-name">{{ selectedLicenseType }}</h4>
+            <div class="plan-price">
+              {{ getLicensePrice(selectedLicenseType) }} per user/month
+            </div>
           </div>
         </div>
 
-        <div class="form-control">
-          <label for="licenseQuantity">Number of licenses to purchase:</label>
-          <input
-            type="number"
-            id="licenseQuantity"
-            [(ngModel)]="purchaseLicenseQuantity"
-            min="1"
-            max="100"
-            step="1"
-          />
+        <div class="form-section">
+          <label class="form-label" for="licenseQuantity"
+            >Number of licenses to purchase</label
+          >
+          <div class="input-group">
+            <input
+              type="number"
+              id="licenseQuantity"
+              class="form-input"
+              [(ngModel)]="purchaseLicenseQuantity"
+              min="1"
+              max="100"
+              step="1"
+              placeholder="Enter quantity"
+            />
+            <span class="input-suffix">licenses</span>
+          </div>
         </div>
 
-        <div class="cost-summary">
-          <div class="summary-row">
-            <span class="label">License type:</span>
-            <span class="value">{{ selectedLicenseType }}</span>
+        <div class="cost-breakdown">
+          <div class="breakdown-header">
+            <h4>Cost Breakdown</h4>
           </div>
-          <div class="summary-row">
-            <span class="label">Price per license:</span>
-            <span class="value">{{
-              getLicensePrice(selectedLicenseType)
-            }}</span>
-          </div>
-          <div class="summary-row">
-            <span class="label">Quantity:</span>
-            <span class="value">{{ purchaseLicenseQuantity }} license(s)</span>
-          </div>
-          <div class="summary-row total">
-            <span class="label">Monthly cost:</span>
-            <span class="value">${{ calculateLicenseCost() }}</span>
-          </div>
-          <div class="summary-row total-year">
-            <span class="label">Yearly cost:</span>
-            <span class="value">${{ calculateLicenseCost() * 12 }}</span>
+          <div class="breakdown-items">
+            <div class="breakdown-item">
+              <span class="item-label">License Type</span>
+              <span class="item-value">{{ selectedLicenseType }}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="item-label">Price per License</span>
+              <span class="item-value">{{
+                getLicensePrice(selectedLicenseType)
+              }}</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="item-label">Quantity</span>
+              <span class="item-value"
+                >{{ purchaseLicenseQuantity }} license(s)</span
+              >
+            </div>
+            <div class="breakdown-item total">
+              <span class="item-label">Monthly Total</span>
+              <span class="item-value">${{ calculateLicenseCost() }}</span>
+            </div>
+            <div class="breakdown-item yearly">
+              <span class="item-label">Annual Total</span>
+              <span class="item-value">${{ calculateLicenseCost() * 12 }}</span>
+            </div>
           </div>
         </div>
 
         <div class="approval-notice">
-          <span class="material-icons">info</span>
-          <span>A confirmation email will be sent directly to you.</span>
+          <div class="notice-icon">
+            <span class="material-icons">info</span>
+          </div>
+          <span>A confirmation email will be sent for approval</span>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn" (click)="closeModals()">Cancel</button>
+        <button class="btn btn-secondary" (click)="closeModals()">
+          Cancel
+        </button>
         <button class="btn btn-primary" (click)="purchaseLicenses()">
+          <span class="material-icons">send</span>
           Submit License Request
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Credits Purchase Modal - Enhanced -->
+  <!-- Enhanced Credits Purchase Modal -->
   <div class="modal-overlay" *ngIf="showCreditsModal" (click)="closeModals()">
-    <div class="modal-content" (click)="$event.stopPropagation()">
+    <div
+      class="modal-content enhanced-modal"
+      (click)="$event.stopPropagation()"
+    >
       <div class="modal-header">
-        <div class="modal-title-group">
-          <div class="modal-icon satori-modal">
+        <div class="modal-title-section">
+          <div class="modal-icon">
             <img
               src="https://signaturesatori.com/wp-content/uploads/SignatureSatori_Logo_for_Google.png"
               alt="Signature Satori"
-              class="modal-logo"
+              class="modal-service-logo"
             />
           </div>
-          <h3>Purchase Signature Satori Credits</h3>
+          <h3 class="modal-title">Purchase Signature Satori Credits</h3>
         </div>
-        <button class="close-button" (click)="closeModals()">
+        <button class="modal-close-btn" (click)="closeModals()">
           <span class="material-icons">close</span>
         </button>
       </div>
 
       <div class="modal-body">
-        <p>Add Signature Satori credits to your account at $0.50 per credit.</p>
-
-        <div class="form-control">
-          <label for="creditsQuantity">Number of credits to purchase:</label>
-          <input
-            type="number"
-            id="creditsQuantity"
-            [(ngModel)]="purchaseQuantity"
-            min="100"
-            max="10000"
-            step="100"
-          />
+        <div class="credits-info-display">
+          <p class="credits-description">
+            Add Signature Satori credits to your account for automated document
+            processing.
+          </p>
         </div>
 
-        <div class="cost-summary">
-          <div class="summary-row">
-            <span class="label">Unit price:</span>
-            <span class="value">$0.50/credit</span>
+        <div class="form-section">
+          <label class="form-label" for="creditsQuantity"
+            >Number of credits to purchase</label
+          >
+          <div class="input-group">
+            <input
+              type="number"
+              id="creditsQuantity"
+              class="form-input"
+              [(ngModel)]="purchaseQuantity"
+              min="1"
+              max="10000"
+              step="1"
+              placeholder="Enter quantity"
+            />
+            <span class="input-suffix">credits</span>
           </div>
-          <div class="summary-row">
-            <span class="label">Quantity:</span>
-            <span class="value">{{ purchaseQuantity }} credits</span>
+        </div>
+
+        <div class="cost-breakdown">
+          <div class="breakdown-header">
+            <h4>Cost Breakdown</h4>
           </div>
-          <div class="summary-row total">
-            <span class="label">Total cost:</span>
-            <span class="value">${{ calculateCreditsCost() }}</span>
+          <div class="breakdown-items">
+            <div class="breakdown-item">
+              <span class="item-label">Unit Price</span>
+              <span class="item-value">€1.00/credit</span>
+            </div>
+            <div class="breakdown-item">
+              <span class="item-label">Quantity</span>
+              <span class="item-value">{{ purchaseQuantity }} credits</span>
+            </div>
+            <div class="breakdown-item total">
+              <span class="item-label">Total Cost</span>
+              <span class="item-value">€{{ calculateCreditsCost() }}</span>
+            </div>
           </div>
         </div>
 
         <div class="approval-notice">
-          <span class="material-icons">info</span>
-          <span>A confirmation email will be sent directly to you.</span>
+          <div class="notice-icon">
+            <span class="material-icons">info</span>
+          </div>
+          <span>A confirmation email will be sent for approval</span>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button class="btn" (click)="closeModals()">Cancel</button>
+        <button class="btn btn-secondary" (click)="closeModals()">
+          Cancel
+        </button>
         <button class="btn btn-primary" (click)="purchaseCredits()">
+          <span class="material-icons">send</span>
           Submit Purchase Request
         </button>
       </div>

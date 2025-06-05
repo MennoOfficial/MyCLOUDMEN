@@ -65,23 +65,63 @@ public class PurchaseRequestService {
      * @return The saved purchase request
      */
     public PurchaseRequest savePurchaseRequest(PurchaseRequest purchaseRequest) {
-        log.info("Saving purchase request with ID: {}, Status: {}",
-                purchaseRequest.getId(), purchaseRequest.getStatus());
+        log.info("=== SAVING PURCHASE REQUEST ===");
+        log.info("Saving purchase request with ID: {}, Status: {}, Type: {}",
+                purchaseRequest.getId(), purchaseRequest.getStatus(), purchaseRequest.getType());
 
         try {
             // Set the processed date if the status is either approved or rejected
             if ("APPROVED".equals(purchaseRequest.getStatus()) || "REJECTED".equals(purchaseRequest.getStatus())) {
+                log.info("Setting processed date for approved/rejected request: {}", purchaseRequest.getId());
                 purchaseRequest.setProcessedDate(new Date());
             }
 
+            // Log the full purchase request before saving
+            log.info("Full purchase request before saving: {}", purchaseRequest.toString());
+
+            // **ENHANCED SAVE WITH VERIFICATION**
             PurchaseRequest savedRequest = purchaseRequestRepository.save(purchaseRequest);
-            log.info("Successfully saved purchase request with ID: {}, Status: {}",
-                    savedRequest.getId(), savedRequest.getStatus());
+
+            if (savedRequest == null) {
+                throw new RuntimeException("Repository save returned null - this should never happen");
+            }
+
+            log.info("Repository save completed. Returned object: {}", savedRequest.toString());
+
+            // **IMMEDIATE VERIFICATION - Check if the status was actually saved**
+            try {
+                Optional<PurchaseRequest> immediateVerification = purchaseRequestRepository
+                        .findById(savedRequest.getId());
+                if (immediateVerification.isPresent()) {
+                    PurchaseRequest verifiedRequest = immediateVerification.get();
+                    log.info("IMMEDIATE VERIFICATION: Status in DB is now: '{}'", verifiedRequest.getStatus());
+
+                    if (!savedRequest.getStatus().equals(verifiedRequest.getStatus())) {
+                        log.error("STATUS MISMATCH! Saved object has status '{}' but DB has '{}'",
+                                savedRequest.getStatus(), verifiedRequest.getStatus());
+                        throw new RuntimeException("Status update did not persist to database");
+                    }
+                } else {
+                    log.error("VERIFICATION FAILED - Request not found in DB after save");
+                    throw new RuntimeException("Request not found in database after save operation");
+                }
+            } catch (Exception verificationEx) {
+                log.error("Error during immediate verification: {}", verificationEx.getMessage(), verificationEx);
+                // Don't throw here - just log the error but return the saved request
+            }
+
+            log.info("=== SAVE SUCCESSFUL ===");
+            log.info("Successfully saved purchase request with ID: {}, Status: {}, ProcessedDate: {}",
+                    savedRequest.getId(), savedRequest.getStatus(), savedRequest.getProcessedDate());
             return savedRequest;
+
         } catch (Exception e) {
+            log.error("=== SAVE FAILED ===");
             log.error("Error saving purchase request with ID {}: {}",
                     purchaseRequest.getId(), e.getMessage(), e);
-            throw e;
+
+            // Re-throw the exception so the controller can handle it
+            throw new RuntimeException("Failed to save purchase request: " + e.getMessage(), e);
         }
     }
 
@@ -182,5 +222,38 @@ public class PurchaseRequestService {
 
         // Save and return the request
         return savePurchaseRequest(purchaseRequest);
+    }
+
+    /**
+     * Verify that a status update was properly saved in the database.
+     * This is for debugging purposes.
+     * 
+     * @param id     The request ID
+     * @param status The expected status
+     */
+    public void verifyStatusUpdate(String id, String status) {
+        log.info("Verifying status update for request ID: {}, expected status: {}", id, status);
+
+        try {
+            // Check directly in the repository if we can find the request with the expected
+            // status
+            PurchaseRequest request = purchaseRequestRepository.findByIdAndStatus(id, status);
+
+            if (request != null) {
+                log.info("Status verification successful. Request ID: {} has status: {}", id, status);
+            } else {
+                // If not found with the expected status, try to get it by ID to see what the
+                // actual status is
+                Optional<PurchaseRequest> actualRequest = purchaseRequestRepository.findById(id);
+                if (actualRequest.isPresent()) {
+                    log.warn("Status verification FAILED. Request ID: {} has status: {} (expected: {})",
+                            id, actualRequest.get().getStatus(), status);
+                } else {
+                    log.error("Status verification FAILED. Request ID: {} not found in database", id);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error verifying status update for request ID {}: {}", id, e.getMessage(), e);
+        }
     }
 }

@@ -8,6 +8,11 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { User } from '../../../core/models/auth.model';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 
+// Import standardized components
+import { PageHeaderComponent, PageAction } from '../../../shared/components/page-header/page-header.component';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
+import { DataTableComponent, TableColumn, TableAction } from '../../../shared/components/data-table/data-table.component';
+
 interface PurchaseRequest {
   id: string;
   type: string;
@@ -69,14 +74,16 @@ interface RequestStatusResponse {
   userEmail?: string;
 }
 
-// Add this in the component class after the existing properties
 @Component({
   selector: 'app-purchase-requests',
   standalone: true,
   imports: [
     CommonModule, 
     FormsModule,
-    RouterModule
+    RouterModule,
+    PageHeaderComponent,
+    LoadingSpinnerComponent,
+    DataTableComponent
   ],
   templateUrl: './purchase-requests.component.html',
   styleUrls: ['./purchase-requests.component.scss']
@@ -116,10 +123,14 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   creditBalance = 0;
   pendingRequests: PurchaseRequest[] = [];
   
+  // Cached displayed data to prevent constant refreshing
+  private _displayedRequests: any[] = [];
+  private _lastRequestsHash: string = '';
+  
   // Modal states
   showCreditsModal = false;
   showLicenseModal = false;
-  purchaseQuantity = 100; // For credits
+  purchaseQuantity = 10; // Changed from 100 to 10 for credits
   purchaseLicenseQuantity = 1; // For licenses
   selectedLicenseType = 'Business Standard';
   
@@ -134,6 +145,53 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   private readonly RECENT_DAYS_LIMIT = 30;
   private readonly PAGE_SIZE = 10;
   private currentPage = 0;
+  private lastFetchTime = 0;
+  private readonly FETCH_COOLDOWN = 5000; // 5 seconds cooldown between fetches
+
+  // Standardized component configurations - REMOVED REFRESH BUTTON
+  headerActions: PageAction[] = [
+    // Removed refresh button to prevent constant refreshing issues
+  ];
+
+  activityTableColumns: TableColumn[] = [
+    {
+      key: 'service',
+      label: 'Service',
+      type: 'avatar',
+      sortable: false
+    },
+    {
+      key: 'type',
+      label: 'Request Type',
+      type: 'text',
+      sortable: true
+    },
+    {
+      key: 'quantity',
+      label: 'Quantity',
+      type: 'text',
+      sortable: false
+    },
+    {
+      key: 'cost',
+      label: 'Cost',
+      type: 'currency',
+      sortable: true
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'badge',
+      badgeType: 'status',
+      sortable: false
+    },
+    {
+      key: 'requestDate',
+      label: 'Date',
+      type: 'date',
+      sortable: true
+    }
+  ];
 
   constructor(
     private renderer: Renderer2,
@@ -193,6 +251,10 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
   
   private handleModeActions() {
+    console.log(`[DEBUG] ===== HANDLE MODE ACTIONS =====`);
+    console.log(`[DEBUG] Current mode: '${this.mode}'`);
+    console.log(`[DEBUG] Request ID: '${this.requestId}'`);
+    
     switch (this.mode) {
       case 'accept-purchase':
         // This is the email link handler (formerly PurchaseAcceptComponent)
@@ -229,6 +291,8 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         break;
         
       case 'approve-license':
+        console.log(`[DEBUG] ✅ APPROVE-LICENSE MODE DETECTED!`);
+        console.log(`[DEBUG] About to call approveLicense with requestId: '${this.requestId}'`);
         // Call API to approve license purchase with requestId from URL
         if (this.requestId) {
           // We're already showing the approval page in the UI
@@ -236,6 +300,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.approveLicense(this.requestId);
         } else {
           // If no requestId, show error
+          console.log(`[DEBUG] ❌ NO REQUEST ID - showing error`);
           this.errorMessage = 'Missing request ID';
           this.mode = 'license-error';
         }
@@ -248,7 +313,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         // Add a timeout to automatically navigate back to purchase requests after 3 seconds
         setTimeout(() => {
           this.mode = 'normal';
-          this.router.navigate(['/purchase-requests']);
+          this.router.navigate(['/requests']);
         }, 3000);
         break;
         
@@ -259,6 +324,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         break;
         
       default:
+        console.log(`[DEBUG] ⚠️ DEFAULT MODE: '${this.mode}'`);
         // Normal mode, handled by normal flow
         break;
     }
@@ -272,20 +338,66 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     // Create the API URL
     const url = `${this.environmentService.apiUrl}/purchase/accept`;
     
-    // Send HTTP request to the backend API
+    console.log(`[DEBUG] Accepting purchase request with ID: ${this.requestId}`);
+    console.log(`[DEBUG] API URL: ${url}`);
+    
+    // Send HTTP request to the backend API - ensure proper response handling
     this.http.get(url, { 
-      params: { requestId: this.requestId },
-      responseType: 'text'
+      params: { requestId: this.requestId }
     }).pipe(
       catchError(error => {
+        console.error('[DEBUG] Error in acceptPurchase:', error);
+        console.error('[DEBUG] Error status:', error.status);
+        console.error('[DEBUG] Error message:', error.error);
+        
+        // Specific handling for 200 OK responses that might be treated as errors
+        if (error.status === 200) {
+          console.log('[DEBUG] Got 200 status but was treated as error, continuing with processing');
+          try {
+            // Try to parse the response body if available
+            const responseBody = error.error?.text || error.error || null;
+            if (responseBody) {
+              return of(responseBody);
+            }
+          } catch (parseError) {
+            console.error('[DEBUG] Failed to parse error response:', parseError);
+          }
+        }
+        
         this.error = true;
         this.message = error.error || 'An error occurred while processing your purchase. Please try again later.';
+        this.loading = false; // Stop loading on error
         return of(null);
       })
     ).subscribe(response => {
+      console.log('[DEBUG] acceptPurchase raw response:', response);
+      
       if (response) {
-        // After initiating acceptance, start polling for status changes
-        this.startPollingRequestStatus();
+        try {
+          // Try to parse the response as JSON if it's a string
+          const jsonResponse = typeof response === 'string' ? JSON.parse(response) : response;
+          console.log('[DEBUG] acceptPurchase parsed response:', jsonResponse);
+          
+          // Check if the response indicates success
+          if (jsonResponse && jsonResponse.status === 'success') {
+            console.log('[DEBUG] Purchase accepted successfully, starting status polling');
+            // After initiating acceptance, start polling for status changes
+            this.startPollingRequestStatus();
+          } else {
+            console.error('[DEBUG] Purchase acceptance failed:', jsonResponse);
+            this.error = true;
+            this.loading = false;
+            this.message = (jsonResponse && jsonResponse.message) || 'An error occurred while processing your purchase.';
+          }
+        } catch (e) {
+          console.error('[DEBUG] Error parsing response:', e);
+          console.log('[DEBUG] Continuing with status polling despite parsing error');
+          // If response is not valid JSON, still try to continue
+          this.startPollingRequestStatus();
+        }
+      } else {
+        // If response is null (due to error), don't start polling
+        console.log('[DEBUG] No response received, not starting status polling');
       }
     });
   }
@@ -294,33 +406,84 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     // Continue to show loading state while we make the API call
     this.loading = true;
     
-    // Create the API URL
-    const url = `${this.environmentService.apiUrl}/purchase/google-workspace/accept`;
+    // **SIMPLIFIED - Use the same endpoint as purchase acceptance**
+    const url = `${this.environmentService.apiUrl}/purchase/accept`;
     
-    // Send HTTP request to the backend API
+    console.log(`[DEBUG] Accepting license request with ID: ${this.requestId}, Customer ID: ${this.customerId}`);
+    console.log(`[DEBUG] Using simplified API URL: ${url}`);
+    
+    // Send HTTP request to the backend API - ensure proper response handling
     this.http.get(url, { 
       params: { 
-        requestId: this.requestId,
-        customerId: this.customerId 
-      },
-      responseType: 'text'
+        requestId: this.requestId
+      }
     }).pipe(
       catchError(error => {
+        console.error('[DEBUG] Error in acceptGoogleWorkspaceLicense:', error);
+        console.error('[DEBUG] Error status:', error.status);
+        console.error('[DEBUG] Error message:', error.error);
+        
+        // Specific handling for 200 OK responses that might be treated as errors
+        if (error.status === 200) {
+          console.log('[DEBUG] Got 200 status but was treated as error, continuing with processing');
+          try {
+            // Try to parse the response body if available
+            const responseBody = error.error?.text || error.error || null;
+            if (responseBody) {
+              return of(responseBody);
+            }
+          } catch (parseError) {
+            console.error('[DEBUG] Failed to parse error response:', parseError);
+          }
+        }
+        
         this.error = true;
         this.message = error.error || 'An error occurred while processing your license. Please try again later.';
+        this.loading = false; // Stop loading on error
         return of(null);
       })
     ).subscribe(response => {
+      console.log('[DEBUG] acceptGoogleWorkspaceLicense raw response:', response);
+      
       if (response) {
-        // After initiating acceptance, start polling for status changes
-        this.startPollingRequestStatus();
+        try {
+          // Try to parse the response as JSON if it's a string
+          const jsonResponse = typeof response === 'string' ? JSON.parse(response) : response;
+          console.log('[DEBUG] acceptGoogleWorkspaceLicense parsed response:', jsonResponse);
+          
+          // Check if the response indicates success
+          if (jsonResponse && jsonResponse.status === 'success') {
+            console.log('[DEBUG] License accepted successfully, starting status polling');
+            // After initiating acceptance, start polling for status changes
+            this.startPollingRequestStatus();
+          } else {
+            console.error('[DEBUG] License acceptance failed:', jsonResponse);
+            this.error = true;
+            this.loading = false;
+            this.message = (jsonResponse && jsonResponse.message) || 'An error occurred while processing your license.';
+          }
+        } catch (e) {
+          console.error('[DEBUG] Error parsing response:', e);
+          console.log('[DEBUG] Continuing with status polling despite parsing error');
+          // If response is not valid JSON, still try to continue
+          this.startPollingRequestStatus();
+        }
+      } else {
+        // If response is null (due to error), don't start polling
+        console.log('[DEBUG] No response received, not starting status polling');
       }
     });
   }
   
   startPollingRequestStatus(): void {
+    console.log(`[DEBUG] Starting to poll for request status. RequestID: ${this.requestId}, Type: ${this.requestType}`);
+    console.log(`[DEBUG] Will check status every 3 seconds, max ${this.maxAttempts} attempts`);
+    
     // Poll every 3 seconds to check if request has been approved
     this.statusCheckInterval = interval(3000).subscribe(() => {
+      // Log start of this polling attempt
+      console.log(`[DEBUG] Poll attempt ${this.currentAttempt + 1}/${this.maxAttempts} for requestId: ${this.requestId}`);
+      
       this.checkRequestStatusForApproval();
       
       // Increment attempt counter
@@ -331,6 +494,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         if (this.statusCheckInterval) {
           this.statusCheckInterval.unsubscribe();
           this.statusCheckInterval = null;
+          console.log(`[DEBUG] Reached max attempts (${this.maxAttempts}). Stopping polling.`);
         }
         
         // Show error if we've reached max attempts without success
@@ -338,43 +502,183 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.error = true;
           this.loading = false;
           this.message = 'The approval process is taking longer than expected. Please check your purchase requests page for status updates.';
+          console.log(`[DEBUG] Max attempts reached without success or error. Showing timeout message.`);
+          
+          // Fetch the requests anyway to see if the status was updated
+          this.fetchPendingRequests();
+          
+          // Navigate back to the main requests page after a delay
+          setTimeout(() => {
+            console.log('[DEBUG] Redirecting to /requests after timeout');
+            this.router.navigate(['/requests']);
+          }, 3000);
         }
       }
     });
   }
   
   checkRequestStatusForApproval(): void {
-    // Default endpoint for regular purchases
-    let url = `${this.environmentService.apiUrl}/purchase/status`;
+    // **SIMPLIFIED - Use only purchase/status endpoint for all types**
+    const url = `${this.environmentService.apiUrl}/purchase/status`;
     
-    // Use different endpoint for license requests
-    if (this.requestType === 'license') {
-      url = `${this.environmentService.apiUrl}/license/status`;
-    }
+    console.log(`[DEBUG] === STATUS CHECK ATTEMPT ${this.currentAttempt + 1}/${this.maxAttempts} ===`);
+    console.log(`[DEBUG] Checking request status - URL: ${url}, RequestID: ${this.requestId}`);
     
-    this.http.get<RequestStatusResponse>(url, {
-      params: { requestId: this.requestId }
+    this.http.get<any>(url, {
+      params: { requestId: this.requestId },
+      // Add headers to ensure we get JSON response
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
     }).pipe(
       catchError(error => {
-        // Don't show error yet, we'll keep trying
-        console.error('Error checking request status:', error);
+        console.error('[DEBUG] === STATUS CHECK ERROR ===');
+        console.error('[DEBUG] Error checking request status:', error);
+        console.error('[DEBUG] Error details:', {
+          status: error.status,
+          statusText: error.statusText,
+          url: error.url,
+          message: error.message,
+          error: error.error
+        });
+        console.error('[DEBUG] Attempt:', this.currentAttempt + 1, 'of', this.maxAttempts);
+        
+        // For the last few attempts, try direct fetch as backup
+        if (this.currentAttempt >= this.maxAttempts - 3) {
+          console.log('[DEBUG] Near max attempts - trying direct fetch as backup');
+          this.fetchRequestDirectly();
+        }
+        
         return of(null);
       })
     ).subscribe(response => {
-      if (response) {
-        // Store request details for success page
-        this.userEmail = response.userEmail || '';
+      console.log('[DEBUG] === STATUS CHECK RESPONSE ===');
+      console.log('[DEBUG] Raw response:', response);
+      console.log('[DEBUG] Response type:', typeof response);
+      console.log('[DEBUG] Attempt:', this.currentAttempt + 1, 'of', this.maxAttempts);
+      
+      if (response && response.status) {
+        const currentStatus = response.status;
+        console.log(`[DEBUG] Current request status: "${currentStatus}"`);
         
+        // Store request details for success page
+        if (response.userEmail) this.userEmail = response.userEmail;
         if (response.type === 'licenses') {
           this.licenseType = response.licenseType || '';
           this.count = response.quantity || 0;
           this.domain = response.domain || '';
+          this.requestType = 'license';
+          console.log(`[DEBUG] License details - Type: ${this.licenseType}, Count: ${this.count}, Domain: ${this.domain}`);
         } else {
           this.count = response.quantity || 0;
+          this.requestType = 'purchase';
+          console.log(`[DEBUG] Purchase details - Count: ${this.count}, Type: ${response.type}`);
         }
         
-        // Check if request has been approved
-        if (response.status === 'APPROVED') {
+        // **SIMPLIFIED STATUS CHECKING**
+        console.log(`[DEBUG] Checking if "${currentStatus}" === "APPROVED"`);
+        
+        if (currentStatus === 'APPROVED') {
+          console.log('[DEBUG] ✅ REQUEST APPROVED! Stopping polling and showing success.');
+          
+          // Stop polling immediately
+          if (this.statusCheckInterval) {
+            this.statusCheckInterval.unsubscribe();
+            this.statusCheckInterval = null;
+          }
+          
+          // Show success state
+          this.success = true;
+          this.loading = false;
+          this.error = false;
+          
+          if (this.requestType === 'license') {
+            this.message = 'Your Google Workspace license has been successfully approved and is being processed.';
+          } else {
+            this.message = 'Your purchase has been successfully approved and is being processed.';
+          }
+          
+          console.log('[DEBUG] Success message set:', this.message);
+          
+          // Force refresh the purchase requests list to show the updated status
+          console.log('[DEBUG] Refreshing purchase requests list');
+          this.fetchPendingRequests();
+          
+          // Navigate back to the main requests page after showing success message
+          setTimeout(() => {
+            console.log('[DEBUG] Navigating to /requests with success parameters');
+            this.router.navigate(['/requests'], {
+              queryParams: {
+                status: 'success',
+                requestId: this.requestId,
+                type: this.requestType
+              }
+            });
+          }, 3000); // Longer delay to show success message
+          
+        } else if (currentStatus === 'REJECTED') {
+          console.log('[DEBUG] ❌ REQUEST REJECTED! Stopping polling and showing error.');
+          
+          // Stop polling
+          if (this.statusCheckInterval) {
+            this.statusCheckInterval.unsubscribe();
+            this.statusCheckInterval = null;
+          }
+          
+          // Show error state
+          this.error = true;
+          this.loading = false;
+          this.success = false;
+          this.message = 'The request was rejected. Please contact support for assistance.';
+          
+          // Force refresh the purchase requests list
+          this.fetchPendingRequests();
+          
+        } else {
+          // PENDING or AWAITING_CONFIRMATION - continue polling
+          console.log(`[DEBUG] ⏳ Request still "${currentStatus}", continuing to poll...`);
+          
+          if (currentStatus !== 'PENDING' && currentStatus !== 'AWAITING_CONFIRMATION') {
+            console.warn(`[DEBUG] ⚠️  Unrecognized status: "${currentStatus}". Valid statuses: PENDING, AWAITING_CONFIRMATION, APPROVED, REJECTED`);
+          }
+        }
+        
+      } else {
+        console.log('[DEBUG] ❌ No valid response received from status check');
+        console.log('[DEBUG] Response object:', response);
+        
+        // If we're near the end of attempts and still no valid response, try direct fetch
+        if (this.currentAttempt >= this.maxAttempts - 3) {
+          console.log('[DEBUG] No valid response near max attempts - trying direct fetch');
+          this.fetchRequestDirectly();
+        }
+      }
+    });
+  }
+  
+  /**
+   * Fetch the request directly from the purchase-requests API as a fallback
+   * if the status endpoints aren't working
+   */
+  private fetchRequestDirectly(): void {
+    const directUrl = `${this.environmentService.apiUrl}/purchase-requests/${this.requestId}`;
+    console.log(`[DEBUG] Fetching request directly from: ${directUrl}`);
+    
+    this.http.get<PurchaseRequest>(directUrl).pipe(
+      catchError(error => {
+        console.error('[DEBUG] Direct fetch failed:', error);
+        return of(null);
+      })
+    ).subscribe(request => {
+      if (request) {
+        console.log('[DEBUG] Direct fetch successful:', request);
+        console.log(`[DEBUG] Direct fetch status: "${request.status}"`);
+        
+        // If request is approved, handle it like in the status check
+        if (request.status === 'APPROVED') {
+          console.log('[DEBUG] Request is APPROVED according to direct fetch!');
+          
           // Stop polling
           if (this.statusCheckInterval) {
             this.statusCheckInterval.unsubscribe();
@@ -385,43 +689,26 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.success = true;
           this.loading = false;
           
-          if (this.requestType === 'license') {
+          if (request.type === 'licenses') {
             this.message = 'Your Google Workspace license has been successfully approved.';
           } else {
             this.message = 'Your purchase has been successfully approved.';
           }
           
-          // Change mode after a delay
-          setTimeout(() => {
-            this.mode = this.requestType === 'license' ? 'license-success' : 'purchase-success';
-            this.router.navigate(
-              [this.requestType === 'license' ? '/license-success' : '/purchase-success'],
-              {
-                queryParams: {
-                  requestId: this.requestId,
-                  email: this.userEmail,
-                  licenseType: this.licenseType,
-                  count: this.count,
-                  domain: this.domain
-                }
-              }
-            );
-          }, 1000);
-        }
-        // Check if request has been rejected
-        else if (response.status === 'REJECTED') {
-          // Stop polling
-          if (this.statusCheckInterval) {
-            this.statusCheckInterval.unsubscribe();
-            this.statusCheckInterval = null;
-          }
+          // Force refresh the purchase requests list
+          this.fetchPendingRequests();
           
-          // Show error state
-          this.error = true;
-          this.loading = false;
-          this.message = 'The request was rejected. Please contact support for assistance.';
+          // Navigate back to the main requests page after a delay
+          setTimeout(() => {
+            this.router.navigate(['/requests'], {
+              queryParams: {
+                status: 'success',
+                requestId: this.requestId,
+                type: request.type === 'licenses' ? 'license' : 'purchase'
+              }
+            });
+          }, 2000);
         }
-        // Otherwise (PENDING or AWAITING_CONFIRMATION), continue polling
       }
     });
   }
@@ -436,13 +723,12 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     this.http.get(url).subscribe({
       next: (response: any) => {
         if (response.status === 'success') {
-          // Navigate back to purchase-requests with success parameters
-          this.router.navigate(['/purchase-requests'], {
+          // Navigate back to main requests page
+          this.router.navigate(['/requests'], {
             queryParams: {
-              requestId: response.requestId,
-              email: response.email,
-              type: response.type,
-              status: 'success'
+              status: 'success',
+              requestId: requestId,
+              type: 'purchase'
             }
           });
           // Show toast notification
@@ -466,76 +752,106 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
   
   private approveLicense(requestId: string) {
-    const url = `${this.environmentService.apiUrl}/purchase/google-workspace/accept?requestId=${requestId}`;
+    console.log(`[DEBUG] ===== APPROVE LICENSE START =====`);
+    console.log(`[DEBUG] Request ID: ${requestId}`);
+    console.log(`[DEBUG] this.requestId: ${this.requestId}`);
+    console.log(`[DEBUG] Current mode: ${this.mode}`);
+    
+    // **SIMPLIFIED - Use the same endpoint as purchase acceptance**
+    const url = `${this.environmentService.apiUrl}/purchase/accept?requestId=${requestId}`;
+    
+    console.log(`[DEBUG] Full URL: ${url}`);
+    console.log(`[DEBUG] Environment API URL: ${this.environmentService.apiUrl}`);
     
     // Show loading status while approval is in progress
     this.mode = 'approve-license';
     this.errorMessage = '';
     
+    console.log(`[DEBUG] About to make HTTP request...`);
+    
     // Don't navigate away immediately, wait for response
-    this.http.get(url, { responseType: 'text' }).subscribe({
-      next: (response) => {
+    this.http.get(url).subscribe({
+      next: (response: any) => {
+        console.log(`[DEBUG] ===== HTTP RESPONSE RECEIVED =====`);
+        console.log('[DEBUG] Raw response:', response);
+        console.log('[DEBUG] Response type:', typeof response);
+        console.log('[DEBUG] Response.status:', response?.status);
+        console.log('[DEBUG] Response.message:', response?.message);
+        console.log('[DEBUG] Full response object:', JSON.stringify(response, null, 2));
+        
         try {
-          // Try to parse the response as JSON
-          const jsonResponse = JSON.parse(response);
-          if (jsonResponse.status === 'success') {
-            // Navigate back to purchase-requests with success parameters
-            this.router.navigate(['/purchase-requests'], {
+          // Check if the response indicates success
+          if (response && response.status === 'success') {
+            console.log('[DEBUG] ✅ SUCCESS! Response indicates success');
+            console.log('[DEBUG] License approved successfully!');
+            
+            console.log('[DEBUG] About to navigate to /requests...');
+            // Navigate back to main requests page
+            this.router.navigate(['/requests'], {
               queryParams: {
+                status: 'success',
                 requestId: this.requestId,
-                email: this.userEmail,
-                licenseType: this.licenseType,
-                count: this.count,
-                domain: this.domain,
-                status: 'success'
+                type: 'license'
               }
             });
             // Show toast notification
             this.showToast('License request successfully approved!', 'success');
+            console.log('[DEBUG] Navigation and toast completed');
             return;
+          } else {
+            console.log('[DEBUG] ❌ FAILURE! Response does not indicate success');
+            console.error('[DEBUG] License approval failed:', response);
+            this.errorMessage = response?.message || 'License approval failed';
+            this.mode = 'license-error';
+            this.showToast('Error approving license: ' + this.errorMessage, 'error');
           }
         } catch (e) {
-          // Non-JSON response, continue with default handling
-        }
-
-        // Navigate back to purchase-requests with success parameters
-        this.router.navigate(['/purchase-requests'], {
-          queryParams: {
-            requestId: this.requestId,
-            email: this.userEmail,
-            licenseType: this.licenseType,
-            count: this.count,
-            domain: this.domain,
-            status: 'success'
-          }
-        });
-        // Show toast notification
-        this.showToast('License request successfully approved!', 'success');
-      },
-      error: (error) => {
-        if (error.status === 200) {
-          // If somehow we got a 200 status as an error, treat it as success
-          this.router.navigate(['/purchase-requests'], {
+          console.error('[DEBUG] ⚠️ EXCEPTION in response processing:', e);
+          console.error('[DEBUG] Error processing license approval response:', e);
+          console.log('[DEBUG] Treating as success anyway due to parsing issue...');
+          // If we get here, treat as success anyway (might be parsing issue)
+          this.router.navigate(['/requests'], {
             queryParams: {
-              requestId: this.requestId || `req-${Math.floor(Math.random() * 10000)}`,
-              email: this.userEmail,
-              licenseType: this.licenseType,
-              count: this.count,
-              domain: this.domain,
-              status: 'success'
+              status: 'success',
+              requestId: this.requestId,
+              type: 'license'
             }
           });
-          // Show toast notification
+          this.showToast('License request processed!', 'success');
+        }
+      },
+      error: (error) => {
+        console.log(`[DEBUG] ===== HTTP ERROR RECEIVED =====`);
+        console.error('[DEBUG] License approval HTTP error:', error);
+        console.error('[DEBUG] Error status:', error.status);
+        console.error('[DEBUG] Error statusText:', error.statusText);
+        console.error('[DEBUG] Error message:', error.message);
+        console.error('[DEBUG] Error error object:', error.error);
+        console.error('[DEBUG] Full error object:', JSON.stringify(error, null, 2));
+        
+        if (error.status === 200) {
+          // If somehow we got a 200 status as an error, treat it as success
+          console.log('[DEBUG] ✅ Got 200 status as error - treating as success');
+          this.router.navigate(['/requests'], {
+            queryParams: {
+              status: 'success',
+              requestId: this.requestId || `req-${Math.floor(Math.random() * 10000)}`,
+              type: 'license'
+            }
+          });
           this.showToast('License request successfully approved!', 'success');
           return;
         }
-        // Show error page instead of toast
-        this.errorMessage = error.message || 'Unknown error';
+        
+        // Show error page
+        console.error('[DEBUG] ❌ Showing error page for license approval');
+        this.errorMessage = error.message || error.error?.message || 'Unknown error occurred';
         this.mode = 'license-error';
-        // Show toast notification
         this.showToast('Error approving license: ' + this.errorMessage, 'error');
       }
     });
+    
+    console.log(`[DEBUG] ===== HTTP REQUEST SENT =====`);
   }
 
   // Custom notification method
@@ -770,11 +1086,6 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     
     console.log('User info prepared with fallback:', this.userInfo);
     
-    // Show a helpful message for Gmail users
-    if (isGmailUser) {
-      this.showToast('Using personal email account. If you have a business account, please contact support to set up your organization.', 'success');
-    }
-    
     // After getting user info, fetch licenses and credits
     this.fetchGoogleWorkspaceLicenses();
     this.fetchSignatureSatoriCredits();
@@ -943,19 +1254,23 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       // Extract items from the paginated response
       this.pendingRequests = response.items.map((item: PurchaseRequestResponse) => ({
         id: item.id,
-        type: this.formatRequestType(item),
+        type: this.formatRequestTypeFromResponse(item),
         quantity: item.quantity || 0,
         cost: item.cost || this.calculateCost(item),
         requestDate: new Date(item.requestDate).toISOString().split('T')[0],
         status: item.status
       }));
       
+      // Clear cached data to force refresh
+      this._displayedRequests = [];
+      this._lastRequestsHash = '';
+      
       console.log('Fetched purchase requests:', this.pendingRequests);
     });
   }
   
-  // Helper to format the request type for display
-  private formatRequestType(request: PurchaseRequestResponse): string {
+  // Helper to format the request type from API response
+  private formatRequestTypeFromResponse(request: PurchaseRequestResponse): string {
     if (request.type === 'licenses' && request.licenseType) {
       return `Google Workspace - ${request.licenseType}`;
     } else if (request.type === 'credits') {
@@ -965,14 +1280,25 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     }
   }
   
+  // Helper to format the request type for display
+  private formatRequestType(request: PurchaseRequest): string {
+    // Convert internal type format to display format
+    if (request.type.toLowerCase().includes('license')) {
+      return 'Google Workspace License';
+    } else if (request.type.toLowerCase().includes('credit')) {
+      return 'Signature Satori Credits';
+    }
+    return request.type; // Fallback to original type
+  }
+  
   // Helper to calculate the cost based on request type
   private calculateCost(request: PurchaseRequestResponse): number {
     if (request.type === 'licenses' && request.licenseType) {
       const pricePerLicense = this.getLicensePriceValue(request.licenseType);
       return pricePerLicense * (request.quantity || 0);
     } else if (request.type === 'credits') {
-      // $0.50 per credit
-      return (request.quantity || 0) * 0.5;
+      // €1.00 per credit (changed from $0.50)
+      return (request.quantity || 0) * 1.0;
     } else {
       return 0;
     }
@@ -1033,7 +1359,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
   
   openCreditsPurchaseModal(): void {
-    this.purchaseQuantity = 100;
+    this.purchaseQuantity = 10; // Changed from 100 to 10
     this.showCreditsModal = true;
   }
 
@@ -1044,8 +1370,8 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
 
   // Calculation functions
   calculateCreditsCost(): number {
-    // $0.50 per credit
-    return this.purchaseQuantity * 0.5;
+    // €1.00 per credit (changed from $0.50)
+    return this.purchaseQuantity * 1.0;
   }
   
   calculateLicenseCost(): number {
@@ -1055,9 +1381,9 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
 
   // Purchase functions
   purchaseCredits(): void {
-    // Validation
-    if (this.purchaseQuantity < 100) {
-      this.showToast('Minimum purchase is 100 credits', 'error');
+    // Validation - updated minimum to be more reasonable
+    if (this.purchaseQuantity < 1) {
+      this.showToast('Minimum purchase is 1 credit', 'error');
       return;
     }
     
@@ -1223,45 +1549,60 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Manually refresh purchase requests
+   * Manually refresh purchase requests with cooldown to prevent spam
    */
   refreshPurchaseRequests(): void {
+    const now = Date.now();
+    if (now - this.lastFetchTime < this.FETCH_COOLDOWN) {
+      this.showToast('Please wait before refreshing again', 'error');
+      return;
+    }
+    
+    this.lastFetchTime = now;
     console.log('Manually refreshing purchase requests');
     this.showToast('Refreshing purchase requests...', 'success');
     this.fetchPendingRequests();
   }
 
   /**
-   * Get displayed requests based on current filter
+   * Get displayedRequests with optimized caching
+   * Optimized with caching to prevent unnecessary re-calculations
    */
-  getDisplayedRequests(): PurchaseRequest[] {
-    if (!this.pendingRequests || this.pendingRequests.length === 0) {
-      return [];
+  get displayedRequests(): any[] {
+    // Create a hash of current requests to detect changes
+    const currentHash = JSON.stringify(this.pendingRequests) + this.showAllRequests.toString();
+    
+    // Return cached data if nothing has changed
+    if (this._lastRequestsHash === currentHash && this._displayedRequests.length > 0) {
+      return this._displayedRequests;
     }
-
-    if (this.showAllRequests) {
-      // Show paginated results
-      const startIndex = 0;
-      const endIndex = (this.currentPage + 1) * this.PAGE_SIZE;
-      return this.pendingRequests.slice(startIndex, endIndex);
-    } else {
-      // Show only recent (last 30 days)
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - this.RECENT_DAYS_LIMIT);
-      
-      return this.pendingRequests.filter(request => {
-        const requestDate = new Date(request.requestDate);
-        return requestDate >= thirtyDaysAgo;
-      }).slice(0, this.PAGE_SIZE);
-    }
+    
+    // Update cache using optimized static methods
+    this._lastRequestsHash = currentHash;
+    this._displayedRequests = this.pendingRequests.slice(0, this.showAllRequests ? undefined : this.RECENT_DAYS_LIMIT).map(request => ({
+      id: request.id,
+      service: {
+        picture: this.getServiceLogo(request.type),
+        name: PurchaseRequestsComponent.getServiceNameStatic(request.type)
+      },
+      type: PurchaseRequestsComponent.formatRequestTypeStatic(request),
+      quantity: `${request.quantity} ${PurchaseRequestsComponent.getQuantityUnitStatic(request.type)}`,
+      cost: request.cost,
+      status: request.status, // Use raw status for badge styling
+      requestDate: request.requestDate,
+      // Add original data for row click handling
+      originalData: request
+    }));
+    
+    return this._displayedRequests;
   }
 
   /**
-   * Track by function for ngFor performance
+   * Track by function for optimal rendering performance
    */
-  trackByRequestId(index: number, request: PurchaseRequest): string {
-    return request.id;
-  }
+  trackByRequestId = (index: number, item: any): string => {
+    return item.id || index.toString();
+  };
 
   /**
    * Get CSS class based on request type
@@ -1343,10 +1684,12 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Format status for display
+   * Format status for better readability - optimized as static method
    */
-  formatStatus(status: string): string {
-    switch (status?.toUpperCase()) {
+  private static formatStatusStatic(status: string): string {
+    if (!status) return 'Unknown';
+    
+    switch (status.toUpperCase()) {
       case 'PENDING':
         return 'Pending';
       case 'AWAITING_CONFIRMATION':
@@ -1356,7 +1699,8 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       case 'REJECTED':
         return 'Rejected';
       default:
-        return status;
+        // Convert to title case for any other status
+        return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
     }
   }
 
@@ -1364,22 +1708,21 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
    * Get quantity unit based on request type
    */
   getQuantityUnit(type: string): string {
-    if (type.toLowerCase().includes('license')) {
-      return 'licenses';
-    }
-    if (type.toLowerCase().includes('credit')) {
-      return 'credits';
-    }
-    return 'items';
+    return PurchaseRequestsComponent.getQuantityUnitStatic(type);
   }
 
   /**
-   * View request details
+   * View request details - optimized to handle table row data properly
    */
-  viewRequestDetails(request: PurchaseRequest): void {
-    // TODO: Implement request details modal or navigation
-    console.log('View request details:', request);
-    this.showToast(`Request details for ${request.id}`, 'success');
+  viewRequestDetails(rowData: any): void {
+    // Handle the data table row click - rowData will be the transformed table row data
+    const originalRequest = rowData.originalData || rowData;
+    console.log('Viewing request details:', originalRequest);
+    
+    // You could implement a modal or navigation to details page here
+    // For now, just show a toast with the request info
+    const serviceName = this.getServiceName(originalRequest.type);
+    this.showToast(`Viewing details for ${serviceName} request #${originalRequest.id}`, 'success');
   }
 
   /**
@@ -1397,18 +1740,31 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
    */
   getServiceLogo(type: string): string {
     if (type.toLowerCase().includes('google') || type.toLowerCase().includes('workspace') || type.toLowerCase().includes('license')) {
-      return 'https://static.dezeen.com/uploads/2025/05/sq-google-g-logo-update_dezeen_2364_col_0.jpg';
+      return 'https://crystalpng.com/wp-content/uploads/2025/05/google-logo.png';
     }
     if (type.toLowerCase().includes('signature') || type.toLowerCase().includes('satori') || type.toLowerCase().includes('credit')) {
-      return 'https://signaturesatori.com/wp-content/uploads/SignatureSatori_Logo_for_Google.png';
+      return 'https://www.cobry.co.uk/wp-content/uploads/2022/01/Asset-1satori-300x300-1.png';
     }
-    return 'https://static.dezeen.com/uploads/2025/05/sq-google-g-logo-update_dezeen_2364_col_0.jpg'; // Default to Google logo
+    return 'https://crystalpng.com/wp-content/uploads/2025/05/google-logo.png'; // Default to Google logo
   }
 
   /**
    * Get service name based on request type
    */
   getServiceName(type: string): string {
+    return PurchaseRequestsComponent.getServiceNameStatic(type);
+  }
+
+  // Header action handler - simplified since refresh button is removed
+  onHeaderAction(action: PageAction): void {
+    // No actions since refresh button is removed
+    console.log('Header action triggered:', action);
+  }
+
+  /**
+   * Get service name based on request type - optimized as static method
+   */
+  private static getServiceNameStatic(type: string): string {
     if (type.toLowerCase().includes('google') || type.toLowerCase().includes('workspace') || type.toLowerCase().includes('license')) {
       return 'Google Workspace';
     }
@@ -1416,5 +1772,42 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       return 'Signature Satori';
     }
     return 'Google Workspace'; // Default
+  }
+
+  /**
+   * Format request type - optimized as static method
+   */
+  private static formatRequestTypeStatic(request: PurchaseRequest): string {
+    // Extract more specific information about the request type
+    if (request.type.toLowerCase().includes('license')) {
+      // For licenses, extract and format the license type if possible
+      const licenseType = request.type.includes('-') ? 
+        request.type.split('-')[1].trim() : 
+        'License';
+      return licenseType;
+    } else if (request.type.toLowerCase().includes('credit')) {
+      return 'Credits';
+    }
+    return request.type; // Fallback to original type
+  }
+
+  /**
+   * Get quantity unit based on request type - optimized as static method
+   */
+  private static getQuantityUnitStatic(type: string): string {
+    if (type.toLowerCase().includes('license')) {
+      return 'licenses';
+    }
+    if (type.toLowerCase().includes('credit')) {
+      return 'credits';
+    }
+    return 'items';
+  }
+
+  /**
+   * Format status for display
+   */
+  formatStatus(status: string): string {
+    return PurchaseRequestsComponent.formatStatusStatic(status);
   }
 } 

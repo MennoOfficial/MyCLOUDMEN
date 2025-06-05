@@ -8,6 +8,7 @@ import com.cloudmen.backend.domain.models.User;
 import com.cloudmen.backend.services.UserEmailService;
 import com.cloudmen.backend.services.UserService;
 import com.cloudmen.backend.services.UserSyncService;
+import com.cloudmen.backend.services.AuthenticationLogService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,19 +33,23 @@ public class UserController {
     private final UserService userService;
     private final UserSyncService userSyncService;
     private final UserEmailService userEmailService;
+    private final AuthenticationLogService authenticationLogService;
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
 
     /**
      * Constructor with dependency injection for UserService and UserSyncService
      * 
-     * @param userService      The service for user operations
-     * @param userSyncService  The service for user synchronization
-     * @param userEmailService The service for sending user-related emails
+     * @param userService              The service for user operations
+     * @param userSyncService          The service for user synchronization
+     * @param userEmailService         The service for sending user-related emails
+     * @param authenticationLogService The service for authentication log operations
      */
-    public UserController(UserService userService, UserSyncService userSyncService, UserEmailService userEmailService) {
+    public UserController(UserService userService, UserSyncService userSyncService, UserEmailService userEmailService,
+            AuthenticationLogService authenticationLogService) {
         this.userService = userService;
         this.userSyncService = userSyncService;
         this.userEmailService = userEmailService;
+        this.authenticationLogService = authenticationLogService;
     }
 
     /**
@@ -110,6 +115,107 @@ public class UserController {
         }
 
         return ResponseEntity.ok(users);
+    }
+
+    /**
+     * Get users with their last login times - optimized for frontend display
+     * 
+     * @param domain        The email domain to filter users by (optional)
+     * @param status        The status to filter users by (optional)
+     * @param excludeStatus The status to exclude from results (optional)
+     * @param role          The role to filter users by (optional)
+     * @return ResponseEntity containing a filtered list of users with last login
+     *         data
+     */
+    @GetMapping("/with-last-login")
+    public ResponseEntity<List<Map<String, Object>>> getUsersWithLastLogin(
+            @RequestParam(required = false) String domain,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String excludeStatus,
+            @RequestParam(required = false) String role) {
+
+        List<User> users = userService.getAllUsers();
+
+        // Apply domain filter if provided
+        if (domain != null && !domain.isEmpty()) {
+            users = filterUsersByDomain(users, domain);
+        }
+
+        // Apply status filter if provided
+        if (status != null && !status.isEmpty()) {
+            try {
+                StatusType statusType = StatusType.valueOf(status.toUpperCase());
+                users = users.stream()
+                        .filter(user -> user.getStatus() == statusType)
+                        .collect(Collectors.toList());
+            } catch (IllegalArgumentException e) {
+                // Invalid status provided, return empty list
+                return ResponseEntity.ok(new ArrayList<>());
+            }
+        }
+
+        // Apply exclude status filter if provided
+        if (excludeStatus != null && !excludeStatus.isEmpty()) {
+            try {
+                StatusType excludeStatusType = StatusType.valueOf(excludeStatus.toUpperCase());
+                users = users.stream()
+                        .filter(user -> user.getStatus() != excludeStatusType)
+                        .collect(Collectors.toList());
+            } catch (IllegalArgumentException e) {
+                // Invalid exclude status, ignore this filter
+            }
+        }
+
+        // Apply role filter if provided
+        if (role != null && !role.isEmpty()) {
+            try {
+                RoleType roleType = RoleType.valueOf(role.toUpperCase());
+                users = users.stream()
+                        .filter(user -> user.getRoles() != null &&
+                                user.getRoles().contains(roleType))
+                        .collect(Collectors.toList());
+            } catch (IllegalArgumentException e) {
+                // Invalid role provided, return empty list
+                return ResponseEntity.ok(new ArrayList<>());
+            }
+        }
+
+        // Enhance users with last login information
+        List<Map<String, Object>> usersWithLastLogin = users.stream()
+                .map(user -> {
+                    Map<String, Object> userMap = new HashMap<>();
+                    userMap.put("id", user.getId());
+                    userMap.put("email", user.getEmail());
+                    userMap.put("name", user.getName());
+                    userMap.put("firstName", user.getFirstName());
+                    userMap.put("lastName", user.getLastName());
+                    userMap.put("picture", user.getPicture());
+                    userMap.put("status", user.getStatus());
+                    userMap.put("roles", user.getRoles());
+                    userMap.put("primaryDomain", user.getPrimaryDomain());
+                    userMap.put("dateTimeAdded", user.getDateTimeAdded());
+                    userMap.put("dateTimeChanged", user.getDateTimeChanged());
+
+                    // Get last login time - try by user ID first, then by email
+                    LocalDateTime lastLogin = null;
+                    try {
+                        if (user.getId() != null) {
+                            lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(user.getId());
+                        }
+                        if (lastLogin == null && user.getEmail() != null) {
+                            lastLogin = authenticationLogService.getLastSuccessfulLoginByEmail(user.getEmail());
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Error fetching last login for user {}: {}", user.getEmail(), e.getMessage());
+                    }
+
+                    userMap.put("lastLogin", lastLogin);
+
+                    return userMap;
+                })
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(usersWithLastLogin);
     }
 
     /**

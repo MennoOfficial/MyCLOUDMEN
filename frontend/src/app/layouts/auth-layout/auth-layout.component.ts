@@ -19,25 +19,34 @@ export class AuthLayoutComponent implements OnInit {
   constructor(private router: Router) {}
 
   ngOnInit(): void {
-    // Show loading animation on navigation start
+    // Only show loading animation for auth routes, not main layout routes
     this.router.events.pipe(
       filter(event => event instanceof NavigationStart)
-    ).subscribe(() => {
-      this.loading = true;
-      this.loadingStartTime = Date.now();
+    ).subscribe((event: NavigationStart) => {
+      // Only show loading for actual auth routes
+      if (event.url.startsWith('/auth/')) {
+        this.loading = true;
+        this.loadingStartTime = Date.now();
+      }
     });
 
     // Hide loading animation on navigation end, but ensure minimum display time
     this.router.events.pipe(
       filter(event => event instanceof NavigationEnd)
-    ).subscribe(() => {
-      const elapsedTime = Date.now() - this.loadingStartTime;
-      const remainingTime = Math.max(0, this.minLoadingTime - elapsedTime);
-      
-      // Ensure loading animation shows for at least minLoadingTime
-      setTimeout(() => {
+    ).subscribe((event: NavigationEnd) => {
+      // Only handle loading for auth routes
+      if (event.url.startsWith('/auth/')) {
+        const elapsedTime = Date.now() - this.loadingStartTime;
+        const remainingTime = Math.max(0, this.minLoadingTime - elapsedTime);
+        
+        // Ensure loading animation shows for at least minLoadingTime
+        setTimeout(() => {
+          this.loading = false;
+        }, remainingTime);
+      } else {
+        // Immediately hide loading for non-auth routes
         this.loading = false;
-      }, remainingTime);
+      }
     });
   }
 }

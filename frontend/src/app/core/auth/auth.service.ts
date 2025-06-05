@@ -47,6 +47,9 @@ export class AuthService {
   private companyStatusCache: Map<string, CompanyStatusResult> = new Map();
   private cacheTTL = 5 * 60 * 1000; // 5 minutes in milliseconds
   
+  // Track if this is a genuine new authentication (not refresh/restore)
+  private isGenuineNewLogin = false;
+  
   constructor(
     @Inject(DOCUMENT) private document: Document,
     private router: Router,
@@ -110,6 +113,13 @@ export class AuthService {
     }
     
     console.log(`[Auth] Processing Auth0 user: ${auth0User.email}`);
+    
+    // Check if this is from a callback (genuine new login) or from refresh
+    const currentPath = this.router.url;
+    this.isGenuineNewLogin = currentPath.includes('/auth/callback') || currentPath.includes('/auth/loading');
+    
+    console.log(`[Auth] Current path: ${currentPath}, Genuine new login: ${this.isGenuineNewLogin}`);
+    
     this.fetchUserProfile(auth0User);
   }
   
@@ -309,8 +319,14 @@ export class AuthService {
     this.userSubject.next(user);
     this.saveUserToSession(user);
     
-    // Log successful authentication to backend
+    // Only log authentication if this is a genuine new login (not session restore/refresh)
+    if (this.isGenuineNewLogin) {
+      console.log(`[Auth] Genuine new login detected, logging authentication to backend`);
     this.logAuthentication(user);
+      this.isGenuineNewLogin = false; // Reset flag after use
+    } else {
+      console.log(`[Auth] Session restore or refresh detected, skipping authentication logging`);
+    }
     
     // Handle post-authentication navigation
     this.handlePostAuthNavigation(user);
@@ -1006,6 +1022,9 @@ export class AuthService {
     console.log('[Auth] Starting login process');
     sessionStorage.removeItem('auth_error');
     this.authLoadingSubject.next(true);
+    
+    // Mark this as a genuine new login attempt
+    this.isGenuineNewLogin = true;
     
     this.auth0.loginWithRedirect({
       appState: { target: window.location.pathname }

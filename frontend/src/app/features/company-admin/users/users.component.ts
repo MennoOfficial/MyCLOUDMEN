@@ -7,10 +7,23 @@ import { User as AuthUser } from '../../../core/models/auth.model';
 import { EnvironmentService } from '../../../core/services/environment.service';
 import { CompanyUser, PendingUser, SelectedUser } from '../../../core/models/user.model';
 
+// Import standardized components
+import { PageHeaderComponent, PageAction } from '../../../shared/components/page-header/page-header.component';
+import { SearchFilterComponent, FilterConfig, SearchFilterEvent } from '../../../shared/components/search-filter/search-filter.component';
+import { DataTableComponent, TableColumn, TableAction, SortEvent, PaginationEvent } from '../../../shared/components/data-table/data-table.component';
+import { UserDetailModalComponent, UserDetailData, UserUpdateEvent } from '../../../shared/components/user-detail-modal/user-detail-modal.component';
+
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [
+    CommonModule, 
+    FormsModule,
+    PageHeaderComponent,
+    SearchFilterComponent,
+    DataTableComponent,
+    UserDetailModalComponent
+  ],
   templateUrl: './users.component.html',
   styleUrl: './users.component.scss'
 })
@@ -47,6 +60,7 @@ export class UsersComponent implements OnInit {
   // User detail popup
   showUserDetailPopup = false;
   selectedUser: SelectedUser | null = null;
+  selectedUserForModal: UserDetailData | null = null;
   availableStatuses = ['Active', 'Inactive'];
   availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN'];
   updatingUser = false;
@@ -59,6 +73,70 @@ export class UsersComponent implements OnInit {
   // Toast notifications
   showApprovePopup = false;
   showRejectPopup = false;
+
+  // Configuration for standardized components
+  headerActions: PageAction[] = [
+    // Can add actions like "Invite User" later if needed
+  ];
+
+  filterConfigs: FilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: 'Active', label: 'Active' },
+        { value: 'Inactive', label: 'Inactive' }
+      ]
+    },
+    {
+      key: 'role',
+      label: 'Role',
+      type: 'select',
+      options: [
+        { value: 'COMPANY_USER', label: 'User' },
+        { value: 'COMPANY_ADMIN', label: 'Admin' }
+      ]
+    }
+  ];
+
+  tableColumns: TableColumn[] = [
+    {
+      key: 'user',
+      label: 'User',
+      sortable: true,
+      type: 'avatar'
+    },
+    {
+      key: 'email',
+      label: 'Email',
+      sortable: true,
+      type: 'text'
+    },
+    {
+      key: 'role',
+      label: 'Role',
+      sortable: true,
+      type: 'badge'
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      type: 'badge'
+    },
+    {
+      key: 'lastLogin',
+      label: 'Last Login',
+      sortable: false,
+      type: 'date',
+      hideOnMobile: true
+    }
+  ];
+
+  tableActions: TableAction[] = [
+    // Actions will be handled through row clicks for user details
+  ];
 
   constructor(
     private apiService: ApiService,
@@ -126,6 +204,41 @@ export class UsersComponent implements OnInit {
     this.initializeCompanyDomain();
   }
 
+  // Event handlers for standardized components
+  onHeaderAction(action: PageAction): void {
+    switch (action.action) {
+      case 'invite':
+        // Handle invite user action
+        break;
+    }
+  }
+
+  onSearchFilter(event: SearchFilterEvent): void {
+    this.searchQuery = event.searchQuery;
+    this.statusFilter = event.filters['status'] || 'all';
+    this.roleFilter = event.filters['role'] || 'all';
+    this.applyFilters();
+  }
+
+  onSort(event: SortEvent): void {
+    // Map avatar column to name for sorting
+    const sortColumn = event.column === 'user' ? 'name' : event.column;
+    this.sortUsers(sortColumn, false);
+    this.sortDirection = event.direction;
+  }
+
+  onTableAction(event: { action: string, item: any }): void {
+    switch (event.action) {
+      case 'view':
+        this.showUserDetail(event.item);
+        break;
+    }
+  }
+
+  onRowClick(user: CompanyUser): void {
+    this.showUserDetail(user);
+  }
+
   private initializeCompanyDomain(): void {
     this.authService.user$.subscribe({
       next: (user: AuthUser | null) => {
@@ -158,8 +271,8 @@ export class UsersComponent implements OnInit {
     this.loadingUsers = true;
     this.error = false; // Reset error flag
     
-    // Call the API to get users with the company's domain
-    this.apiService.get<any[]>(`users?domain=${this.companyDomain}&excludeStatus=PENDING`)
+    // Call the new API endpoint that includes last login times
+    this.apiService.get<any[]>(`users/with-last-login?domain=${this.companyDomain}&excludeStatus=PENDING`)
       .subscribe({
         next: (users) => {
           try {
@@ -174,7 +287,13 @@ export class UsersComponent implements OnInit {
                        user.status === 'DEACTIVATED' ? 'Inactive' : 
                        user.status,
                 lastLogin: user.lastLogin || null,
-                picture: user.picture || ''
+                picture: user.picture || '',
+                // Add user object for avatar column
+                user: {
+                  name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+                  email: user.email,
+                  picture: user.picture ? this.getProxyImageUrl(user.picture) : ''
+                }
               };
               
               // Process profile image URL if it exists
@@ -698,8 +817,20 @@ export class UsersComponent implements OnInit {
 
   // Method to show user detail popup
   showUserDetail(user: any): void {
-    // Convert the CompanyUser to SelectedUser format
+    // Convert the CompanyUser to SelectedUser format (for backward compatibility)
     this.selectedUser = {
+      id: user.id,
+      firstName: user.name.split(' ')[0] || '',
+      lastName: user.name.split(' ').slice(1).join(' ') || '',
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      picture: user.picture,
+      lastLogin: user.lastLogin
+    };
+
+    // Convert to UserDetailData format for the new modal
+    this.selectedUserForModal = {
       id: user.id,
       firstName: user.name.split(' ')[0] || '',
       lastName: user.name.split(' ').slice(1).join(' ') || '',
@@ -711,50 +842,6 @@ export class UsersComponent implements OnInit {
     };
     
     this.showUserDetailPopup = true;
-  }
-
-  /**
-   * Fetch the last login time for a user, trying by ID first and then falling back to email if needed
-   * @param user The user to fetch last login for
-   */
-  private fetchLastLoginTime(user: CompanyUser): void {
-    // The API returns a LocalDateTime which is serialized as a string
-    this.apiService.get<string>(`auth-logs/user/${user.id}/last-login`).subscribe({
-      next: (lastLoginTime) => {
-        if (lastLoginTime && this.selectedUser) {
-          this.selectedUser.lastLogin = lastLoginTime;
-        } else if (this.selectedUser) {
-          // If no login found by ID, try by email as fallback
-          this.fetchLastLoginByEmail(user.email);
-        }
-      },
-      error: (err) => {
-        // On error, try by email as fallback
-        if (this.selectedUser) {
-          this.fetchLastLoginByEmail(user.email);
-        }
-      }
-    });
-  }
-  
-  /**
-   * Fetch the last login time for a user by email
-   * @param email The user's email
-   */
-  private fetchLastLoginByEmail(email: string): void {
-    // Encode the email for URL safety
-    const encodedEmail = encodeURIComponent(email);
-    
-    this.apiService.get<string>(`auth-logs/email/${encodedEmail}/last-login`).subscribe({
-      next: (lastLoginTime) => {
-        if (lastLoginTime && this.selectedUser) {
-          this.selectedUser.lastLogin = lastLoginTime;
-        }
-      },
-      error: (err) => {
-        // Silent failure - last login time is not critical
-      }
-    });
   }
 
   // Method to hide user detail popup
@@ -891,5 +978,14 @@ export class UsersComponent implements OnInit {
     setTimeout(() => {
       this.showToast = false;
     }, 3000);
+  }
+
+  // Handle user updates from the modal
+  onUserUpdate(event: UserUpdateEvent): void {
+    if (event.type === 'status') {
+      this.updateUserStatus(event.value);
+    } else if (event.type === 'role') {
+      this.updateUserRole(event.value);
+    }
   }
 }

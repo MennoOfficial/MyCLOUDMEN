@@ -564,8 +564,8 @@ export class CompanyDetailComponent implements OnInit {
    * @param user The user to fetch last login for
    */
   private fetchLastLoginTime(user: CompanyUser): void {
-    // The API returns a LocalDateTime which is serialized as a string
-    this.apiService.get<string>(`auth-logs/user/${user.id}/last-login`).subscribe({
+    // The API returns a LocalDateTime which is serialized as a string, or null if no login found
+    this.apiService.get<string | null>(`auth-logs/user/${user.id}/last-login`).subscribe({
       next: (lastLoginTime) => {
         if (lastLoginTime && this.selectedUser) {
           this.selectedUser.lastLogin = lastLoginTime;
@@ -575,7 +575,7 @@ export class CompanyDetailComponent implements OnInit {
         }
       },
       error: (err) => {
-        console.error(`Error fetching last login time for user ${user.id}:`, err);
+        console.warn(`No last login found for user ID ${user.id}, trying email fallback:`, err);
         // On error, try by email as fallback
         if (this.selectedUser) {
           this.fetchLastLoginByEmail(user.email);
@@ -592,14 +592,21 @@ export class CompanyDetailComponent implements OnInit {
     // Encode the email for URL safety
     const encodedEmail = encodeURIComponent(email);
     
-    this.apiService.get<string>(`auth-logs/email/${encodedEmail}/last-login`).subscribe({
+    this.apiService.get<string | null>(`auth-logs/email/${encodedEmail}/last-login`).subscribe({
       next: (lastLoginTime) => {
         if (lastLoginTime && this.selectedUser) {
           this.selectedUser.lastLogin = lastLoginTime;
+        } else if (this.selectedUser) {
+          // No last login found, set to undefined to show "Never logged in"
+          this.selectedUser.lastLogin = undefined;
         }
       },
       error: (err) => {
-        console.error(`Error fetching last login time for email ${email}:`, err);
+        console.warn(`No last login found for email ${email}:`, err);
+        // Set to undefined to show "Never logged in"
+        if (this.selectedUser) {
+          this.selectedUser.lastLogin = undefined;
+        }
       }
     });
   }

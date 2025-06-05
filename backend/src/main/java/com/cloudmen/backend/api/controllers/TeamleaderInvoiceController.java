@@ -227,6 +227,7 @@ public class TeamleaderInvoiceController {
      */
     private boolean isValidFormat(String format) {
         return format != null && (format.equals("pdf") ||
-                format.equals("ubl/e-fff"));
+                format.equals("ubl/e-fff") ||
+                format.equals("ubl/peppol_bis_3"));
     }
 }
