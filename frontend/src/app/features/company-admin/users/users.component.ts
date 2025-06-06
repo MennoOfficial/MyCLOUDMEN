@@ -12,6 +12,7 @@ import { PageHeaderComponent, PageAction } from '../../../shared/components/page
 import { SearchFilterComponent, FilterConfig, SearchFilterEvent } from '../../../shared/components/search-filter/search-filter.component';
 import { DataTableComponent, TableColumn, TableAction, SortEvent, PaginationEvent } from '../../../shared/components/data-table/data-table.component';
 import { UserDetailModalComponent, UserDetailData, UserUpdateEvent } from '../../../shared/components/user-detail-modal/user-detail-modal.component';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-users',
@@ -22,7 +23,8 @@ import { UserDetailModalComponent, UserDetailData, UserUpdateEvent } from '../..
     PageHeaderComponent,
     SearchFilterComponent,
     DataTableComponent,
-    UserDetailModalComponent
+    UserDetailModalComponent,
+    LoadingSpinnerComponent
   ],
   templateUrl: './users.component.html',
   styleUrl: './users.component.scss'
@@ -61,18 +63,19 @@ export class UsersComponent implements OnInit {
   showUserDetailPopup = false;
   selectedUser: SelectedUser | null = null;
   selectedUserForModal: UserDetailData | null = null;
-  availableStatuses = ['Active', 'Inactive'];
+  
+  // Rejected user popup
+  showRejectedUserPopup = false;
+  selectedRejectedUser: SelectedUser | null = null;
+  
+  availableStatuses = ['Active', 'Inactive', 'Rejected'];
   availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN'];
   updatingUser = false;
 
-  // Add these properties at the class level
+  // State management
   showToast = false;
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
-
-  // Toast notifications
-  showApprovePopup = false;
-  showRejectPopup = false;
 
   // Configuration for standardized components
   headerActions: PageAction[] = [
@@ -86,7 +89,8 @@ export class UsersComponent implements OnInit {
       type: 'select',
       options: [
         { value: 'Active', label: 'Active' },
-        { value: 'Inactive', label: 'Inactive' }
+        { value: 'Inactive', label: 'Inactive' },
+        { value: 'Rejected', label: 'Rejected' }
       ]
     },
     {
@@ -146,6 +150,16 @@ export class UsersComponent implements OnInit {
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
+    const target = event.target as Element;
+    
+    // Check if the click is outside the notification system
+    if (this.showNotificationPopup) {
+      const notificationSection = target.closest('.notification-section');
+      if (!notificationSection) {
+        this.showNotificationPopup = false;
+      }
+    }
+
     // Check if click was outside the user detail popup
     if (this.showUserDetailPopup && this.selectedUser) {
       const popupElement = document.querySelector('.user-detail-popup');
@@ -165,21 +179,6 @@ export class UsersComponent implements OnInit {
         }
       }
     }
-
-    // Check if click was outside the notification popup
-    if (this.showNotificationPopup) {
-      const notificationBell = document.querySelector('.notification-bell');
-      const notificationPopup = document.querySelector('.notification-popup');
-      
-      if (notificationBell && notificationPopup) {
-        const clickedInsideBell = notificationBell.contains(event.target as Node);
-        const clickedInsidePopup = notificationPopup.contains(event.target as Node);
-        
-        if (!clickedInsideBell && !clickedInsidePopup && !event.defaultPrevented) {
-          this.showNotificationPopup = false;
-        }
-      }
-    }
     
     // Check if click was outside the pending user popup
     if (this.showPendingPopup) {
@@ -196,6 +195,15 @@ export class UsersComponent implements OnInit {
       if (confirmationPopup && !confirmationPopup.contains(event.target as Node) && 
           !event.defaultPrevented) {
         this.cancelUserAction();
+      }
+    }
+    
+    // Check if click was outside the rejected user popup
+    if (this.showRejectedUserPopup) {
+      const rejectedUserPopup = document.querySelector('.rejected-user-modal');
+      if (rejectedUserPopup && !rejectedUserPopup.contains(event.target as Node) && 
+          !event.defaultPrevented) {
+        this.closeRejectedUserPopup();
       }
     }
   }
@@ -236,7 +244,12 @@ export class UsersComponent implements OnInit {
   }
 
   onRowClick(user: CompanyUser): void {
-    this.showUserDetail(user);
+    // Check if this is a rejected user
+    if (user.status === 'Rejected' || user.status === 'REJECTED') {
+      this.showRejectedUserDetail(user);
+    } else {
+      this.showUserDetail(user);
+    }
   }
 
   private initializeCompanyDomain(): void {
@@ -285,8 +298,9 @@ export class UsersComponent implements OnInit {
                 role: user.roles && user.roles.length > 0 ? user.roles[0] : 'COMPANY_USER',
                 status: user.status === 'ACTIVATED' ? 'Active' : 
                        user.status === 'DEACTIVATED' ? 'Inactive' : 
+                       user.status === 'REJECTED' ? 'Rejected' :
                        user.status,
-                lastLogin: user.lastLogin || null,
+                lastLogin: user.lastLogin || undefined,
                 picture: user.picture || '',
                 // Add user object for avatar column
                 user: {
@@ -329,7 +343,7 @@ export class UsersComponent implements OnInit {
     }
     
     // Call the API to get pending users for the domain
-    this.apiService.get<PendingUser[]>(`users?domain=${encodeURIComponent(this.companyDomain)}&status=PENDING`)
+    this.apiService.get<any[]>(`users?domain=${encodeURIComponent(this.companyDomain)}&status=PENDING`)
       .subscribe({
         next: (pendingUsers) => {
           // Process the results
@@ -337,11 +351,24 @@ export class UsersComponent implements OnInit {
             this.pendingUsers = pendingUsers
               .filter(user => user != null) // Filter nulls just in case
               .map(user => {
-                // Process profile image URL if it exists
-                if (user.picture) {
-                  user.picture = this.getProxyImageUrl(user.picture);
-                }
-                return user;
+                // Map backend fields to frontend PendingUser interface
+                const mappedUser: PendingUser = {
+                  id: user.id,
+                  name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+                  email: user.email,
+                  requestedAt: user.dateTimeAdded || user.requestedAt || new Date().toISOString(), // Map dateTimeAdded to requestedAt
+                  status: user.status,
+                  primaryDomain: user.primaryDomain,
+                  roles: user.roles || [],
+                  firstName: user.firstName,
+                  lastName: user.lastName,
+                  picture: user.picture ? this.getProxyImageUrl(user.picture) : '',
+                  auth0Id: user.auth0Id,
+                  dateTimeAdded: user.dateTimeAdded,
+                  dateTimeChanged: user.dateTimeChanged
+                };
+                
+                return mappedUser;
               });
             
             this.pendingCount = this.pendingUsers.length;
@@ -421,7 +448,10 @@ export class UsersComponent implements OnInit {
       roles: user.roles
     };
     
-    this.showApprovePopup = true;
+    // Set up confirmation popup
+    this.confirmAction = 'approve';
+    this.showUserActionConfirmPopup = true;
+    this.showNotificationPopup = false; // Close notification dropdown
   }
 
   rejectUser(userId: string): void {
@@ -447,7 +477,10 @@ export class UsersComponent implements OnInit {
       roles: user.roles
     };
     
-    this.showRejectPopup = true;
+    // Set up confirmation popup
+    this.confirmAction = 'reject';
+    this.showUserActionConfirmPopup = true;
+    this.showNotificationPopup = false; // Close notification dropdown
   }
   
   confirmUserAction(): void {
@@ -516,24 +549,38 @@ export class UsersComponent implements OnInit {
       this.filteredUsers = [...this.companyUsers];
     }
     
-    // Close the approval popup
-    this.showApprovePopup = false;
-    
     // Call the API to approve the pending user
+    console.log(`[DEBUG] Approving user ${userId} using endpoint: users/pending/${userId}/approve`);
     
-    // Use the correct API endpoint format - users/pending/{id}/approve
     this.apiService.post(`users/pending/${userId}/approve`, {})
       .subscribe({
         next: (response) => {
+          console.log(`[DEBUG] User approval successful:`, response);
           // Display success message using toast
           this.showToastNotification('User has been approved successfully', 'success');
           
-          // Refresh the company users list to ensure data consistency
+          // Add a small delay to ensure backend has processed the approval
+          setTimeout(() => {
+            // Refresh both lists to ensure data consistency
           this.fetchCompanyUsers();
+            this.fetchPendingUsers();
+          }, 500);
+          
+          // Reset state
+          this.updatingUser = false;
         },
         error: (err) => {
+          console.error(`[ERROR] Failed to approve user ${userId}:`, err);
+          console.error(`[ERROR] API endpoint used: users/pending/${userId}/approve`);
+          console.error(`[ERROR] Error details:`, {
+            status: err.status,
+            statusText: err.statusText,
+            message: err.message,
+            error: err.error
+          });
+          
           // Show error toast
-          this.showToastNotification(`Failed to approve user: ${err.message || 'Unknown error'}`, 'error');
+          this.showToastNotification(`Failed to approve user: ${err.error?.message || err.message || 'Unknown error'}`, 'error');
           
           // Revert the optimistic update if the API call fails
           if (this.selectedUser) {
@@ -548,6 +595,9 @@ export class UsersComponent implements OnInit {
             this.companyUsers = this.companyUsers.filter(u => u.id !== userId);
             this.filteredUsers = [...this.companyUsers];
           }
+          
+          // Reset state
+          this.updatingUser = false;
         }
       });
   }
@@ -575,25 +625,48 @@ export class UsersComponent implements OnInit {
       this.hasPendingUsers = this.pendingCount > 0;
     }
     
-    // Close the rejection popup
-    this.showRejectPopup = false;
-    
     // Call the API to reject the pending user
+    console.log(`[DEBUG] Rejecting user ${userId} using endpoint: users/pending/${userId}/reject`);
+    
     this.apiService.post(`users/pending/${userId}/reject`, {})
       .subscribe({
-        next: (response) => {
+        next: (response: any) => {
+          console.log(`[DEBUG] User rejection successful:`, response);
           this.showToastNotification('User has been rejected successfully', 'success');
+          
+          // Add a small delay to ensure backend has processed the rejection
+          setTimeout(() => {
+            // Refresh both pending users and company users lists 
+            // since the rejected user now appears in the company users list
+            this.fetchPendingUsers();
+            this.fetchCompanyUsers();
+          }, 500);
+          
+          // Reset state
+          this.updatingUser = false;
         },
         error: (err) => {
+          console.error(`[ERROR] Failed to reject user ${userId}:`, err);
+          console.error(`[ERROR] API endpoint used: users/pending/${userId}/reject`);
+          console.error(`[ERROR] Error details:`, {
+            status: err.status,
+            statusText: err.statusText,
+            message: err.message,
+            error: err.error
+          });
+          
           // Show error toast
-          this.showToastNotification(`Failed to reject user: ${err.message || 'Unknown error'}`, 'error');
+          this.showToastNotification(`Failed to reject user: ${err.error?.message || err.message || 'Unknown error'}`, 'error');
           
           // Revert the optimistic update if the API call fails
-          if (this.selectedUser && this.pendingUsers) {
+          if (this.pendingUsers) {
             this.pendingUsers.push(pendingUser);
             this.pendingCount = this.pendingUsers.length;
             this.hasPendingUsers = true;
           }
+          
+          // Reset state
+          this.updatingUser = false;
         }
       });
   }
@@ -679,6 +752,10 @@ export class UsersComponent implements OnInit {
         return 'Active';
       case 'DEACTIVATED':
         return 'Inactive';
+      case 'REJECTED':
+        return 'Rejected';
+      case 'PENDING':
+        return 'Pending';
       default:
         return status;
     }
@@ -852,6 +929,60 @@ export class UsersComponent implements OnInit {
       // Restore body scrolling
       document.body.style.overflow = '';
     }, 200); // Small delay to allow animation to complete
+  }
+
+  // Method to show rejected user detail popup
+  showRejectedUserDetail(user: CompanyUser): void {
+    this.selectedRejectedUser = {
+      id: user.id,
+      firstName: user.name.split(' ')[0] || '',
+      lastName: user.name.split(' ').slice(1).join(' ') || '',
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      picture: user.picture,
+      lastLogin: user.lastLogin,
+      primaryDomain: this.companyDomain,
+      requestedAt: user.lastLogin || new Date().toISOString() // Use lastLogin as fallback for requestedAt
+    };
+    
+    this.showRejectedUserPopup = true;
+        }
+
+  // Method to close rejected user popup
+  closeRejectedUserPopup(): void {
+    this.showRejectedUserPopup = false;
+    setTimeout(() => {
+      this.selectedRejectedUser = null;
+    }, 200);
+  }
+  
+  // Method to accept a rejected user (change status from REJECTED to ACTIVATED)
+  acceptRejectedUser(): void {
+    if (!this.selectedRejectedUser) return;
+    
+    this.updatingUser = true;
+    
+    // Call the API to update user status from REJECTED to ACTIVATED
+    this.apiService.put(`users/${this.selectedRejectedUser.id}/status`, { status: 'ACTIVATED' })
+      .subscribe({
+        next: (response) => {
+          this.showToastNotification('User has been accepted successfully', 'success');
+          
+          // Close the popup
+          this.closeRejectedUserPopup();
+          
+          // Refresh the users list to reflect the status change
+          this.fetchCompanyUsers();
+          
+          this.updatingUser = false;
+      },
+      error: (err) => {
+          console.error('Error accepting rejected user:', err);
+          this.showToastNotification(`Failed to accept user: ${err.error?.message || err.message || 'Unknown error'}`, 'error');
+          this.updatingUser = false;
+      }
+    });
   }
 
   // Method to check if the current user can modify another user

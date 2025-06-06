@@ -135,7 +135,8 @@
   color: var(--arctic-dawn);
 }
 .nav-text {
-  font-weight: 600 !important;
+  font-weight: normal !important;
+  font-family: "Inter", "Roboto", -apple-system, BlinkMacSystemFont, sans-serif;
   white-space: nowrap;
   opacity: 0;
   transform: translateX(10px);

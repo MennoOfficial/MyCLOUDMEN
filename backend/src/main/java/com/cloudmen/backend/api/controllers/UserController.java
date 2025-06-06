@@ -351,17 +351,24 @@ public class UserController {
      * Reject a pending user
      * 
      * @param userId The ID of the user to reject
-     * @return ResponseEntity with 204 No Content if successful
+     * @return ResponseEntity containing the updated user with REJECTED status
      */
     @PostMapping("/pending/{userId}/reject")
-    public ResponseEntity<Void> rejectUser(@PathVariable String userId) {
+    public ResponseEntity<User> rejectUser(@PathVariable String userId) {
         return userService.getUserById(userId)
                 .map(user -> {
                     if (user.getStatus() == StatusType.PENDING) {
-                        userService.deleteUser(userId);
-                        return ResponseEntity.noContent().<Void>build();
+                        user.setStatus(StatusType.REJECTED);
+                        user.setDateTimeChanged(LocalDateTime.now());
+
+                        User updatedUser = userService.updateUser(user.getId(), user)
+                                .orElse(user); // Fall back to original user if update fails
+
+                        logger.info("User {} has been rejected and marked with REJECTED status", user.getEmail());
+                        return ResponseEntity.ok(updatedUser);
                     } else {
-                        return ResponseEntity.badRequest().<Void>build(); // User is not in PENDING status
+                        return ResponseEntity.badRequest()
+                                .body(user); // User is not in PENDING status
                     }
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -452,21 +459,45 @@ public class UserController {
             return ResponseEntity.badRequest().body(errorResponse);
         }
 
-        // Check if user already exists
-        if (userService.getUserByAuth0Id(userDTO.getAuth0Id()).isPresent()) {
-            logger.warn("User with Auth0 ID {} already exists", userDTO.getAuth0Id());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("error", true);
-            errorResponse.put("message", "User with this Auth0 ID already exists");
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+        // Check if user already exists by Auth0 ID
+        Optional<User> existingUserByAuth0Id = userService.getUserByAuth0Id(userDTO.getAuth0Id());
+        if (existingUserByAuth0Id.isPresent()) {
+            logger.info("User with Auth0 ID {} already exists, returning existing user", userDTO.getAuth0Id());
+            User existingUser = existingUserByAuth0Id.get();
+
+            // Create a response DTO with limited information for security
+            UserResponseDTO response = new UserResponseDTO(
+                    existingUser.getId(),
+                    existingUser.getEmail(),
+                    existingUser.getRoles(),
+                    existingUser.getAuth0Id());
+
+            return ResponseEntity.ok(response); // Return 200 OK with existing user
         }
 
-        if (userService.getUserByEmail(userDTO.getEmail()).isPresent()) {
-            logger.warn("User with email {} already exists", userDTO.getEmail());
-            Map<String, Object> errorResponse = new HashMap<>();
-            errorResponse.put("error", true);
-            errorResponse.put("message", "User with this email already exists");
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+        // Check if user already exists by email
+        Optional<User> existingUserByEmail = userService.getUserByEmail(userDTO.getEmail());
+        if (existingUserByEmail.isPresent()) {
+            logger.info("User with email {} already exists, updating Auth0 ID if needed", userDTO.getEmail());
+            User existingUser = existingUserByEmail.get();
+
+            // Update the Auth0 ID if it's different (user might have logged in with
+            // different provider)
+            if (!userDTO.getAuth0Id().equals(existingUser.getAuth0Id())) {
+                existingUser.setAuth0Id(userDTO.getAuth0Id());
+                existingUser.setDateTimeChanged(LocalDateTime.now());
+                userService.updateUser(existingUser.getId(), existingUser);
+                logger.info("Updated Auth0 ID for existing user {}", userDTO.getEmail());
+            }
+
+            // Create a response DTO with limited information for security
+            UserResponseDTO response = new UserResponseDTO(
+                    existingUser.getId(),
+                    existingUser.getEmail(),
+                    existingUser.getRoles(),
+                    existingUser.getAuth0Id());
+
+            return ResponseEntity.ok(response); // Return 200 OK with existing user
         }
 
         // Extract domain from email for company association
@@ -702,6 +733,47 @@ public class UserController {
                 .filter(user -> email.equals(user.getEmail()))
                 .findFirst()
                 .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Get login times for a specific user
+     * 
+     * @param userId The ID of the user
+     * @return ResponseEntity containing login time information
+     */
+    @GetMapping("/{userId}/login-times")
+    public ResponseEntity<Map<String, Object>> getUserLoginTimes(@PathVariable String userId) {
+        return userService.getUserById(userId)
+                .map(user -> {
+                    Map<String, Object> loginTimes = new HashMap<>();
+
+                    try {
+                        // Get first login time
+                        LocalDateTime firstLogin = authenticationLogService.getFirstSuccessfulLoginByUserId(userId);
+                        if (firstLogin == null && user.getEmail() != null) {
+                            firstLogin = authenticationLogService.getFirstSuccessfulLoginByEmail(user.getEmail());
+                        }
+
+                        // Get last login time
+                        LocalDateTime lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
+                        if (lastLogin == null && user.getEmail() != null) {
+                            lastLogin = authenticationLogService.getLastSuccessfulLoginByEmail(user.getEmail());
+                        }
+
+                        loginTimes.put("firstLogin", firstLogin);
+                        loginTimes.put("lastLogin", lastLogin);
+                        loginTimes.put("hasLoggedIn", firstLogin != null);
+
+                    } catch (Exception e) {
+                        logger.warn("Error fetching login times for user {}: {}", user.getEmail(), e.getMessage());
+                        loginTimes.put("firstLogin", null);
+                        loginTimes.put("lastLogin", null);
+                        loginTimes.put("hasLoggedIn", false);
+                    }
+
+                    return ResponseEntity.ok(loginTimes);
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 }

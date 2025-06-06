@@ -29,66 +29,8 @@ export class CallbackComponent implements OnInit {
     // First handle the callback
     this.authService.handleAuthCallback();
     
-    // Wait for user profile to be loaded before proceeding
-    // This helps prevent the double login issue
-    this.authService.user$.pipe(
-      // Delay a bit to ensure auth0 processes are complete
-      switchMap(user => {
-        if (user) {
-          return of(user);
-        }
-        
-        // Give some time for the user profile to load
-        return timer(1000).pipe(
-          switchMap(() => this.authService.user$.pipe(take(1)))
-        );
-      }),
-      // Only proceed when we have a user
-      filter(user => !!user),
-      // Limit to first value
-      first(),
-      // Add timeout to prevent indefinite hanging
-      timeout(10000),
-      // Make sure we trigger a refresh if needed
-      tap(user => {
-        if (!user || !user.roles || user.roles.length === 0) {
-          this.authService.refreshUserProfile();
-        }
-      })
-    ).subscribe({
-      next: (user) => {
-        // Navigate based on roles once we have a proper user
-        this.navigateBasedOnRoles(user);
-      },
-      error: () => {
-        // Fallback on timeout or error
-        this.router.navigate(['/purchase-requests']);
-      }
-    });
-  }
-
-  private navigateBasedOnRoles(user: User): void {
-    // **IMPORTANT: Check if there's a target URL stored from before login**
-    const targetUrl = sessionStorage.getItem('auth_target_url');
-    
-    if (targetUrl) {
-      // Clear the stored URL
-      sessionStorage.removeItem('auth_target_url');
-      console.log(`[DEBUG] Redirecting to stored target URL: ${targetUrl}`);
-      
-      // Navigate to the stored URL
-      this.router.navigateByUrl(targetUrl);
-      return;
-    }
-    
-    // Default navigation based on roles if no target URL
-    console.log(`[DEBUG] No target URL found, navigating based on roles`);
-    if (user.roles.includes('SYSTEM_ADMIN')) {
-      this.router.navigate(['/companies']);
-    } else if (user.roles.includes('COMPANY_ADMIN')) {
-      this.router.navigate(['/users']);
-    } else {
-      this.router.navigate(['/requests']);
-    }
+    // Let the AuthService handle all post-authentication navigation
+    // The callback component should NOT interfere with navigation
+    console.log('[Callback] Auth callback processed, AuthService will handle navigation');
   }
 }

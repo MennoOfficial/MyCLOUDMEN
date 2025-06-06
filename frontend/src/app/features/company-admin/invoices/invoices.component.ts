@@ -14,6 +14,7 @@ import { Company } from '../../../core/models/company.model';
 // Import standardized components
 import { PageHeaderComponent, PageAction } from '../../../shared/components/page-header/page-header.component';
 import { DataTableComponent, TableColumn, TableAction, SortEvent, PaginationEvent } from '../../../shared/components/data-table/data-table.component';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 
 // For production build, define a simple environment object
 const environment = {
@@ -29,7 +30,8 @@ const environment = {
     ReactiveFormsModule, 
     RouterModule,
     PageHeaderComponent,
-    DataTableComponent
+    DataTableComponent,
+    LoadingSpinnerComponent
   ],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.scss'

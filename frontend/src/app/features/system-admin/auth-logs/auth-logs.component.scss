@@ -73,13 +73,13 @@
 .error-container {
   display: flex;
   justify-content: center;
-  align-items: center;
+    align-items: center;
   padding: var(--space-xl);
   background: white;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   margin: var(--space-lg) 0;
-}
+    }
 
 .error-content {
   display: flex;
@@ -97,9 +97,9 @@
   .error-text {
     h3 {
       margin: 0 0 var(--space-xs) 0;
-      color: var(--deep-ocean);
+    color: var(--deep-ocean);
       font-size: 1.25rem;
-      font-weight: 600;
+    font-weight: 600;
     }
     
     p {
@@ -119,7 +119,7 @@
   background: var(--aqua-spring);
   color: white;
   padding: var(--space-md) var(--space-lg);
-  border-radius: var(--radius-md);
+      border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
   display: flex;
   align-items: center;
@@ -130,18 +130,18 @@
   
   &.show {
     transform: translateX(0);
-  }
-  
+}
+
   .material-icons {
     font-size: 20px;
-  }
-  
+}
+
   .toast-message {
     font-size: 0.875rem;
     font-weight: 500;
+    }
   }
-}
-
+  
 /* Modal Content Styling */
 .modal-body {
   padding: 0;
@@ -180,8 +180,8 @@
   gap: var(--space-lg);
   
   @media (max-width: 768px) {
-    grid-template-columns: 1fr;
-    gap: var(--space-md);
+  grid-template-columns: 1fr;
+  gap: var(--space-md);
   }
 }
 
@@ -278,7 +278,7 @@
         
         .material-icons {
           color: var(--fire-red);
-        }
+      }
       }
       
       .material-icons {
@@ -327,7 +327,7 @@
     
     &:hover {
       background: var(--aqua-spring);
-      color: white;
+  color: white;
     }
   }
 }

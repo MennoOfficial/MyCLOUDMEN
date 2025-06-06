@@ -2,12 +2,13 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService, RedirectResult } from '../auth.service';
-import { filter, take } from 'rxjs/operators';
+import { filter, take, timeout } from 'rxjs/operators';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-auth-loading',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, LoadingSpinnerComponent],
   templateUrl: './loading.component.html',
   styleUrls: ['./loading.component.scss']
 })
@@ -44,53 +45,42 @@ export class LoadingComponent implements OnInit {
       }
     }, 1000);
     
-    // Subscribe to auth loading state
-    this.authService.authLoading$.pipe(
-      filter(loading => !loading),  // Wait until loading is false
-      take(1)
-    ).subscribe(async () => {
+    // Wait for authentication to complete and user to be available
+    this.authService.user$.pipe(
+      filter(user => user !== null && user !== undefined),
+      take(1),
+      timeout(this.maxWaitTime)
+    ).subscribe({
+      next: (user) => {
       clearInterval(timer);
-      
-      // Get the user and check where to navigate
-      const user = this.authService.getCurrentUser();
-      if (user) {
-        console.log(`[Loading] User loaded: ${user.email}, ${user.status}`);
+        console.log(`[Loading] Authentication completed for: ${user.email}`);
         
-        // Allow the AuthService to determine the correct redirect
-        // This will follow the appropriate sequence of checks
-        const redirectResult = await this.authService['determineUserRedirect'](user);
-        
-        if (redirectResult) {
-          console.log(`[Loading] Redirecting to ${redirectResult.path}`);
-          this.router.navigate([redirectResult.path], {
-            queryParams: redirectResult.queryParams,
-            replaceUrl: redirectResult.replaceUrl ?? true
-          });
+        // Check if we're still on the loading page - if not, don't redirect
+        const currentUrl = this.router.url;
+        if (currentUrl !== '/auth/loading') {
+          console.log(`[Loading] Already navigated away from loading page to: ${currentUrl}`);
           return;
         }
         
-        // Check for stored target URL if no redirection was determined
+        // AuthService will handle all navigation including approvals
+        // So we just check for manual target URLs here
+        
+        // Check if there's a stored target URL
         const targetUrl = sessionStorage.getItem('auth_target_url');
         if (targetUrl) {
-          console.log(`[Loading] Redirecting to target URL: ${targetUrl}`);
+          console.log(`[Loading] Redirecting to stored target URL: ${targetUrl}`);
           sessionStorage.removeItem('auth_target_url');
           this.router.navigateByUrl(targetUrl, { replaceUrl: true });
           return;
         }
-        
-        // Default redirects based on role if nothing else matches
-        console.log(`[Loading] Using role-based redirect`);
-        if (user.roles.includes('SYSTEM_ADMIN')) {
-          this.router.navigate(['/companies'], { replaceUrl: true });
-        } else if (user.roles.includes('COMPANY_ADMIN')) {
-          this.router.navigate(['/users'], { replaceUrl: true });
-        } else {
-          this.router.navigate(['/requests'], { replaceUrl: true });
-        }
-      } else {
-        // No user available, redirect to home
-        console.log(`[Loading] No user found, redirecting to home`);
-        this.router.navigate(['/'], { replaceUrl: true });
+      },
+      error: (error) => {
+        clearInterval(timer);
+        console.error('[Loading] Authentication timeout or error:', error);
+        this.router.navigate(['/auth/error'], {
+          queryParams: { error: 'authentication_timeout' },
+          replaceUrl: true
+        });
       }
     });
   }

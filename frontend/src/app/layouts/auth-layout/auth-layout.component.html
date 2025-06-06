@@ -10,20 +10,12 @@
   <div class="loading-overlay" *ngIf="loading">
     <div class="loading-background"></div>
     <div class="loading-container">
-      <div class="loading-animation">
-        <!-- Professional Three-Bar Loader -->
-        <div class="professional-loader">
-          <div class="wave-element wave-1"></div>
-          <div class="wave-element wave-2"></div>
-          <div class="wave-element wave-3"></div>
-        </div>
-      </div>
-      <div class="loading-text">
-        <span>Connecting to MyCLOUDMEN</span>
-      </div>
-      <div class="loading-progress">
-        <div class="progress-bar"></div>
-      </div>
+      <app-loading-spinner
+        size="large"
+        text="Connecting to MyCLOUDMEN"
+        [showText]="true"
+      >
+      </app-loading-spinner>
     </div>
   </div>
 

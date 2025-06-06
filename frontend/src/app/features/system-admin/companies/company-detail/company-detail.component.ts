@@ -7,11 +7,12 @@ import { CompanyDetail } from '../../../../core/models/company.model';
 import { EnvironmentService } from '../../../../core/services/environment.service';
 import { CompanyStatusType } from '../../../../core/models/enums';
 import { CompanyUser, PendingUser } from '../../../../core/models/user.model';
+import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-company-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, LoadingSpinnerComponent],
   templateUrl: './company-detail.component.html',
   styleUrl: './company-detail.component.scss'
 })
@@ -191,10 +192,26 @@ export class CompanyDetailComponent implements OnInit {
     const companyDomain = companyEmailParts[1];
 
     // Use the new direct endpoint to get pending users by domain
-    this.apiService.get<PendingUser[]>(`users?domain=${companyDomain}&status=PENDING`)
+    this.apiService.get<any[]>(`users?domain=${companyDomain}&status=PENDING`)
       .subscribe({
         next: (pendingUsers) => {
-          this.pendingUsers = pendingUsers;
+          // Map backend fields to frontend PendingUser interface
+          this.pendingUsers = pendingUsers.map(user => ({
+            id: user.id,
+            name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+            email: user.email,
+            requestedAt: user.dateTimeAdded || user.requestedAt || new Date().toISOString(), // Map dateTimeAdded to requestedAt
+            status: user.status,
+            primaryDomain: user.primaryDomain,
+            roles: user.roles || [],
+            firstName: user.firstName,
+            lastName: user.lastName,
+            picture: user.picture,
+            auth0Id: user.auth0Id,
+            dateTimeAdded: user.dateTimeAdded,
+            dateTimeChanged: user.dateTimeChanged
+          }));
+          
           this.pendingCount = this.pendingUsers.length;
           this.hasPendingUsers = this.pendingCount > 0;
         },

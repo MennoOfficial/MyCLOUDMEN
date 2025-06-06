@@ -50,6 +50,13 @@ export class AuthService {
   // Track if this is a genuine new authentication (not refresh/restore)
   private isGenuineNewLogin = false;
   
+  // Prevent multiple simultaneous authentication attempts
+  private authenticationInProgress = false;
+  private authenticationPromise: Promise<User | null> | null = null;
+  
+  // Approval handling
+  private readonly APPROVAL_STORAGE_KEY = 'pending_approval_request';
+  
   constructor(
     @Inject(DOCUMENT) private document: Document,
     private router: Router,
@@ -64,6 +71,15 @@ export class AuthService {
    * Initialize auth flow by checking session storage and setting up Auth0
    */
   private initializeAuth(): void {
+    // **FIRST: Always check for approval parameters before anything else**
+    this.checkForApprovalParameters();
+    
+    // Log if we found approval data
+    const pendingApproval = this.getPendingApprovalRequest();
+    if (pendingApproval) {
+      console.log(`[Auth] 🎯 INITIALIZATION: Approval request detected and preserved:`, pendingApproval);
+    }
+    
     // First try to restore from session if possible
     this.restoreUserFromSession();
     
@@ -84,16 +100,13 @@ export class AuthService {
       console.log(`[Auth] Authentication state changed: ${isAuthenticated}`);
       
       if (isAuthenticated) {
-        this.authLoadingSubject.next(true);
+        // Prevent multiple simultaneous authentication attempts
+        if (this.authenticationInProgress) {
+          console.log('[Auth] Authentication already in progress, skipping');
+          return;
+        }
         
-        // Get user info from Auth0
-        this.auth0.user$.pipe(
-          filter(user => !!user),
-          take(1)
-        ).subscribe({
-          next: auth0User => this.processAuth0User(auth0User),
-          error: error => this.handleAuthError('Failed to get user profile', error)
-        });
+        this.handleAuthentication();
       } else {
         // If not authenticated and we have a user, clear it
         if (this.userSubject.value) {
@@ -104,23 +117,63 @@ export class AuthService {
   }
 
   /**
-   * Process the Auth0 user and fetch backend profile
+   * Handle authentication in a single, controlled flow
    */
-  private processAuth0User(auth0User: any): void {
-    if (!auth0User?.sub) {
-      this.handleAuthError('No auth0 user ID found', null);
+  private async handleAuthentication(): Promise<void> {
+    if (this.authenticationInProgress) {
+      console.log('[Auth] Authentication already in progress, waiting for completion');
+      await this.authenticationPromise;
       return;
     }
-    
-    console.log(`[Auth] Processing Auth0 user: ${auth0User.email}`);
-    
-    // Check if this is from a callback (genuine new login) or from refresh
-    const currentPath = this.router.url;
-    this.isGenuineNewLogin = currentPath.includes('/auth/callback') || currentPath.includes('/auth/loading');
-    
-    console.log(`[Auth] Current path: ${currentPath}, Genuine new login: ${this.isGenuineNewLogin}`);
-    
-    this.fetchUserProfile(auth0User);
+
+    this.authenticationInProgress = true;
+    this.authLoadingSubject.next(true);
+
+    this.authenticationPromise = new Promise<User | null>(async (resolve) => {
+      try {
+        // Get user info from Auth0
+        const auth0User = await firstValueFrom(
+          this.auth0.user$.pipe(
+            filter(user => !!user),
+            take(1),
+            timeout(10000)
+          )
+        );
+
+        if (!auth0User?.sub) {
+          throw new Error('No auth0 user ID found');
+        }
+
+        console.log(`[Auth] Processing Auth0 user: ${auth0User.email}`);
+        
+        // Check if this is from a callback (genuine new login) or from refresh
+        const currentPath = this.router.url;
+        this.isGenuineNewLogin = currentPath.includes('/auth/callback') || currentPath.includes('/auth/loading');
+        
+        console.log(`[Auth] Current path: ${currentPath}, Genuine new login: ${this.isGenuineNewLogin}`);
+        
+        // Fetch user profile
+        const user = await this.fetchUserProfileAsync(auth0User);
+        
+        if (user) {
+          console.log(`[Auth] User authentication completed: ${user.email}`);
+          this.processUserProfile(user);
+          resolve(user);
+        } else {
+          throw new Error('Failed to fetch user profile');
+        }
+      } catch (error) {
+        console.error('[Auth] Authentication error:', error);
+        this.handleAuthError('Authentication failed', error);
+        resolve(null);
+      } finally {
+        this.authenticationInProgress = false;
+        this.authLoadingSubject.next(false);
+        this.authenticationPromise = null;
+      }
+    });
+
+    await this.authenticationPromise;
   }
   
   /**
@@ -193,61 +246,58 @@ export class AuthService {
   }
   
   /**
-   * Fetch user profile from backend API
+   * Fetch user profile from backend API (async version)
    */
-  private fetchUserProfile(auth0User: any): void {
+  private async fetchUserProfileAsync(auth0User: any): Promise<User | null> {
     const auth0Id = encodeURIComponent(auth0User.sub);
     
     console.log(`[Auth] Fetching user profile for: ${auth0User.email}, ID: ${auth0Id}`);
     
-    this.http.get<User>(`${this.environmentService.apiUrl}/users/${auth0Id}`)
-      .pipe(
-        // Don't retry on 404 as that's expected for new users
-        retryWhen(errors => 
-          errors.pipe(
-            concatMap((error, i) => {
-              // Only retry network errors, not 404s
+    try {
+      return await firstValueFrom(
+        this.http.get<User>(`${this.environmentService.apiUrl}/users/${auth0Id}`)
+          .pipe(
+            // Don't retry on 404 as that's expected for new users
+            retryWhen(errors => 
+              errors.pipe(
+                concatMap((error, i) => {
+                  // Only retry network errors, not 404s
+                  if (error.status === 404) {
+                    return throwError(() => error);
+                  }
+                  if (i >= 3) {
+                    return throwError(() => error);
+                  }
+                  console.log(`[Auth] Retrying API call after error, attempt ${i + 1}`);
+                  return timer((i + 1) * 500);
+                })
+              )
+            ),
+            catchError(error => {
+              // If user not found, register them
               if (error.status === 404) {
-                return throwError(() => error);
+                console.log('[Auth] User not found (404), registering new user');
+                return this.registerNewUser(auth0User).pipe(
+                  tap(() => console.log('[Auth] Registration API call completed')),
+                  catchError(regError => {
+                    console.error('[Auth] Registration failed with error:', regError);
+                    if (regError.error) {
+                      console.error('[Auth] Registration error details:', regError.error);
+                    }
+                    return throwError(() => new Error('Failed to register: ' + (regError.message || regError.statusText || 'Unknown error')));
+                  })
+                );
               }
-              if (i >= 3) {
-                return throwError(() => error);
-              }
-              console.log(`[Auth] Retrying API call after error, attempt ${i + 1}`);
-              return timer((i + 1) * 500);
-            })
+              console.error('[Auth] Error fetching user profile:', error);
+              return throwError(() => error);
+            }),
+            timeout(10000)
           )
-        ),
-        catchError(error => {
-          // If user not found, register them
-          if (error.status === 404) {
-            console.log('[Auth] User not found (404), registering new user');
-            return this.registerNewUser(auth0User).pipe(
-              tap(() => console.log('[Auth] Registration API call completed')),
-              catchError(regError => {
-                console.error('[Auth] Registration failed with error:', regError);
-                if (regError.error) {
-                  console.error('[Auth] Registration error details:', regError.error);
-                }
-                return throwError(() => new Error('Failed to register: ' + (regError.message || regError.statusText || 'Unknown error')));
-              })
-            );
-          }
-          console.error('[Auth] Error fetching user profile:', error);
-          return throwError(() => error);
-        }),
-        finalize(() => this.authLoadingSubject.next(false))
-      )
-      .subscribe({
-        next: user => {
-          console.log('[Auth] User profile received successfully:', user);
-          this.processUserProfile(user);
-        },
-        error: error => {
-          console.error('[Auth] Final error in fetchUserProfile:', error);
-          this.handleAuthError('Failed to fetch or register user profile', error);
-        }
-      });
+      );
+    } catch (error) {
+      console.error('[Auth] Final error in fetchUserProfileAsync:', error);
+      throw error;
+    }
   }
   
   /**
@@ -373,8 +423,51 @@ export class AuthService {
    * Handle navigation after successful authentication
    */
   private handlePostAuthNavigation(user: User): void {
+    console.log(`[Auth] Post-auth navigation for user: ${user.email}`);
+    console.log(`[Auth] Current URL: ${this.router.url}`);
+    
+    // **FIRST PRIORITY: Check for pending approval requests - ALWAYS**
+    const pendingApproval = this.getPendingApprovalRequest();
+    console.log(`[Auth] Checking for pending approval...`);
+    
+    if (pendingApproval) {
+      console.log(`[Auth] 🎯 PRIORITY: Found pending approval request:`, pendingApproval);
+      
+      // Navigate to approval page with parameters
+      const approvalUrl = `${pendingApproval.originalPath}?requestId=${pendingApproval.requestId}&email=${pendingApproval.email}`;
+      console.log(`[Auth] 🚀 REDIRECTING to approval URL: ${approvalUrl}`);
+      
+      // DON'T clear the pending request yet - let the approval page handle it
+      // This ensures if there are redirect issues, we still have the data
+      
+      this.router.navigateByUrl(approvalUrl, { replaceUrl: true });
+      return;
+    } else {
+      console.log(`[Auth] ❌ No pending approval found in post-auth navigation`);
+    }
+    
+    console.log(`[Auth] No pending approval found, continuing with normal navigation`);
+    
+    // **Don't redirect if we're already on an approval URL**
+    const currentUrl = this.router.url;
+    const approvalUrls = ['/approve-license', '/confirm-purchase', '/purchase/accept', '/accept-purchase'];
+    const isOnApprovalUrl = approvalUrls.some(url => currentUrl.startsWith(url));
+    
+    if (isOnApprovalUrl) {
+      console.log(`[Auth] User is already on approval URL: ${currentUrl}, not redirecting`);
+      return;
+    }
+    
     // Check if there's a stored target URL from the auth guard
     const targetUrl = sessionStorage.getItem('auth_target_url');
+    console.log(`[Auth] Stored target URL: ${targetUrl}`);
+    
+    // **Only handle navigation if we're on the loading page OR root page**
+    if (currentUrl !== '/auth/loading' && currentUrl !== '/' && currentUrl !== '') {
+      console.log(`[Auth] Not on loading or root page (${currentUrl}), skipping post-auth navigation`);
+      return;
+    }
+    
     if (targetUrl) {
       console.log(`[Auth] Found stored target URL after authentication: ${targetUrl}`);
       sessionStorage.removeItem('auth_target_url');
@@ -382,8 +475,10 @@ export class AuthService {
       // Don't redirect to auth-related or status pages
       if (!this.isExcludedPath(targetUrl)) {
         console.log(`[Auth] Redirecting to stored target URL: ${targetUrl}`);
-        this.router.navigate([targetUrl], { replaceUrl: true });
+        this.router.navigateByUrl(targetUrl, { replaceUrl: true });
         return;
+      } else {
+        console.log(`[Auth] Target URL ${targetUrl} is excluded from redirects`);
       }
     }
     
@@ -567,6 +662,16 @@ export class AuthService {
     if (!user) return null;
     
     console.log(`[Auth] Checking redirect for user: ${user.email}, Status: ${user.status}`);
+    
+    // **CHECK FOR APPROVAL URLS FIRST - Don't redirect away from these**
+    const currentUrl = this.router.url;
+    const approvalUrls = ['/approve-license', '/confirm-purchase', '/purchase/accept', '/accept-purchase'];
+    const isOnApprovalUrl = approvalUrls.some(url => currentUrl.startsWith(url));
+    
+    if (isOnApprovalUrl) {
+      console.log(`[Auth] User is on approval URL: ${currentUrl}, staying on current page`);
+      return null; // Don't redirect, stay on current page
+    }
     
     try {
       // 1. Check company status FIRST (most important check)
@@ -926,8 +1031,12 @@ export class AuthService {
     this.auth0.handleRedirectCallback().subscribe({
       next: result => {
         console.log('[Auth] Auth0 callback processed successfully');
+        console.log(`[Auth] Callback result appState:`, result.appState);
         if (result.appState?.target) {
+          console.log(`[Auth] Storing target URL from appState: ${result.appState.target}`);
           sessionStorage.setItem('auth_target_url', result.appState.target);
+        } else {
+          console.log('[Auth] No target URL found in appState');
         }
         // Auth0 will trigger the isAuthenticated$ observable, which will handle profile loading
       },
@@ -955,7 +1064,7 @@ export class AuthService {
                 ).subscribe({
                   next: auth0User => {
                     console.log('[Auth] Retrieved user profile after state error:', auth0User?.email);
-                    this.processAuth0User(auth0User);
+                    this.handleAuthentication();
                   },
                   error: profileError => {
                     console.error('[Auth] Failed to get user profile after state error:', profileError);
@@ -998,9 +1107,33 @@ export class AuthService {
   private handleInvalidStateError(): void {
     console.log('[Auth] Handling invalid state error - clearing session and redirecting');
     
-    // Clear any lingering state
+    // Get the target URL BEFORE clearing everything
+    const targetUrl = sessionStorage.getItem('auth_target_url');
+    
+    // Clear any lingering state from both sessionStorage and localStorage
     sessionStorage.removeItem('auth_state');
     localStorage.removeItem('auth0.is.authenticated');
+    
+    // Clear Auth0 cache but preserve target URL
+    try {
+      // Clear Auth0's internal state
+      if (this.auth0) {
+        // Auth0 doesn't have a clear method, but we can clear localStorage keys
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('@@auth0spajs@@')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+    } catch (error) {
+      console.error('[Auth] Error clearing Auth0 cache:', error);
+    }
+    
+    // Restore target URL if it existed
+    if (targetUrl) {
+      sessionStorage.setItem('auth_target_url', targetUrl);
+      console.log(`[Auth] Preserved target URL during state error recovery: ${targetUrl}`);
+    }
     
     // Store error but don't display yet
     sessionStorage.setItem('auth_error', JSON.stringify({
@@ -1009,8 +1142,9 @@ export class AuthService {
       recoverable: true
     }));
     
-    // Redirect to login page
-    this.router.navigate(['/login'], { replaceUrl: true });
+    // Don't redirect to login - let the current flow continue
+    // The user is already authenticated despite the state error
+    console.log('[Auth] State error handled, continuing with current authentication');
   }
   
   /**
@@ -1026,8 +1160,12 @@ export class AuthService {
     // Mark this as a genuine new login attempt
     this.isGenuineNewLogin = true;
     
+    // Store the complete current URL including query parameters
+    const currentUrl = window.location.pathname + window.location.search;
+    console.log(`[Auth] Storing current URL for post-auth redirect: ${currentUrl}`);
+    
     this.auth0.loginWithRedirect({
-      appState: { target: window.location.pathname }
+      appState: { target: currentUrl }
     });
   }
 
@@ -1101,26 +1239,9 @@ export class AuthService {
   refreshUserProfile(): void {
     console.log('[Auth] Refreshing user profile');
     sessionStorage.removeItem('user_profile');
-    this.authLoadingSubject.next(true);
     
-    this.auth0.user$.pipe(
-      take(1),
-      timeout(5000),
-      catchError(error => {
-        console.error('[Auth] Error getting auth0 user during refresh:', error);
-        this.clearUserState();
-        this.authLoadingSubject.next(false);
-        return of(null);
-      })
-    ).subscribe(auth0User => {
-      if (auth0User) {
-        this.processAuth0User(auth0User);
-      } else {
-        console.error('[Auth] No auth0 user available for refresh');
-        this.clearUserState();
-        this.authLoadingSubject.next(false);
-      }
-    });
+    // Use the new authentication flow instead of the old method
+    this.handleAuthentication();
   }
 
   /**
@@ -1171,5 +1292,94 @@ export class AuthService {
         );
       })
     );
+  }
+
+  /**
+   * Check for approval parameters and store them for later processing
+   */
+  private checkForApprovalParameters(): void {
+    const currentUrl = window.location.href;
+    const url = new URL(currentUrl);
+    
+    // Check if this is an approval URL
+    const isApprovalPath = url.pathname.includes('/approve-license') || 
+                          url.pathname.includes('/confirm-purchase') || 
+                          url.pathname.includes('/purchase/accept') ||
+                          url.pathname.includes('/accept-purchase');
+    
+    if (isApprovalPath) {
+      const requestId = url.searchParams.get('requestId');
+      const email = url.searchParams.get('email');
+      
+      if (requestId && email) {
+        const approvalData = {
+          requestId,
+          email,
+          originalPath: url.pathname,
+          timestamp: Date.now()
+        };
+        
+        console.log(`[Auth] Detected approval request:`, approvalData);
+        localStorage.setItem(this.APPROVAL_STORAGE_KEY, JSON.stringify(approvalData));
+        
+        // Store in session storage as backup
+        sessionStorage.setItem(this.APPROVAL_STORAGE_KEY, JSON.stringify(approvalData));
+      }
+    }
+  }
+
+  /**
+   * Check if there's a pending approval request
+   */
+  private getPendingApprovalRequest(): any {
+    try {
+      // Check localStorage first, then sessionStorage
+      let storedData = localStorage.getItem(this.APPROVAL_STORAGE_KEY);
+      if (!storedData) {
+        storedData = sessionStorage.getItem(this.APPROVAL_STORAGE_KEY);
+      }
+      
+      if (storedData) {
+        const approvalData = JSON.parse(storedData);
+        
+        // Check if the approval request is not too old (1 hour max)
+        const maxAge = 60 * 60 * 1000; // 1 hour
+        if (Date.now() - approvalData.timestamp > maxAge) {
+          console.log('[Auth] Approval request expired, clearing');
+          this.clearPendingApprovalRequest();
+          return null;
+        }
+        
+        return approvalData;
+      }
+    } catch (error) {
+      console.error('[Auth] Error reading pending approval request:', error);
+      this.clearPendingApprovalRequest();
+    }
+    
+    return null;
+  }
+
+  /**
+   * Clear pending approval request
+   */
+  private clearPendingApprovalRequest(): void {
+    localStorage.removeItem(this.APPROVAL_STORAGE_KEY);
+    sessionStorage.removeItem(this.APPROVAL_STORAGE_KEY);
+  }
+
+  /**
+   * Clear pending approval request (should only be called by approval components after successful processing)
+   */
+  public clearProcessedApprovalRequest(): void {
+    console.log('[Auth] 🧹 Clearing processed approval request');
+    this.clearPendingApprovalRequest();
+  }
+
+  /**
+   * Get pending approval request (public method for components)
+   */
+  public getPendingApprovalForProcessing(): any {
+    return this.getPendingApprovalRequest();
   }
 }

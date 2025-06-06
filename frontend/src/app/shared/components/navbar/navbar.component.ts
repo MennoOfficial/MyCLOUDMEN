@@ -5,11 +5,12 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { User } from '../../../core/models/auth.model';
 import { BehaviorSubject, Subject, takeUntil, Observable, map } from 'rxjs';
 import { EnvironmentService } from '../../../core/services/environment.service';
+import { LoadingSpinnerComponent } from '../loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, LoadingSpinnerComponent],
   templateUrl: './navbar.component.html',
   styleUrls: ['./navbar.component.scss']
 })

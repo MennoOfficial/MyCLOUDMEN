@@ -8,29 +8,16 @@
 <!-- Accept Purchase Mode (formerly PurchaseAcceptComponent) -->
 <div *ngIf="mode === 'accept-purchase'" class="purchase-accept-container">
   <div class="purchase-accept-card">
-    <!-- Loading state -->
-    <div *ngIf="loading" class="loading-state">
-      <div class="spinner"></div>
-      <h2>
-        Processing Your
-        {{ requestType === "license" ? "License" : "Purchase" }} Request
-      </h2>
-      <p>
-        Your {{ requestType === "license" ? "license" : "purchase" }} request is
-        being processed and approved. This may take a minute...
-      </p>
-      <div class="progress-container">
-        <div class="progress-dots">
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
-        </div>
-        <p class="progress-text">Awaiting approval confirmation</p>
-      </div>
-      <p class="small-text">
-        Please don't close this window. You will be redirected automatically
-        once the process is complete.
-      </p>
+    <!-- Simplified Loading state -->
+    <div *ngIf="loading" class="modern-loading-state">
+      <app-loading-spinner
+        size="large"
+        text="Processing {{
+          requestType === 'license' ? 'License' : 'Purchase'
+        }}"
+        [showText]="true"
+      >
+      </app-loading-spinner>
     </div>
 
     <!-- Success state -->
@@ -42,14 +29,12 @@
         {{ requestType === "license" ? "License" : "Purchase" }} Approved!
       </h2>
       <p class="message">{{ message }}</p>
-      <p class="redirect-message">
-        You will be redirected automatically in a moment...
-      </p>
+      <p class="redirect-message">Redirecting automatically...</p>
       <button
         (click)="mode = 'normal'; router.navigate(['/requests'])"
         class="btn btn-primary"
       >
-        Go to Purchase Requests
+        Go to Requests
       </button>
     </div>
 
@@ -64,7 +49,7 @@
         (click)="mode = 'normal'; router.navigate(['/requests'])"
         class="btn btn-primary"
       >
-        Go to Purchase Requests
+        Go to Requests
       </button>
     </div>
   </div>
@@ -73,15 +58,13 @@
 <!-- Confirm Purchase Mode -->
 <div *ngIf="mode === 'confirm'" class="confirm-page">
   <div class="confirm-container">
-    <div class="spinner-container">
-      <div class="spinner"></div>
-      <div class="spinner-text">Processing your request...</div>
-    </div>
-    <h2>Confirming Your Purchase</h2>
-    <p>Please wait while we securely process your transaction.</p>
-    <div class="confirm-details">
-      <p><strong>Request ID:</strong> {{ requestId }}</p>
-      <p><strong>Email:</strong> {{ userEmail }}</p>
+    <div class="modern-loading-state">
+      <app-loading-spinner
+        size="large"
+        text="Confirming Purchase"
+        [showText]="true"
+      >
+      </app-loading-spinner>
     </div>
   </div>
 </div>
@@ -89,18 +72,13 @@
 <!-- Approve License Mode -->
 <div *ngIf="mode === 'approve-license'" class="confirm-page">
   <div class="confirm-container">
-    <div class="spinner-container">
-      <div class="spinner"></div>
-      <div class="spinner-text">Processing your request...</div>
-    </div>
-    <h2>Approving License Request</h2>
-    <p>Please wait while we activate your Google Workspace licenses.</p>
-    <div class="confirm-details">
-      <p><strong>Request ID:</strong> {{ requestId }}</p>
-      <p><strong>License Type:</strong> {{ licenseType }}</p>
-      <p><strong>Quantity:</strong> {{ count }}</p>
-      <p><strong>Domain:</strong> {{ domain }}</p>
-      <p><strong>Email:</strong> {{ userEmail }}</p>
+    <div class="modern-loading-state">
+      <app-loading-spinner
+        size="large"
+        text="Approving License Request"
+        [showText]="true"
+      >
+      </app-loading-spinner>
     </div>
   </div>
 </div>

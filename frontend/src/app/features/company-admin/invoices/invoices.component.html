@@ -69,8 +69,10 @@
 
     <!-- Loading State -->
     <div class="loading-container" *ngIf="loading">
-      <div class="loading-spinner"></div>
-      <p>Loading invoices...</p>
+      <app-loading-spinner
+        size="medium"
+        text="Loading invoices..."
+      ></app-loading-spinner>
     </div>
 
     <!-- Data Table -->

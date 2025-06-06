@@ -1,4 +1,5 @@
 /* Cloudmen Design System - Enhanced Version */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600;700&display=swap');
 
 :root {
@@ -892,15 +893,7 @@ button {
   color: var(--slate);
 }
 
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--silver-lining);
-  border-top: 3px solid var(--aqua-spring);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: var(--space-md);
-}
+/* Loading spinner styles are now handled by the LoadingSpinnerComponent */
 
 /* Empty States */
 .empty-state {

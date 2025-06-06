@@ -75,8 +75,10 @@
 
   <!-- Loading State -->
   <div *ngIf="loading" class="loading-container">
-    <div class="loading-spinner"></div>
-    <p>Loading company details...</p>
+    <app-loading-spinner
+      size="medium"
+      text="Loading company details..."
+    ></app-loading-spinner>
   </div>
 
   <!-- Error State -->
@@ -191,8 +193,11 @@
 
         <!-- Loading state for users -->
         <div *ngIf="loadingUsers" class="users-loading">
-          <div class="mini-spinner"></div>
-          <span>Loading users...</span>
+          <app-loading-spinner
+            size="small"
+            text="Loading users..."
+            [showText]="true"
+          ></app-loading-spinner>
         </div>
 
         <!-- Users table -->
@@ -445,7 +450,12 @@
           [disabled]="updatingStatus"
           (click)="confirmStatusChange()"
         >
-          <span *ngIf="updatingStatus" class="mini-spinner"></span>
+          <span *ngIf="updatingStatus" class="loading-indicator">
+            <app-loading-spinner
+              size="small"
+              [showText]="false"
+            ></app-loading-spinner>
+          </span>
           <span *ngIf="!updatingStatus">Confirm</span>
         </button>
       </div>

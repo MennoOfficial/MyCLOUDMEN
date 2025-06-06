@@ -14,10 +14,11 @@
     <!-- Loading State -->
     <div class="profile-header" *ngIf="isUserLoading">
       <div class="profile-loading">
-        <div class="avatar-loader">
-          <span class="material-icons">hourglass_empty</span>
-        </div>
-        <div class="loading-text">Loading profile...</div>
+        <app-loading-spinner
+          size="small"
+          text="Loading profile..."
+          [showText]="false"
+        ></app-loading-spinner>
       </div>
     </div>
 
@@ -42,7 +43,10 @@
             (error)="handleImageError($event)"
           />
           <div class="avatar-loader" *ngIf="profileImageLoading">
-            <span class="material-icons">hourglass_empty</span>
+            <app-loading-spinner
+              size="small"
+              [showText]="false"
+            ></app-loading-spinner>
           </div>
         </div>
         <div class="profile-info">
