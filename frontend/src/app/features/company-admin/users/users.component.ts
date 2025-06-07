@@ -67,6 +67,7 @@ export class UsersComponent implements OnInit {
   // Rejected user popup
   showRejectedUserPopup = false;
   selectedRejectedUser: SelectedUser | null = null;
+  showAcceptConfirmation = false;
   
   availableStatuses = ['Active', 'Inactive', 'Rejected'];
   availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN'];
@@ -947,16 +948,28 @@ export class UsersComponent implements OnInit {
     };
     
     this.showRejectedUserPopup = true;
-        }
+    this.showAcceptConfirmation = false; // Reset confirmation state
+  }
 
   // Method to close rejected user popup
   closeRejectedUserPopup(): void {
     this.showRejectedUserPopup = false;
+    this.showAcceptConfirmation = false;
     setTimeout(() => {
       this.selectedRejectedUser = null;
     }, 200);
   }
-  
+
+  // Method to show accept confirmation dialog
+  showAcceptConfirmationDialog(): void {
+    this.showAcceptConfirmation = true;
+  }
+
+  // Method to hide accept confirmation and go back to main dialog
+  hideAcceptConfirmation(): void {
+    this.showAcceptConfirmation = false;
+  }
+
   // Method to accept a rejected user (change status from REJECTED to ACTIVATED)
   acceptRejectedUser(): void {
     if (!this.selectedRejectedUser) return;
@@ -969,8 +982,12 @@ export class UsersComponent implements OnInit {
         next: (response) => {
           this.showToastNotification('User has been accepted successfully', 'success');
           
-          // Close the popup
-          this.closeRejectedUserPopup();
+          // Close the popup and reset all states
+          this.showRejectedUserPopup = false;
+          this.showAcceptConfirmation = false;
+          setTimeout(() => {
+            this.selectedRejectedUser = null;
+          }, 200);
           
           // Refresh the users list to reflect the status change
           this.fetchCompanyUsers();
@@ -1015,6 +1032,11 @@ export class UsersComponent implements OnInit {
             this.selectedUser.status = newStatus;
           }
           
+          // Also update selectedUserForModal to sync the modal
+          if (this.selectedUserForModal) {
+            this.selectedUserForModal.status = newStatus;
+          }
+          
           // Also update in the main users array for consistency
           const userIndex = this.companyUsers.findIndex(u => u.id === this.selectedUser?.id);
           if (userIndex >= 0) {
@@ -1043,6 +1065,11 @@ export class UsersComponent implements OnInit {
           // Update the UI
           if (this.selectedUser) {
             this.selectedUser.role = newRole;
+          }
+          
+          // Also update selectedUserForModal to sync the modal
+          if (this.selectedUserForModal) {
+            this.selectedUserForModal.role = newRole;
           }
           
           // Also update in the main users array for consistency

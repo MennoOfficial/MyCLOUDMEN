@@ -26,7 +26,7 @@ export interface UserUpdateEvent {
   imports: [CommonModule, FormsModule, ModalComponent],
   template: `
     <app-modal
-      [isOpen]="isOpen"
+      [isOpen]="isOpen && !showConfirmation"
       title="User Details"
       icon="person"
       size="md"
@@ -80,14 +80,18 @@ export interface UserUpdateEvent {
             </label>
             <div class="form-control-wrapper">
               <select class="form-control"
-                      [(ngModel)]="user!.status"
+                      [(ngModel)]="pendingStatus"
                       [disabled]="!canModifyUser() || isUpdating"
-                      (change)="onStatusChange()"
+                      (change)="onPendingStatusChange()"
                       *ngIf="user">
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
               </select>
               <span class="form-control-icon material-icons">expand_more</span>
+            </div>
+            <div class="change-indicator" *ngIf="hasStatusChanged()">
+              <span class="material-icons">info</span>
+              <span>Changes pending - click Save to apply</span>
             </div>
           </div>
 
@@ -99,14 +103,18 @@ export interface UserUpdateEvent {
             </label>
             <div class="form-control-wrapper">
               <select class="form-control"
-                      [(ngModel)]="user!.role"
+                      [(ngModel)]="pendingRole"
                       [disabled]="!canModifyUser() || isUpdating"
-                      (change)="onRoleChange()"
+                      (change)="onPendingRoleChange()"
                       *ngIf="user">
                 <option value="COMPANY_USER">User</option>
                 <option value="COMPANY_ADMIN">Admin</option>
               </select>
               <span class="form-control-icon material-icons">expand_more</span>
+            </div>
+            <div class="change-indicator" *ngIf="hasRoleChanged()">
+              <span class="material-icons">info</span>
+              <span>Changes pending - click Save to apply</span>
             </div>
           </div>
 
@@ -116,6 +124,22 @@ export interface UserUpdateEvent {
               <span class="material-icons">info</span>
               <span>You cannot modify other administrators or your own account.</span>
             </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="action-buttons" *ngIf="canModifyUser() && hasChanges()">
+            <button class="btn btn-secondary" 
+                    (click)="resetChanges()"
+                    [disabled]="isUpdating">
+              <span class="material-icons">undo</span>
+              Reset
+            </button>
+            <button class="btn btn-primary" 
+                    (click)="showSaveConfirmation()"
+                    [disabled]="isUpdating">
+              <span class="material-icons">save</span>
+              Save Changes
+            </button>
           </div>
 
         </div>
@@ -128,6 +152,68 @@ export interface UserUpdateEvent {
 
       </div>
     </app-modal>
+
+    <!-- Save Confirmation Modal -->
+    <div *ngIf="showConfirmation" class="modal-overlay">
+      <div class="confirmation-modal">
+        <div class="modal-header">
+          <div class="header-icon save-icon">
+            <span class="material-icons">save</span>
+          </div>
+          <h2>Save Changes</h2>
+        </div>
+
+        <div class="modal-body">
+          <div class="user-summary" *ngIf="user">
+            <div class="user-avatar-large">
+              <img *ngIf="user.picture"
+                   [src]="user.picture"
+                   [alt]="getFullName()" />
+              <span *ngIf="!user.picture">
+                {{ getInitials() }}
+              </span>
+            </div>
+            <div class="user-details">
+              <h3>{{ getFullName() }}</h3>
+              <p class="user-email">{{ user.email }}</p>
+            </div>
+          </div>
+
+          <div class="changes-summary">
+            <h4>The following changes will be applied:</h4>
+            <ul class="changes-list">
+              <li *ngIf="hasStatusChanged()" class="change-item">
+                <span class="material-icons">toggle_on</span>
+                <span>Status: <strong>{{ user?.status }}</strong> → <strong>{{ pendingStatus }}</strong></span>
+              </li>
+              <li *ngIf="hasRoleChanged()" class="change-item">
+                <span class="material-icons">admin_panel_settings</span>
+                <span>Role: <strong>{{ formatRole(user?.role || '') }}</strong> → <strong>{{ formatRole(pendingRole) }}</strong></span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="confirmation-message">
+            <p>Are you sure you want to apply these changes? This action cannot be undone.</p>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="hideConfirmation()">
+            Cancel
+          </button>
+          <button class="btn btn-success" 
+                  (click)="confirmSaveChanges()"
+                  [disabled]="isUpdating">
+            <span *ngIf="isUpdating" class="loading-indicator">
+              <div class="loading-spinner-small"></div>
+            </span>
+            <span class="material-icons" *ngIf="!isUpdating">check</span>
+            {{ isUpdating ? "Saving..." : "Yes, Save Changes" }}
+          </button>
+        </div>
+      </div>
+    </div>
   `,
   styleUrls: ['./user-detail-modal.component.scss']
 })
@@ -141,32 +227,86 @@ export class UserDetailModalComponent {
   @Output() userUpdate = new EventEmitter<UserUpdateEvent>();
   @Output() copyEmail = new EventEmitter<string>();
 
+  // Pending changes tracking
+  pendingStatus = '';
+  pendingRole = '';
+  showConfirmation = false;
+
+  ngOnChanges() {
+    // Initialize pending values when user changes
+    if (this.user) {
+      this.pendingStatus = this.user.status;
+      this.pendingRole = this.user.role;
+    }
+  }
+
   onClose() {
+    this.resetChanges();
+    this.hideConfirmation();
     this.modalClose.emit();
   }
 
-  onStatusChange() {
-    if (this.user) {
-      this.userUpdate.emit({
-        type: 'status',
-        value: this.user.status,
-        userId: this.user.id
-      });
-    }
+  onPendingStatusChange() {
+    // Just update the pending value, don't emit changes yet
   }
 
-  onRoleChange() {
-    if (this.user) {
-      this.userUpdate.emit({
-        type: 'role',
-        value: this.user.role,
-        userId: this.user.id
-      });
-    }
+  onPendingRoleChange() {
+    // Just update the pending value, don't emit changes yet
   }
 
   copyToClipboard(email: string) {
     this.copyEmail.emit(email);
+  }
+
+  hasChanges(): boolean {
+    return this.hasStatusChanged() || this.hasRoleChanged();
+  }
+
+  hasStatusChanged(): boolean {
+    return this.user ? this.pendingStatus !== this.user.status : false;
+  }
+
+  hasRoleChanged(): boolean {
+    return this.user ? this.pendingRole !== this.user.role : false;
+  }
+
+  resetChanges() {
+    if (this.user) {
+      this.pendingStatus = this.user.status;
+      this.pendingRole = this.user.role;
+    }
+  }
+
+  showSaveConfirmation() {
+    this.showConfirmation = true;
+  }
+
+  hideConfirmation() {
+    this.showConfirmation = false;
+  }
+
+  confirmSaveChanges() {
+    if (!this.user) return;
+
+    // Apply status changes
+    if (this.hasStatusChanged()) {
+      this.userUpdate.emit({
+        type: 'status',
+        value: this.pendingStatus,
+        userId: this.user.id
+      });
+    }
+
+    // Apply role changes
+    if (this.hasRoleChanged()) {
+      this.userUpdate.emit({
+        type: 'role',
+        value: this.pendingRole,
+        userId: this.user.id
+      });
+    }
+
+    this.hideConfirmation();
   }
 
   canModifyUser(): boolean {
@@ -175,6 +315,14 @@ export class UserDetailModalComponent {
     // Company admins can only modify company users, not other admins
     return this.user.role.toUpperCase() !== 'COMPANY_ADMIN' && 
            this.user.role.toUpperCase() !== 'SYSTEM_ADMIN';
+  }
+
+  formatRole(role: string): string {
+    switch(role) {
+      case 'COMPANY_ADMIN': return 'Admin';
+      case 'COMPANY_USER': return 'User';
+      default: return role;
+    }
   }
 
   getInitials(): string {

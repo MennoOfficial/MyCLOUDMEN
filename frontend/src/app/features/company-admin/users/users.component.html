@@ -270,18 +270,19 @@
   (copyEmail)="copyToClipboard($event)"
 ></app-user-detail-modal>
 
-<!-- Special Rejected User Popup -->
+<!-- Simple Rejected User Popup -->
 <div *ngIf="showRejectedUserPopup" class="modal-overlay">
-  <div class="rejected-user-modal">
-    <div class="modal-header">
+  <div class="confirmation-modal">
+    <!-- First State: Show rejected user info -->
+    <div *ngIf="!showAcceptConfirmation" class="modal-header">
       <div class="header-icon rejected-icon">
         <span class="material-icons">person_off</span>
       </div>
       <h2>Rejected User</h2>
     </div>
 
-    <div class="modal-body" *ngIf="selectedRejectedUser">
-      <div class="user-summary">
+    <div *ngIf="!showAcceptConfirmation" class="modal-body">
+      <div class="user-summary" *ngIf="selectedRejectedUser">
         <div class="user-avatar-large">
           <img
             *ngIf="selectedRejectedUser.picture"
@@ -293,7 +294,7 @@
             "
           />
           <span *ngIf="!selectedRejectedUser.picture">
-            {{ selectedRejectedUser.firstName.charAt(0).toUpperCase() }}
+            {{ (selectedRejectedUser.firstName || "").charAt(0).toUpperCase() }}
           </span>
         </div>
         <div class="user-details">
@@ -302,40 +303,51 @@
             {{ selectedRejectedUser.lastName }}
           </h3>
           <p class="user-email">{{ selectedRejectedUser.email }}</p>
-          <div class="user-meta">
-            <span class="material-icons">domain</span>
-            <span>{{
-              selectedRejectedUser.primaryDomain || companyDomain
-            }}</span>
-          </div>
         </div>
       </div>
 
-      <div class="rejection-info">
-        <div class="status-badge rejected">
-          <span>Rejected</span>
-        </div>
-        <p class="rejection-message">
-          This user request was previously rejected. You can review their
-          information and choose to accept them if you've reconsidered.
+      <div class="confirmation-message">
+        <p>
+          This user request was previously rejected. You can accept them to
+          grant system access.
         </p>
-      </div>
-
-      <div class="user-info-grid">
-        <div class="info-item">
-          <label>Role</label>
-          <span>{{ formatRole(selectedRejectedUser.role || "") }}</span>
-        </div>
-        <div class="info-item">
-          <label>Originally Requested</label>
-          <span>{{ formatTimeAgo(selectedRejectedUser.requestedAt) }}</span>
-        </div>
       </div>
     </div>
 
-    <div class="modal-footer">
+    <div *ngIf="!showAcceptConfirmation" class="modal-footer">
       <button class="btn btn-secondary" (click)="closeRejectedUserPopup()">
         Close
+      </button>
+      <button class="btn btn-success" (click)="showAcceptConfirmationDialog()">
+        <span class="material-icons">check</span>
+        Accept User
+      </button>
+    </div>
+
+    <!-- Second State: Confirmation dialog -->
+    <div *ngIf="showAcceptConfirmation" class="modal-header">
+      <div class="header-icon approve-icon">
+        <span class="material-icons">check_circle</span>
+      </div>
+      <h2>Accept User</h2>
+    </div>
+
+    <div *ngIf="showAcceptConfirmation" class="modal-body">
+      <div class="confirmation-message" *ngIf="selectedRejectedUser">
+        <p>
+          Are you sure you want to accept
+          <strong
+            >{{ selectedRejectedUser.firstName }}
+            {{ selectedRejectedUser.lastName }}</strong
+          >?
+        </p>
+        <p>They will be granted access to the system immediately.</p>
+      </div>
+    </div>
+
+    <div *ngIf="showAcceptConfirmation" class="modal-footer">
+      <button class="btn btn-secondary" (click)="hideAcceptConfirmation()">
+        Cancel
       </button>
       <button
         class="btn btn-success"
@@ -349,7 +361,7 @@
           ></app-loading-spinner>
         </span>
         <span class="material-icons" *ngIf="!updatingUser">check</span>
-        {{ updatingUser ? "Processing..." : "Accept User" }}
+        {{ updatingUser ? "Processing..." : "Yes, Accept" }}
       </button>
     </div>
   </div>
