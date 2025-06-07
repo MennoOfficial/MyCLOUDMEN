@@ -399,10 +399,10 @@ export class DataTableComponent implements OnInit {
       return 'badge-success';
     }
     if (stringValue === 'DEACTIVATED' || lowerValue.includes('deactivated') || lowerValue.includes('inactive') || lowerValue.includes('error') || lowerValue.includes('failed') || lowerValue.includes('rejected')) {
-      return 'badge-danger';
+      return 'badge-warning'; // Orange for deactivated (left on good terms)
     }
     if (stringValue === 'SUSPENDED' || lowerValue.includes('suspended')) {
-      return 'badge-warning';
+      return 'badge-danger'; // Red for suspended (serious issues)
     }
     
     // Handle user roles - Admin should be blue, User should be gray

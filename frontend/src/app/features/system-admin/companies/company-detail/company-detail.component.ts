@@ -924,9 +924,9 @@ export class CompanyDetailComponent implements OnInit {
       case 'ACTIVE': 
         return 'Active companies have full access to all features and appear in regular searches.';
       case 'DEACTIVATED': 
-        return 'Deactivated companies have no access to the platform and won\'t appear in searches.';
+        return 'Deactivated companies have ended their partnership with CLOUDMEN on good terms. No platform access.';
       case 'SUSPENDED': 
-        return 'Suspended companies have temporary limited access to the platform and reduced visibility.';
+        return 'Suspended companies have been temporarily blocked due to payment issues or policy violations. No platform access.';
       default: 
         return '';
     }

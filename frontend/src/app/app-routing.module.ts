@@ -216,6 +216,10 @@ export const routes: Routes = [
     loadComponent: () => import('./core/auth/company-inactive/company-inactive.component').then(c => c.CompanyInactiveComponent)
   },
   {
+    path: 'company-suspended',
+    loadComponent: () => import('./core/auth/company-suspended/company-suspended.component').then(c => c.CompanySuspendedComponent)
+  },
+  {
     path: 'company-not-registered',
     loadComponent: () => import('./core/auth/company-not-registered/company-not-registered.component').then(c => c.CompanyNotRegisteredComponent)
   },

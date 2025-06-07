@@ -10,9 +10,14 @@
 .auth-logo {
   margin-top: 40px;
   margin-bottom: 40px;
+  transition: opacity 0.3s ease;
   
   img {
     height: 60px;
+  }
+  
+  &.hidden {
+    opacity: 0;
   }
 }
 
@@ -48,8 +53,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(circle at center, var(--arctic-dawn) 0%, var(--silver-lining) 100%);
-  opacity: 0.95;
+  background: var(--deep-ocean); // Clean dark blue background
 }
 
 .loading-container {
@@ -58,16 +62,29 @@
   align-items: center;
   justify-content: center;
   z-index: 10;
-  width: 280px;
   position: relative;
+  text-align: center;
 }
 
-.loading-animation {
+.loading-content {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-bottom: 24px;
-  height: 80px;
+  gap: 1.5rem;
+}
+
+.loading-logo {
+  img {
+    height: 80px;
+    width: auto;
+    filter: none; // Keep original logo colors
+    animation: fadeIn 0.8s ease;
+    
+    @media (max-width: 480px) {
+      height: 60px;
+    }
+  }
 }
 
 // Professional Three-Bar Loader

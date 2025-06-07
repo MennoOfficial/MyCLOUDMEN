@@ -1,4 +1,4 @@
-<div class="deactivated-container">
+<div class="suspended-container">
   <div class="logo-container">
     <img
       src="https://images.squarespace-cdn.com/content/v1/5ccbf1d3af468332420ae5e1/29cace80-077c-4a83-b165-c29a38b583d8/embleem_transp_white_1700.png"
@@ -17,24 +17,23 @@
 
     <div class="card-content">
       <div class="icon-container">
-        <i class="material-icons centered-icon">business_center</i>
+        <i class="material-icons centered-icon">pause_circle_outline</i>
       </div>
 
-      <h1>Account Deactivated</h1>
+      <h1>Account Suspended</h1>
 
       <div class="message-container">
         <p class="main-message" *ngIf="companyName">
-          <strong>{{ companyName }}</strong> is currently deactivated and does
-          not have access to CLOUDMEN services.
+          <strong>{{ companyName }}</strong> has been temporarily suspended from
+          accessing CLOUDMEN services.
         </p>
         <p class="main-message" *ngIf="!companyName">
-          Your account is currently deactivated and does not have access to
-          CLOUDMEN services.
+          Your access has been temporarily suspended from accessing CLOUDMEN
+          services.
         </p>
 
         <p class="action-message">
-          Contact support if you need to reactivate your account or have
-          questions about your status.
+          Please contact support to resolve this issue and restore access.
         </p>
       </div>
 

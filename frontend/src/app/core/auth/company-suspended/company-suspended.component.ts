@@ -4,13 +4,13 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 import { AuthService } from '../auth.service';
 
 @Component({
-  selector: 'app-company-inactive',
+  selector: 'app-company-suspended',
   standalone: true,
   imports: [CommonModule, RouterModule],
-  templateUrl: './company-inactive.component.html',
-  styleUrls: ['./company-inactive.component.scss']
+  templateUrl: './company-suspended.component.html',
+  styleUrls: ['./company-suspended.component.scss']
 })
-export class CompanyInactiveComponent implements OnInit {
+export class CompanySuspendedComponent implements OnInit {
   companyName: string = '';
   
   constructor(
@@ -28,8 +28,8 @@ export class CompanyInactiveComponent implements OnInit {
   }
   
   contactSupport(): void {
-    // Open email client with subject about company deactivation
-    window.location.href = `mailto:help@cloudmen.com?subject=Account reactivation request - ${this.companyName || 'Company Name'}`;
+    // Open email client with subject about company suspension
+    window.location.href = `mailto:help@cloudmen.com?subject=Account suspended  - ${this.companyName || 'Company Name'}`;
   }
   
   logout(): void {

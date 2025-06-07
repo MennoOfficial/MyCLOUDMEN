@@ -45,7 +45,7 @@ export class AuthService {
   
   // Cache for company domain status to prevent repeated API calls
   private companyStatusCache: Map<string, CompanyStatusResult> = new Map();
-  private cacheTTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+  private cacheTTL = 30 * 1000; // 30 seconds in milliseconds (reduced from 5 minutes)
   
   // Track if this is a genuine new authentication (not refresh/restore)
   private isGenuineNewLogin = false;
@@ -65,6 +65,12 @@ export class AuthService {
     @Optional() @Inject(Auth0Service) private auth0: Auth0Service
   ) {
     this.initializeAuth();
+    
+    // Expose auth service globally for debugging (development only)
+    if (typeof window !== 'undefined' && !this.environmentService.isProduction) {
+      (window as any).authService = this;
+      console.log('[Auth] 🛠️ Auth service exposed globally as window.authService for debugging');
+    }
   }
   
   /**
@@ -756,11 +762,16 @@ export class AuthService {
       
       // Next check if user has an inactive company
       if (this.hasInactiveCompany(user)) {
-        console.log(`[Auth] User company is inactive`);
+        const companyStatus = user.company?.status || user.companyStatus || 'DEACTIVATED';
+        console.log(`[Auth] User company is inactive with status: ${companyStatus}`);
+        
+        // Route to different components based on status
+        const redirectPath = companyStatus === 'SUSPENDED' ? '/company-suspended' : '/company-inactive';
+        
         const redirect = {
-          path: '/company-inactive',
+          path: redirectPath,
           queryParams: { 
-            status: user.company?.status || user.companyStatus || 'DEACTIVATED',
+            status: companyStatus,
             company: user.company?.name || user.companyName || ''
           },
           replaceUrl: true
@@ -790,8 +801,12 @@ export class AuthService {
       
       if (this.INACTIVE_STATUSES.includes(companyInfo.status)) {
         console.log(`[Auth] Company is inactive with status: ${companyInfo.status}`);
+        
+        // Route to different components based on status
+        const redirectPath = companyInfo.status === 'SUSPENDED' ? '/company-suspended' : '/company-inactive';
+        
         const redirect = {
-          path: '/company-inactive',
+          path: redirectPath,
           queryParams: { 
             status: companyInfo.status,
             company: companyInfo.name
@@ -1381,5 +1396,87 @@ export class AuthService {
    */
   public getPendingApprovalForProcessing(): any {
     return this.getPendingApprovalRequest();
+  }
+
+  /**
+   * Clear company status cache and refresh user profile
+   * Useful when company status changes and immediate update is needed
+   */
+  public clearCompanyStatusCache(): void {
+    console.log('[Auth] Clearing company status cache');
+    this.companyStatusCache.clear();
+    
+    // Also refresh the user profile to get latest data
+    this.refreshUserProfile();
+  }
+  
+  /**
+   * Clear cache for a specific domain
+   */
+  public clearDomainCache(domain: string): void {
+    console.log(`[Auth] Clearing cache for domain: ${domain}`);
+    this.companyStatusCache.delete(domain);
+  }
+
+  /**
+   * Force check company status for current user, bypassing cache
+   */
+  public async forceCheckCompanyStatus(): Promise<void> {
+    const currentUser = this.getCurrentUser();
+    if (!currentUser || !currentUser.email) {
+      console.log('[Auth] No current user or email, cannot check company status');
+      return;
+    }
+    
+    const domain = this.getEmailDomain(currentUser.email);
+    if (!domain) {
+      console.log('[Auth] Cannot extract domain from user email');
+      return;
+    }
+    
+    // Clear cache for this domain first
+    this.clearDomainCache(domain);
+    
+    // Check company status
+    const companyStatus = await this.checkCompanyStatus(currentUser);
+    if (companyStatus) {
+      console.log(`[Auth] Force check found company status issue, redirecting to: ${companyStatus.path}`);
+      this.router.navigate([companyStatus.path], {
+        queryParams: companyStatus.queryParams,
+        replaceUrl: companyStatus.replaceUrl ?? true
+      });
+    } else {
+      console.log('[Auth] Force check: Company status is active, no redirection needed');
+    }
+  }
+
+  /**
+   * Debug method to manually test status changes (for development only)
+   * Usage in browser console: window.authService.testStatusChange('SUSPENDED')
+   */
+  public testStatusChange(newStatus: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED'): void {
+    if (typeof window !== 'undefined') {
+      console.log(`[Auth] 🧪 DEBUG: Testing status change to ${newStatus}`);
+      
+      // Clear all caches first
+      this.clearCompanyStatusCache();
+      
+      // Simulate the status change by temporarily modifying the user object
+      const currentUser = this.getCurrentUser();
+      if (currentUser) {
+        // Create a test company status
+        if (currentUser.company) {
+          currentUser.company.status = newStatus;
+        } else {
+          currentUser.company = { name: 'Test Company', status: newStatus };
+        }
+        
+        // Update the user subject to trigger status checks
+        this.userSubject.next(currentUser);
+        
+        // Force a status check
+        this.forceCheckCompanyStatus();
+      }
+    }
   }
 }

@@ -60,16 +60,26 @@ export class StatusCheckerService implements OnDestroy {
             return; // Skip if no user is found
           }
           
-          // Check user status
-          if (user.status !== 'ACTIVATED') {
-            this.router.navigate(['/account-deactivated'], { 
-              queryParams: { status: user.status } 
+          // Check user status and route appropriately
+          if (user.status === 'PENDING') {
+            this.router.navigate(['/pending-account'], { 
+              replaceUrl: true 
             });
             return;
           }
           
-          // Also check company status
-          this.checkCompanyStatus(user);
+          if (user.status === 'DEACTIVATED') {
+            this.router.navigate(['/account-deactivated'], { 
+              queryParams: { status: user.status },
+              replaceUrl: true 
+            });
+            return;
+          }
+          
+          // For ACTIVATED users, check company status
+          if (user.status === 'ACTIVATED') {
+            this.checkCompanyStatus(user);
+          }
         },
         error: (error) => {
           console.error('Error in periodic status check:', error);
