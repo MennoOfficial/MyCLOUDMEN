@@ -222,6 +222,11 @@ export class UserDetailModalComponent {
   @Input() user: UserDetailData | null = null;
   @Input() currentUserRole = '';
   @Input() isUpdating = false;
+  /**
+   * Allow editing of admin users (set to true for system admins who can modify anyone)
+   * When false (default), prevents editing of COMPANY_ADMIN and SYSTEM_ADMIN users
+   */
+  @Input() allowAdminEdit = false;
 
   @Output() modalClose = new EventEmitter<void>();
   @Output() userUpdate = new EventEmitter<UserUpdateEvent>();
@@ -311,6 +316,9 @@ export class UserDetailModalComponent {
 
   canModifyUser(): boolean {
     if (!this.user) return false;
+    
+    // If allowAdminEdit is true (system admin context), allow editing of anyone
+    if (this.allowAdminEdit) return true;
     
     // Company admins can only modify company users, not other admins
     return this.user.role.toUpperCase() !== 'COMPANY_ADMIN' && 

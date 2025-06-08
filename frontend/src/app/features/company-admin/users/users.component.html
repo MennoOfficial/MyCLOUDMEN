@@ -27,52 +27,65 @@
       </div>
 
       <div class="dropdown-body">
-        <div *ngFor="let user of pendingUsers" class="user-request-card">
-          <div class="user-avatar-container">
-            <div class="user-avatar">
-              <img
-                *ngIf="user.picture"
-                [src]="user.picture"
-                [alt]="user.name"
-                class="avatar-image"
-              />
-              <span *ngIf="!user.picture" class="avatar-initials">
-                {{ user.name.charAt(0).toUpperCase() }}
-              </span>
-            </div>
-            <div class="online-indicator"></div>
-          </div>
+        <div *ngIf="pendingUsers.length > 0; else emptyState">
+          <div *ngFor="let user of pendingUsers" class="user-request-card">
+            <div class="user-content">
+              <div class="user-avatar-container">
+                <div class="user-avatar">
+                  <img
+                    *ngIf="user.picture"
+                    [src]="user.picture"
+                    [alt]="user.name"
+                    class="avatar-image"
+                  />
+                  <span *ngIf="!user.picture" class="avatar-initials">
+                    {{ user.name.charAt(0).toUpperCase() }}
+                  </span>
+                </div>
+              </div>
 
-          <div class="user-info">
-            <div class="user-name">{{ user.name }}</div>
-            <div class="user-email">{{ user.email }}</div>
-            <div class="request-meta">
-              <span class="material-icons">schedule</span>
-              <span class="request-time">{{
-                formatTimeAgo(user.requestedAt)
-              }}</span>
+              <div class="user-info">
+                <div class="user-name">{{ user.name }}</div>
+                <div class="user-email">{{ user.email }}</div>
+                <div class="request-meta">
+                  <span class="material-icons">schedule</span>
+                  <span class="request-time">{{
+                    formatTimeAgo(user.requestedAt)
+                  }}</span>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div class="action-buttons">
-            <button
-              class="action-btn approve-btn"
-              (click)="approveUser(user.id); $event.stopPropagation()"
-              title="Approve user request"
-              [disabled]="updatingUser"
-            >
-              <span class="material-icons">check_circle</span>
-            </button>
-            <button
-              class="action-btn reject-btn"
-              (click)="rejectUser(user.id); $event.stopPropagation()"
-              title="Reject user request"
-              [disabled]="updatingUser"
-            >
-              <span class="material-icons">cancel</span>
-            </button>
+            <div class="action-buttons">
+              <button
+                class="action-btn approve-btn"
+                (click)="approveUser(user.id); $event.stopPropagation()"
+                title="Approve user request"
+                [disabled]="updatingUser"
+              >
+                <span class="material-icons">check_circle</span>
+              </button>
+              <button
+                class="action-btn reject-btn"
+                (click)="rejectUser(user.id); $event.stopPropagation()"
+                title="Reject user request"
+                [disabled]="updatingUser"
+              >
+                <span class="material-icons">cancel</span>
+              </button>
+            </div>
           </div>
         </div>
+
+        <ng-template #emptyState>
+          <div class="empty-state">
+            <span class="material-icons empty-icon">inbox</span>
+            <div class="empty-title">All caught up!</div>
+            <div class="empty-message">
+              No pending user requests at the moment.
+            </div>
+          </div>
+        </ng-template>
       </div>
     </div>
   </div>

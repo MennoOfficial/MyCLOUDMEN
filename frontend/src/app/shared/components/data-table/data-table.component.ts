@@ -394,23 +394,23 @@ export class DataTableComponent implements OnInit {
       return 'badge-success';
     }
     
-    // Handle specific company status values
-    if (stringValue === 'ACTIVE' || lowerValue.includes('active')) {
-      return 'badge-success';
-    }
-    if (stringValue === 'DEACTIVATED' || lowerValue.includes('deactivated') || lowerValue.includes('inactive') || lowerValue.includes('error') || lowerValue.includes('failed') || lowerValue.includes('rejected')) {
+    // Handle specific company status values - Check inactive first to prevent substring matching
+    if (stringValue === 'DEACTIVATED' || lowerValue === 'deactivated' || lowerValue === 'inactive' || stringValue === 'Inactive' || lowerValue.includes('error') || lowerValue.includes('failed') || lowerValue.includes('rejected')) {
       return 'badge-warning'; // Orange for deactivated (left on good terms)
+    }
+    if (stringValue === 'ACTIVE' || stringValue === 'Active' || lowerValue === 'active') {
+      return 'badge-success';
     }
     if (stringValue === 'SUSPENDED' || lowerValue.includes('suspended')) {
       return 'badge-danger'; // Red for suspended (serious issues)
     }
     
-    // Handle user roles - Admin should be blue, User should be gray
-    if (stringValue === 'COMPANY_ADMIN' || lowerValue === 'admin') {
-      return 'badge-info';
+    // Handle user roles - All admins should get purple, users should get a specific user color
+    if (stringValue === 'COMPANY_ADMIN' || stringValue === 'SYSTEM_ADMIN' || lowerValue === 'admin' || lowerValue === 'system admin') {
+      return 'badge-admin'; // Purple for all admin roles
     }
     if (stringValue === 'COMPANY_USER' || lowerValue === 'user') {
-      return 'badge-secondary';
+      return 'badge-user'; // Specific color for users
     }
     
     // Handle other statuses

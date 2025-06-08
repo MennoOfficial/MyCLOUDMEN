@@ -1,8 +1,9 @@
-import { Component, OnInit, HostListener } from '@angular/core';
+import { Component, OnInit, HostListener, Inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/auth/auth.service';
 import { CompanyListItem, CompanyDetail, CompanyListResponse, CompanyAddress, ContactInfo } from '../../../core/models/company.model';
 import { CompanyStatusType } from '../../../core/models/enums';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
@@ -30,6 +31,9 @@ import { DataTableComponent, TableColumn, TableAction, SortEvent, PaginationEven
 export class CompaniesComponent implements OnInit {
   companies: CompanyListItem[] = [];
   filteredCompanies: CompanyListItem[] = [];
+  
+  // Admin domain filtering
+  adminDomain: string = '';
   
   // Pagination
   pageSize = 25;
@@ -119,9 +123,11 @@ export class CompaniesComponent implements OnInit {
 
   constructor(
     private apiService: ApiService,
-    private router: Router
+    private router: Router,
+    @Inject(AuthService) private authService: AuthService
   ) {
     this.checkScreenSize();
+    this.initializeAdminDomain();
   }
 
   @HostListener('window:resize')
@@ -201,8 +207,14 @@ export class CompaniesComponent implements OnInit {
     this.apiService.get<CompanyListResponse>(`teamleader/companies?page=${this.pageIndex}&size=${this.pageSize}&sortBy=${sortBy}&direction=${direction}`)
       .subscribe({
         next: (response) => {
-          this.companies = response.companies;
-          this.totalCompanies = response.total;
+          // Filter out the admin's own domain from the companies list
+          this.companies = response.companies.filter(company => {
+            if (!this.adminDomain || !company.email) return true;
+            const companyDomain = company.email.split('@')[1];
+            return companyDomain !== this.adminDomain;
+          });
+          
+          this.totalCompanies = this.companies.length; // Update total after filtering
           this.applyFilters();
           this.loading = false;
         },
@@ -361,5 +373,22 @@ export class CompaniesComponent implements OnInit {
     setTimeout(() => {
       this.showToast = false;
     }, 3000);
+  }
+
+  initializeAdminDomain(): void {
+    this.authService.user$.subscribe({
+      next: (user) => {
+        if (user && user.email) {
+          // Extract domain from admin's email
+          const emailParts = user.email.split('@');
+          if (emailParts.length === 2) {
+            this.adminDomain = emailParts[1];
+          }
+        }
+      },
+      error: (err) => {
+        console.error('Failed to get admin user profile:', err);
+      }
+    });
   }
 }
