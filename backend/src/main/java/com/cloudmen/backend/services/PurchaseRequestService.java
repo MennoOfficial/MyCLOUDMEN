@@ -187,12 +187,16 @@ public class PurchaseRequestService {
         // Create a new purchase request
         PurchaseRequest purchaseRequest = new PurchaseRequest(requestId, userEmail);
         purchaseRequest.setType("licenses");
+        purchaseRequest.setSkuId(request.getSkuId());
         purchaseRequest.setLicenseType(request.getLicenseType());
         purchaseRequest.setQuantity(request.getCount());
         purchaseRequest.setDomain(request.getDomain());
         purchaseRequest.setCost(request.getCost());
         purchaseRequest.setStatus("PENDING");
         purchaseRequest.setRequestDate(new Date());
+
+        log.info("Created license request with SKU ID: {} and license type: {}",
+                request.getSkuId(), request.getLicenseType());
 
         // Save and return the request
         return savePurchaseRequest(purchaseRequest);

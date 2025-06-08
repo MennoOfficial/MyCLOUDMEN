@@ -128,7 +128,7 @@
     <h1>License Request Sent!</h1>
     <div class="message-container">
       <p class="lead">
-        Your Google Workspace license request has been sent for approval.
+        Your Workspace license request has been sent for approval.
       </p>
       <div class="details-card">
         <div class="detail-row" *ngIf="requestId">
@@ -157,8 +157,7 @@
         your inbox.
       </p>
       <p class="note">
-        The license will be added to your Google Workspace account after
-        approval.
+        The license will be added to your Workspace account after approval.
       </p>
     </div>
     <div class="button-container">
@@ -227,8 +226,8 @@
 <div *ngIf="mode === 'normal'" class="page-container">
   <!-- Standardized Page Header -->
   <app-page-header
-    title="License & Credits Management"
-    description="Manage your Google Workspace licenses and Signature Satori credits efficiently"
+    title="Purchase Requests"
+    description="Manage your Workspace licenses and Signature credits efficiently"
     icon="business_center"
     [actions]="headerActions"
     (actionClick)="onHeaderAction($event)"
@@ -297,18 +296,18 @@
   <div class="content-container" *ngIf="!isLoading && !loadingError">
     <!-- Service Cards Grid -->
     <div class="services-grid">
-      <!-- Google Workspace Card -->
+      <!-- Workspace Card -->
       <div class="service-card google-workspace-card">
         <div class="service-header">
           <div class="service-logo">
             <img
               src="https://crystalpng.com/wp-content/uploads/2025/05/google-logo.png"
-              alt="Google Workspace"
+              alt="Workspace"
               class="logo-img"
             />
           </div>
           <div class="service-info">
-            <h2 class="service-title">Google Workspace</h2>
+            <h2 class="service-title">Workspace</h2>
             <p class="service-description">
               Professional email, cloud storage, and productivity tools
             </p>
@@ -508,18 +507,18 @@
         </div>
       </div>
 
-      <!-- Signature Satori Card -->
+      <!-- Signature Card -->
       <div class="service-card satori-card">
         <div class="service-header">
           <div class="service-logo">
             <img
-              src="https://signaturesatori.com/wp-content/uploads/SignatureSatori_Logo_for_Google.png"
-              alt="Signature Satori"
+              src="https://www.cobry.co.uk/wp-content/uploads/2022/01/Asset-1satori-300x300-1.png"
+              alt="Signature"
               class="logo-img"
             />
           </div>
           <div class="service-info">
-            <h2 class="service-title">Signature Satori</h2>
+            <h2 class="service-title">Signature</h2>
             <p class="service-description">
               Automated document processing and signature management
             </p>
@@ -562,7 +561,7 @@
       </div>
     </div>
 
-    <!-- Activity Section with Data Table -->
+    <!-- Enhanced Activity Section with Search, Filter, and Pagination -->
     <div class="activity-section">
       <div class="section-header">
         <div class="section-info">
@@ -573,18 +572,126 @@
         </div>
       </div>
 
-      <!-- Standardized Data Table -->
+      <!-- Activity Controls -->
+      <div class="activity-controls" *ngIf="pendingRequests.length > 0">
+        <!-- Search Bar -->
+        <div class="search-section">
+          <div class="search-input-wrapper">
+            <span class="material-icons search-icon">search</span>
+            <input
+              type="text"
+              class="search-input"
+              placeholder="Search requests by type, status, or ID..."
+              [(ngModel)]="activitySearchTerm"
+              (input)="onActivitySearch(activitySearchTerm)"
+            />
+            <button
+              *ngIf="activitySearchTerm"
+              class="clear-search-btn"
+              (click)="onActivitySearch('')"
+              title="Clear search"
+            >
+              <span class="material-icons">close</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-section">
+          <div class="filter-row">
+            <!-- Status Filter -->
+            <div class="filter-group">
+              <label class="filter-label">Status</label>
+              <select
+                class="filter-select"
+                [(ngModel)]="activityFilter.status"
+                (ngModelChange)="onActivityFilterChange()"
+              >
+                <option
+                  *ngFor="let option of activityStatusOptions"
+                  [value]="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Type Filter -->
+            <div class="filter-group">
+              <label class="filter-label">Type</label>
+              <select
+                class="filter-select"
+                [(ngModel)]="activityFilter.type"
+                (ngModelChange)="onActivityFilterChange()"
+              >
+                <option
+                  *ngFor="let option of activityTypeOptions"
+                  [value]="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Date Range Filter -->
+            <div class="filter-group">
+              <label class="filter-label">Time Period</label>
+              <select
+                class="filter-select"
+                [(ngModel)]="activityFilter.dateRange"
+                (ngModelChange)="onActivityFilterChange()"
+              >
+                <option
+                  *ngFor="let option of activityDateOptions"
+                  [value]="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Clear Filters Button -->
+            <div class="filter-actions">
+              <button
+                *ngIf="hasActiveActivityFilters"
+                class="clear-filters-btn"
+                (click)="clearActivityFilters()"
+                title="Clear all filters"
+              >
+                <span class="material-icons">filter_alt_off</span>
+                Clear Filters
+              </button>
+            </div>
+          </div>
+
+          <!-- Filter Summary -->
+          <div *ngIf="hasActiveActivityFilters" class="filter-summary">
+            <span class="material-icons">info</span>
+            {{ activityFilterSummary }}
+            <span class="results-count"
+              >({{ activityTotalItems }} result{{
+                activityTotalItems !== 1 ? "s" : ""
+              }})</span
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- Enhanced Data Table with Pagination -->
       <app-data-table
         *ngIf="pendingRequests.length > 0"
-        [data]="displayedRequests"
+        [data]="displayedActivityRequests"
         [columns]="activityTableColumns"
         [loading]="false"
-        [rowClickable]="true"
-        [showPagination]="false"
-        emptyIcon="receipt_long"
-        emptyTitle="No recent activity"
-        emptyMessage="Your license and credit requests will appear here"
-        (rowClick)="viewRequestDetails($event)"
+        [rowClickable]="false"
+        [showPagination]="true"
+        [totalItems]="activityTotalItems"
+        [currentPage]="activityCurrentPage - 1"
+        [pageSize]="activityPageSize"
+        emptyIcon="search_off"
+        emptyTitle="No matching requests"
+        emptyMessage="Try adjusting your search term or filters to find what you're looking for"
+        (pageChange)="onActivityPageChange($event)"
       ></app-data-table>
 
       <!-- Empty State -->
@@ -632,7 +739,7 @@
               class="modal-service-logo"
             />
           </div>
-          <h3 class="modal-title">Purchase Google Workspace Licenses</h3>
+          <h3 class="modal-title">Purchase Workspace Licenses</h3>
         </div>
         <button class="modal-close-btn" (click)="closeModals()">
           <span class="material-icons">close</span>
@@ -730,12 +837,12 @@
         <div class="modal-title-section">
           <div class="modal-icon">
             <img
-              src="https://signaturesatori.com/wp-content/uploads/SignatureSatori_Logo_for_Google.png"
-              alt="Signature Satori"
+              src="https://www.cobry.co.uk/wp-content/uploads/2022/01/Asset-1satori-300x300-1.png"
+              alt="Signature"
               class="modal-service-logo"
             />
           </div>
-          <h3 class="modal-title">Purchase Signature Satori Credits</h3>
+          <h3 class="modal-title">Purchase Signature Credits</h3>
         </div>
         <button class="modal-close-btn" (click)="closeModals()">
           <span class="material-icons">close</span>
@@ -745,7 +852,7 @@
       <div class="modal-body">
         <div class="credits-info-display">
           <p class="credits-description">
-            Add Signature Satori credits to your account for automated document
+            Add Signature credits to your account for automated document
             processing.
           </p>
         </div>

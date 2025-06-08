@@ -18,7 +18,8 @@ public class PurchaseRequest {
     private Date processedDate;
     private String status; // PENDING, APPROVED, REJECTED
     private String type; // licenses, credits, etc.
-    private String licenseType; // Type of license for Google Workspace
+    private String skuId; // SKU ID for Google Workspace licenses (e.g., "1010020020")
+    private String licenseType; // Type of license for Google Workspace (kept for backward compatibility)
     private Integer quantity; // Number of licenses or credits
     private String domain; // Domain for license requests
     private Double cost; // Cost of the purchase request
@@ -82,6 +83,14 @@ public class PurchaseRequest {
         this.type = type;
     }
 
+    public String getSkuId() {
+        return skuId;
+    }
+
+    public void setSkuId(String skuId) {
+        this.skuId = skuId;
+    }
+
     public String getLicenseType() {
         return licenseType;
     }
@@ -123,6 +132,7 @@ public class PurchaseRequest {
                 ", processedDate=" + processedDate +
                 ", status='" + status + '\'' +
                 ", type='" + type + '\'' +
+                ", skuId='" + skuId + '\'' +
                 ", licenseType='" + licenseType + '\'' +
                 ", quantity=" + quantity +
                 ", domain='" + domain + '\'' +

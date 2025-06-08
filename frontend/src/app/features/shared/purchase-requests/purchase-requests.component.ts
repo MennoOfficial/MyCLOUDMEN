@@ -11,7 +11,7 @@ import { ActivatedRoute, Router, RouterModule } from '@angular/router';
 // Import standardized components
 import { PageHeaderComponent, PageAction } from '../../../shared/components/page-header/page-header.component';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
-import { DataTableComponent, TableColumn, TableAction } from '../../../shared/components/data-table/data-table.component';
+import { DataTableComponent, TableColumn, TableAction, PaginationEvent } from '../../../shared/components/data-table/data-table.component';
 
 interface PurchaseRequest {
   id: string;
@@ -74,6 +74,37 @@ interface RequestStatusResponse {
   userEmail?: string;
 }
 
+// Add new interfaces for SKU data
+interface GoogleWorkspaceSku {
+  skuId: string;
+  skuName: string;
+  description?: string;
+  plans?: string[];
+  price?: {
+    basePrice: number;
+    currency: string;
+    interval: string;
+  };
+}
+
+interface SkuResponse {
+  kind: string;
+  skus: GoogleWorkspaceSku[];
+}
+
+// Add new interfaces for enhanced activity management
+interface ActivityFilter {
+  status: string;
+  type: string;
+  dateRange: string;
+}
+
+interface ActivitySearchState {
+  searchTerm: string;
+  filteredRequests: PurchaseRequest[];
+  totalFilteredItems: number;
+}
+
 @Component({
   selector: 'app-purchase-requests',
   standalone: true,
@@ -123,6 +154,10 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   creditBalance = 0;
   pendingRequests: PurchaseRequest[] = [];
   
+  // SKU data for Google Workspace licenses
+  availableSkus: GoogleWorkspaceSku[] = [];
+  skuMap: Map<string, GoogleWorkspaceSku> = new Map(); // For quick lookups
+  
   // Cached displayed data to prevent constant refreshing
   private _displayedRequests: any[] = [];
   private _lastRequestsHash: string = '';
@@ -133,6 +168,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   purchaseQuantity = 10; // Changed from 100 to 10 for credits
   purchaseLicenseQuantity = 1; // For licenses
   selectedLicenseType = 'Business Standard';
+  selectedSkuId = '1010020028'; // Default to Business Standard SKU
   
   // Notification states 
   showNotification = false;
@@ -183,7 +219,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       label: 'Status',
       type: 'badge',
       badgeType: 'status',
-      sortable: false
+      sortable: true
     },
     {
       key: 'requestDate',
@@ -191,6 +227,46 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       type: 'date',
       sortable: true
     }
+  ];
+
+  // Enhanced activity management properties
+  activitySearchTerm = '';
+  activityFilter: ActivityFilter = {
+    status: 'all',
+    type: 'all',
+    dateRange: 'all'
+  };
+  
+  // Pagination for activity section
+  activityCurrentPage = 1;
+  activityPageSize = 10;
+  activityTotalItems = 0;
+  
+  // Cache for filtered and paginated data
+  private filteredActivityRequests: PurchaseRequest[] = [];
+  private _displayedActivityRequests: any[] = [];
+  private _lastActivityHash = '';
+
+  // Available filter options
+  readonly activityStatusOptions = [
+    { value: 'all', label: 'All Statuses' },
+    { value: 'PENDING', label: 'Pending' },
+    { value: 'AWAITING_CONFIRMATION', label: 'Awaiting Confirmation' },
+    { value: 'APPROVED', label: 'Approved' },
+    { value: 'REJECTED', label: 'Rejected' }
+  ];
+
+  readonly activityTypeOptions = [
+    { value: 'all', label: 'All Types' },
+    { value: 'license', label: 'License Requests' },
+    { value: 'credit', label: 'Credit Purchases' }
+  ];
+
+  readonly activityDateOptions = [
+    { value: 'all', label: 'All Time' },
+    { value: '7', label: 'Last 7 days' },
+    { value: '30', label: 'Last 30 days' },
+    { value: '90', label: 'Last 90 days' }
   ];
 
   constructor(
@@ -1323,9 +1399,10 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
               
               console.log('User info prepared with company data:', this.userInfo);
               
-              // After getting user info, fetch licenses and credits
+              // After getting user info, fetch licenses, credits, and SKUs
               this.fetchGoogleWorkspaceLicenses();
               this.fetchSignatureSatoriCredits();
+              this.fetchAvailableSkus();
               this.fetchPendingRequests();
             } else {
               console.log('No valid company data found in response, using fallback');
@@ -1464,9 +1541,10 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     
     console.log('User info prepared with fallback:', this.userInfo);
     
-    // After getting user info, fetch licenses and credits
+    // After getting user info, fetch licenses, credits, and SKUs
     this.fetchGoogleWorkspaceLicenses();
     this.fetchSignatureSatoriCredits();
+    this.fetchAvailableSkus();
     this.fetchPendingRequests();
   }
 
@@ -1644,9 +1722,9 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   // Helper to format the request type from API response
   private formatRequestTypeFromResponse(request: PurchaseRequestResponse): string {
     if (request.type === 'licenses' && request.licenseType) {
-      return `Google Workspace - ${request.licenseType}`;
+      return request.licenseType.replace('Google Workspace ', '');
     } else if (request.type === 'credits') {
-      return 'Signature Satori Credits';
+      return 'Signature Credits';
     } else {
       return request.type || 'Unknown';
     }
@@ -1727,7 +1805,39 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   openLicensePurchaseModal(licenseType: string): void {
     this.selectedLicenseType = licenseType;
     this.purchaseLicenseQuantity = 1;
+    
+    // Find the corresponding SKU ID for this license type
+    const sku = this.availableSkus.find(s => 
+      s.skuName.toLowerCase().includes(licenseType.toLowerCase())
+    );
+    
+    if (sku) {
+      this.selectedSkuId = sku.skuId;
+      console.log(`Selected SKU ID: ${this.selectedSkuId} for license type: ${licenseType}`);
+    } else {
+      // Fallback to default mapping
+      this.selectedSkuId = this.getSkuIdFromLicenseType(licenseType);
+      console.log(`Using fallback SKU ID: ${this.selectedSkuId} for license type: ${licenseType}`);
+    }
+    
     this.showLicenseModal = true;
+  }
+  
+  /**
+   * Get SKU ID from license type as fallback
+   */
+  private getSkuIdFromLicenseType(licenseType: string): string {
+    const normalizedType = licenseType.toLowerCase();
+    if (normalizedType.includes('starter')) {
+      return '1010020020';
+    } else if (normalizedType.includes('standard')) {
+      return '1010020028';
+    } else if (normalizedType.includes('plus')) {
+      return '1010020025';
+    } else if (normalizedType.includes('enterprise')) {
+      return '1010060001';
+    }
+    return '1010020028'; // Default to Business Standard
   }
   
   openCreditsPurchaseModal(): void {
@@ -1747,7 +1857,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
   
   calculateLicenseCost(): number {
-    // Cost = price per license * quantity
+    // Use SKU price if available, otherwise fallback to hardcoded prices
+    const sku = this.skuMap.get(this.selectedSkuId);
+    if (sku && sku.price) {
+      return sku.price.basePrice * this.purchaseLicenseQuantity;
+    }
+    
+    // Fallback to hardcoded prices
     return this.getLicensePriceValue(this.selectedLicenseType) * this.purchaseLicenseQuantity;
   }
 
@@ -1850,12 +1966,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     
     // Ensure consistent license type naming
     const fullLicenseType = this.getFullLicenseTypeName(this.selectedLicenseType);
-    console.log(`Requesting license type: ${fullLicenseType}`);
+    console.log(`Requesting license type: ${fullLicenseType} with SKU ID: ${this.selectedSkuId}`);
     
-    // Create the license request DTO
+    // Create the license request DTO with SKU ID
     const licenseRequest = {
       count: this.purchaseLicenseQuantity,
-      licenseType: fullLicenseType,
+      skuId: this.selectedSkuId, // Send the actual SKU ID
+      licenseType: fullLicenseType, // Keep for backward compatibility
       domain: userDomain,
       cost: this.calculateLicenseCost()
     };
@@ -2007,10 +2124,10 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
    */
   formatActivityTitle(request: PurchaseRequest): string {
     if (request.type.toLowerCase().includes('license')) {
-      return `Google Workspace ${request.type} Request`;
+      return `Workspace ${request.type} Request`;
     }
     if (request.type.toLowerCase().includes('credit')) {
-      return 'Signature Satori Credits Purchase';
+      return 'Signature Credits Purchase';
     }
     return request.type;
   }
@@ -2138,12 +2255,12 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
    */
   private static getServiceNameStatic(type: string): string {
     if (type.toLowerCase().includes('google') || type.toLowerCase().includes('workspace') || type.toLowerCase().includes('license')) {
-      return 'Google Workspace';
+      return 'Workspace';
     }
     if (type.toLowerCase().includes('signature') || type.toLowerCase().includes('satori') || type.toLowerCase().includes('credit')) {
-      return 'Signature Satori';
+      return 'Signature';
     }
-    return 'Google Workspace'; // Default
+    return 'Workspace'; // Default
   }
 
   /**
@@ -2155,7 +2272,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       // For licenses, extract and format the license type if possible
       const licenseType = request.type.includes('-') ? 
         request.type.split('-')[1].trim() : 
-        'License';
+        'Workspace License';
       return licenseType;
     } else if (request.type.toLowerCase().includes('credit')) {
       return 'Credits';
@@ -2181,5 +2298,252 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
    */
   formatStatus(status: string): string {
     return PurchaseRequestsComponent.formatStatusStatic(status);
+  }
+
+  /**
+   * Enhanced displayedRequests with search, filtering, and pagination
+   */
+  get displayedActivityRequests(): any[] {
+    const currentHash = JSON.stringify({
+      requests: this.pendingRequests,
+      searchTerm: this.activitySearchTerm,
+      filter: this.activityFilter,
+      currentPage: this.activityCurrentPage,
+      pageSize: this.activityPageSize
+    });
+
+    // Return cached data if nothing has changed
+    if (this._lastActivityHash === currentHash && this._displayedActivityRequests.length > 0) {
+      return this._displayedActivityRequests;
+    }
+
+    this._lastActivityHash = currentHash;
+    
+    // Apply search and filters
+    this.filteredActivityRequests = this.applyActivityFilters(this.pendingRequests);
+    this.activityTotalItems = this.filteredActivityRequests.length;
+    
+    // Apply pagination
+    const startIndex = (this.activityCurrentPage - 1) * this.activityPageSize;
+    const endIndex = startIndex + this.activityPageSize;
+    const paginatedRequests = this.filteredActivityRequests.slice(startIndex, endIndex);
+    
+    // Transform for display
+    this._displayedActivityRequests = paginatedRequests.map(request => ({
+      id: request.id,
+      service: {
+        picture: this.getServiceLogo(request.type),
+        name: PurchaseRequestsComponent.getServiceNameStatic(request.type)
+      },
+      type: PurchaseRequestsComponent.formatRequestTypeStatic(request),
+      quantity: `${request.quantity} ${PurchaseRequestsComponent.getQuantityUnitStatic(request.type)}`,
+      cost: request.cost,
+      status: request.status,
+      requestDate: request.requestDate,
+      // Don't include originalData to prevent clicking
+      clickable: false
+    }));
+
+    return this._displayedActivityRequests;
+  }
+
+  /**
+   * Apply search term and filters to the requests
+   */
+  private applyActivityFilters(requests: PurchaseRequest[]): PurchaseRequest[] {
+    let filtered = [...requests];
+
+    // Apply search term
+    if (this.activitySearchTerm.trim()) {
+      const searchLower = this.activitySearchTerm.toLowerCase();
+      filtered = filtered.filter(request => 
+        request.type.toLowerCase().includes(searchLower) ||
+        request.status.toLowerCase().includes(searchLower) ||
+        request.id.toLowerCase().includes(searchLower) ||
+        PurchaseRequestsComponent.getServiceNameStatic(request.type).toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply status filter
+    if (this.activityFilter.status !== 'all') {
+      filtered = filtered.filter(request => request.status === this.activityFilter.status);
+    }
+
+    // Apply type filter
+    if (this.activityFilter.type !== 'all') {
+      if (this.activityFilter.type === 'license') {
+        filtered = filtered.filter(request => 
+          request.type.toLowerCase().includes('license') || 
+          request.type.toLowerCase().includes('workspace')
+        );
+      } else if (this.activityFilter.type === 'credit') {
+        filtered = filtered.filter(request => 
+          request.type.toLowerCase().includes('credit') || 
+          request.type.toLowerCase().includes('satori')
+        );
+      }
+    }
+
+    // Apply date range filter
+    if (this.activityFilter.dateRange !== 'all') {
+      const daysAgo = parseInt(this.activityFilter.dateRange);
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
+      
+      filtered = filtered.filter(request => {
+        const requestDate = new Date(request.requestDate);
+        return requestDate >= cutoffDate;
+      });
+    }
+
+    // Sort by date (newest first)
+    filtered.sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime());
+
+    return filtered;
+  }
+
+  /**
+   * Handle activity search input
+   */
+  onActivitySearch(searchTerm: string): void {
+    this.activitySearchTerm = searchTerm;
+    this.activityCurrentPage = 1; // Reset to first page
+    this.clearActivityCache();
+  }
+
+  /**
+   * Handle activity filter changes
+   */
+  onActivityFilterChange(): void {
+    this.activityCurrentPage = 1; // Reset to first page
+    this.clearActivityCache();
+  }
+
+  /**
+   * Handle activity pagination
+   */
+  onActivityPageChange(event: PaginationEvent): void {
+    this.activityCurrentPage = event.pageIndex + 1; // Convert 0-based to 1-based
+    this.activityPageSize = event.pageSize;
+    this.clearActivityCache();
+  }
+
+  /**
+   * Clear activity filters and search
+   */
+  clearActivityFilters(): void {
+    this.activitySearchTerm = '';
+    this.activityFilter = {
+      status: 'all',
+      type: 'all',
+      dateRange: 'all'
+    };
+    this.activityCurrentPage = 1;
+    this.clearActivityCache();
+  }
+
+  /**
+   * Clear activity cache to force refresh
+   */
+  private clearActivityCache(): void {
+    this._lastActivityHash = '';
+    this._displayedActivityRequests = [];
+  }
+
+  /**
+   * Check if any filters are active
+   */
+  get hasActiveActivityFilters(): boolean {
+    return this.activitySearchTerm.trim() !== '' ||
+           this.activityFilter.status !== 'all' ||
+           this.activityFilter.type !== 'all' ||
+           this.activityFilter.dateRange !== 'all';
+  }
+
+  /**
+   * Get activity filter summary for display
+   */
+  get activityFilterSummary(): string {
+    const active = [];
+    if (this.activitySearchTerm.trim()) active.push(`"${this.activitySearchTerm}"`);
+    if (this.activityFilter.status !== 'all') {
+      const statusLabel = this.activityStatusOptions.find(opt => opt.value === this.activityFilter.status)?.label;
+      active.push(statusLabel);
+    }
+    if (this.activityFilter.type !== 'all') {
+      const typeLabel = this.activityTypeOptions.find(opt => opt.value === this.activityFilter.type)?.label;
+      active.push(typeLabel);
+    }
+    if (this.activityFilter.dateRange !== 'all') {
+      const dateLabel = this.activityDateOptions.find(opt => opt.value === this.activityFilter.dateRange)?.label;
+      active.push(dateLabel);
+    }
+    
+    return active.length > 0 ? `Filtered by: ${active.join(', ')}` : '';
+  }
+
+  /**
+   * Fetch available Google Workspace SKUs from the backend
+   */
+  fetchAvailableSkus(): void {
+    this.http.get<SkuResponse>(`${this.environmentService.apiUrl}/google-workspace/skus`)
+      .pipe(
+        catchError(error => {
+          console.error('Error fetching available SKUs:', error);
+          this.showToast('Failed to load license types', 'error');
+          // Return fallback SKU data
+          return of({
+            kind: 'reseller#skus',
+            skus: [
+              {
+                skuId: '1010020020',
+                skuName: 'Google Workspace Business Starter',
+                description: 'Google Workspace Business Starter plan with 30GB storage',
+                plans: ['ANNUAL', 'FLEXIBLE', 'TRIAL'],
+                price: {
+                  basePrice: 6.0,
+                  currency: 'USD',
+                  interval: 'MONTHLY'
+                }
+              },
+              {
+                skuId: '1010020028',
+                skuName: 'Google Workspace Business Standard',
+                description: 'Google Workspace Business Standard plan with 2TB storage',
+                plans: ['ANNUAL', 'FLEXIBLE', 'TRIAL'],
+                price: {
+                  basePrice: 12.0,
+                  currency: 'USD',
+                  interval: 'MONTHLY'
+                }
+              },
+              {
+                skuId: '1010020025',
+                skuName: 'Google Workspace Business Plus',
+                description: 'Google Workspace Business Plus plan with 5TB storage',
+                plans: ['ANNUAL', 'FLEXIBLE', 'TRIAL'],
+                price: {
+                  basePrice: 18.0,
+                  currency: 'USD',
+                  interval: 'MONTHLY'
+                }
+              }
+            ]
+          });
+        })
+      )
+      .subscribe(response => {
+        if (response && response.skus) {
+          this.availableSkus = response.skus;
+          
+          // Build SKU map for quick lookups
+          this.skuMap.clear();
+          this.availableSkus.forEach(sku => {
+            this.skuMap.set(sku.skuId, sku);
+          });
+          
+          console.log('Loaded available SKUs:', this.availableSkus);
+        }
+      });
   }
 } 
