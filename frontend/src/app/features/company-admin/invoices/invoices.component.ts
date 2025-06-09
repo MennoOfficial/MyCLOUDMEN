@@ -72,7 +72,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   
   // Sorting
   sortColumn: string = 'paymentReference';
-  sortDirection: string = 'asc';
+  sortDirection: 'asc' | 'desc' = 'asc';
   
   // Company identification
   private currentUserEmail: string = '';
@@ -108,7 +108,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     {
       key: 'paymentReference',
       label: 'Payment Reference',
-      sortable: true,
+      sortable: false,
       type: 'text'
     },
     {
@@ -126,7 +126,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     {
       key: 'status',
       label: 'Status',
-      sortable: false,
+      sortable: true,
       type: 'badge'
     }
   ];
@@ -259,10 +259,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       // Set filtered invoices based on active tab
       this.filteredInvoices = [...this.getActiveInvoices()];
       
-      // Generate test credit notes if needed
-      if (this.allInvoices.length > 0 && this.allCreditNotes.length === 0) {
-        this.generateTestCreditNotes();
-      }
+      // Credit notes are now loaded on-demand when viewing invoice details
+      // No longer generate test credit notes here
     } catch (error) {
       this.errorMessage = 'Failed to load invoices. Please try again later.';
       
@@ -389,10 +387,19 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         // Create a credit note for a portion of the invoice amount
         const creditNoteAmount = invoice.totalAmount * (0.15 + (i * 0.10));
         
+        // Generate a realistic credit note date - between invoice due date and today
+        const invoiceDueDate = invoice.dueDate instanceof Date ? invoice.dueDate : new Date(invoice.dueDate || Date.now());
+        const today = new Date();
+        const daysBetween = Math.floor((today.getTime() - invoiceDueDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Credit note should be issued after the invoice, but not necessarily recently
+        const daysAfterInvoice = Math.floor(Math.random() * Math.max(1, daysBetween * 0.7)) + 5; // 5+ days after invoice
+        const creditNoteDate = new Date(invoiceDueDate.getTime() + (daysAfterInvoice * 24 * 60 * 60 * 1000));
+        
         this.allCreditNotes.push({
           id: `-${invoice.id}-${i+1}`,
           creditNoteNumber: `${invoice.invoiceNumber}-CN${i+1}`,
-          date: new Date(),
+          date: creditNoteDate,
           totalAmount: creditNoteAmount,
           status: invoice.isPaid ? 'paid' : 'outstanding',
           relatedInvoiceId: invoice.id,
@@ -577,7 +584,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     
     this.filteredInvoices = filteredList;
     
-    // Apply sorting
+    // Apply sorting to maintain sort order
     this.sortInvoices();
   }
 
@@ -623,6 +630,9 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     } as InvoiceDetails;
     
     this.isDetailViewVisible = true;
+    
+    // Load real credit notes for this invoice
+    this.loadCreditNotesForInvoice(invoice.id);
     
     // Prevent body scroll on mobile when detail panel is open
     if (this.isMobileView()) {
@@ -734,8 +744,47 @@ export class InvoicesComponent implements OnInit, OnDestroy {
 
   // Download invoice
   downloadInvoice(invoice: Invoice | InvoiceDetails, format: string = 'pdf'): void {
-    // Use the redirect parameter to open the download link directly without an extra AJAX call
+    // Construct URL for invoice download with company context
     window.open(`${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${this.getApiCompanyId()}/invoice/${invoice.id}/download?format=${format}&redirect=true`, '_blank');
+  }
+
+  // Download credit note in the specified format
+  downloadCreditNote(creditNote: CreditNote, format: string = 'pdf'): void {
+    const companyId = this.getApiCompanyId();
+    if (!companyId) {
+      console.error('No company ID available for credit note download');
+      return;
+    }
+
+    // Log the credit note data to debug
+    console.log('Downloading credit note:', creditNote);
+    console.log('Credit note ID:', creditNote.id);
+    console.log('Credit note number:', creditNote.creditNoteNumber || creditNote.number);
+    console.log('Company ID:', companyId);
+    console.log('Format:', format);
+
+    // Try to use credit note ID first, fallback to number if needed
+    const creditNoteIdentifier = creditNote.id || creditNote.creditNoteNumber || creditNote.number;
+    
+    if (!creditNoteIdentifier) {
+      console.error('No valid credit note identifier found');
+      alert('Cannot download credit note: No valid identifier found');
+      return;
+    }
+
+    // Construct URL for credit note download with company context
+    const downloadUrl = `${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${companyId}/credit-note/${creditNoteIdentifier}/download?format=${format}&redirect=true`;
+    
+    console.log('Download URL:', downloadUrl);
+    console.log('Using identifier:', creditNoteIdentifier);
+    
+    // Try to open the URL and log any issues
+    try {
+      window.open(downloadUrl, '_blank');
+      console.log('Successfully opened download URL');
+    } catch (error) {
+      console.error('Error opening download URL:', error);
+    }
   }
 
   // Helper to get active invoices based on current tab
@@ -759,16 +808,27 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     const sortFn = (a: Invoice, b: Invoice) => {
       let valA: any, valB: any;
       
-      // Special case for amount sorting
-      if (this.sortColumn === 'amount') {
-        valA = a.totalAmount;
-        valB = b.totalAmount;
-      } else if (this.sortColumn === 'dueDate') {
-        valA = a.dueDate instanceof Date ? a.dueDate : new Date(a.dueDate || 0);
-        valB = b.dueDate instanceof Date ? b.dueDate : new Date(b.dueDate || 0);
-      } else {
-        valA = a[this.sortColumn as keyof Invoice];
-        valB = b[this.sortColumn as keyof Invoice];
+      // Handle different column types
+      switch (this.sortColumn) {
+        case 'totalAmount':
+          valA = a.totalAmount;
+          valB = b.totalAmount;
+          break;
+        case 'dueDate':
+          valA = a.dueDate instanceof Date ? a.dueDate : new Date(a.dueDate || 0);
+          valB = b.dueDate instanceof Date ? b.dueDate : new Date(b.dueDate || 0);
+          break;
+        case 'status':
+          valA = a.status || (a.isPaid ? 'Paid' : (a.isOverdue ? 'Overdue' : 'Outstanding'));
+          valB = b.status || (b.isPaid ? 'Paid' : (b.isOverdue ? 'Overdue' : 'Outstanding'));
+          break;
+        case 'paymentReference':
+          valA = a.paymentReference || '';
+          valB = b.paymentReference || '';
+          break;
+        default:
+          valA = a[this.sortColumn as keyof Invoice];
+          valB = b[this.sortColumn as keyof Invoice];
       }
       
       // Convert dates to timestamps for comparison
@@ -788,7 +848,10 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       }
     };
     
-    // Sort both invoice lists
+    // Sort the filtered invoices list directly
+    this.filteredInvoices.sort(sortFn);
+    
+    // Also update the source arrays to maintain consistency
     this.outstandingInvoices.sort(sortFn);
     this.paidInvoices.sort(sortFn);
   }
@@ -1017,5 +1080,40 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         document.addEventListener('click', closeDropdown);
       }, 0);
     }
+  }
+
+  // Load credit notes for an invoice
+  private loadCreditNotesForInvoice(invoiceId: string): void {
+    const companyId = this.getApiCompanyId();
+    if (!companyId) {
+      this.log.warn('No company ID available for loading credit notes');
+      return;
+    }
+
+    console.log(`Loading credit notes for invoice ${invoiceId} and company ${companyId}`);
+
+    this.apiService.get<CreditNote[]>(`teamleader/finance/company/${companyId}/invoices/${invoiceId}/credit-notes`)
+      .pipe(
+        catchError(error => {
+          this.log.warn('Failed to load credit notes for invoice: ' + (error?.message || 'Unknown error'));
+          return of([]);
+        })
+      )
+      .subscribe(creditNotes => {
+        console.log('Received credit notes from API:', creditNotes);
+        
+        // Filter credit notes for this specific invoice
+        const invoiceCreditNotes = creditNotes.filter(note => note.relatedInvoiceId === invoiceId);
+        
+        console.log('Filtered credit notes for this invoice:', invoiceCreditNotes);
+        
+        // Update the allCreditNotes array, keeping other invoice's credit notes
+        this.allCreditNotes = this.allCreditNotes.filter(note => note.relatedInvoiceId !== invoiceId);
+        this.allCreditNotes.push(...invoiceCreditNotes);
+        
+        console.log('All credit notes after update:', this.allCreditNotes);
+        
+        this.log.info(`Loaded ${invoiceCreditNotes.length} credit notes for invoice ${invoiceId}`);
+      });
   }
 }

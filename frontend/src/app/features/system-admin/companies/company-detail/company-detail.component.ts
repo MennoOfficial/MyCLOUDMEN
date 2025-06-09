@@ -1,4 +1,4 @@
-import { Component, OnInit, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -10,27 +10,49 @@ import { CompanyUser, PendingUser } from '../../../../core/models/user.model';
 import { LoadingSpinnerComponent } from '../../../../shared/components/loading-spinner/loading-spinner.component';
 import { UserDetailModalComponent, UserDetailData, UserUpdateEvent } from '../../../../shared/components/user-detail-modal/user-detail-modal.component';
 import { DataTableComponent, TableColumn, SortEvent } from '../../../../shared/components/data-table/data-table.component';
+import { PageHeaderComponent, PageAction, BreadcrumbItem } from '../../../../shared/components/page-header/page-header.component';
+
+// Toast interface
+interface Toast {
+  id: number;
+  title: string;
+  message: string;
+  type: 'success' | 'error';
+}
 
 @Component({
   selector: 'app-company-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, LoadingSpinnerComponent, UserDetailModalComponent, DataTableComponent],
+  imports: [CommonModule, FormsModule, LoadingSpinnerComponent, UserDetailModalComponent, DataTableComponent, PageHeaderComponent],
   templateUrl: './company-detail.component.html',
   styleUrl: './company-detail.component.scss'
 })
-export class CompanyDetailComponent implements OnInit {
+export class CompanyDetailComponent implements OnInit, OnDestroy {
   company: CompanyDetail | null = null;
   loading = true;
   error = false;
   errorMessage = '';
   
+  // Modern page header properties
+  breadcrumbs: BreadcrumbItem[] = [];
+  headerActions: PageAction[] = [];
+  
+  // Status modal properties
+  showStatusModal = false;
+  selectedStatus: string | null = null;
+  newStatus: string = '';
+  updatingStatus = false;
+  
+  // Toast notifications
+  toasts: Toast[] = [];
+  private toastIdCounter = 0;
+  
   // Expose enum to template
   CompanyStatusType = CompanyStatusType;
   
-  // Status toggle popup
+  // Status toggle popup (legacy - keeping for backward compatibility)
   showStatusPopup = false;
-  newStatus: CompanyStatusType = CompanyStatusType.ACTIVE;
-  updatingStatus = false;
+  updatingStatusLegacy = false;
   
   // Available status types for dropdown
   statusTypes: CompanyStatusType[] = [
@@ -57,6 +79,7 @@ export class CompanyDetailComponent implements OnInit {
   showUserActionConfirmPopup = false;
   confirmAction: 'approve' | 'reject' | undefined = undefined;
   pendingUserId: string = '';
+  selectedUser: PendingUser | null = null; // For pending user actions
   
   // Sorting properties
   sortColumn: string = '';
@@ -64,13 +87,13 @@ export class CompanyDetailComponent implements OnInit {
 
   // User detail popup
   showUserDetailPopup = false;
-  selectedUser: CompanyUser | null = null;
+  selectedUserDetail: CompanyUser | null = null; // For user detail modal
   selectedUserForModal: UserDetailData | null = null;
   availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN']; 
   availableStatuses = ['Active', 'Inactive'];
   updatingUser = false;
 
-  // Toast notification
+  // Toast notification (legacy - keeping for backward compatibility)
   showToast = false;
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
@@ -100,7 +123,14 @@ export class CompanyDetailComponent implements OnInit {
     private router: Router,
     private apiService: ApiService,
     private environmentService: EnvironmentService
-  ) {}
+  ) {
+    // Initialize breadcrumbs
+    this.breadcrumbs = [
+      { label: 'Admin', route: '/admin' },
+      { label: 'Companies', route: '/admin/companies' },
+      { label: 'Company Details', active: true }
+    ];
+  }
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
@@ -111,6 +141,33 @@ export class CompanyDetailComponent implements OnInit {
       const notificationSection = target.closest('.notification-section');
       if (!notificationSection) {
         this.showNotificationPopup = false;
+      }
+    }
+    
+    // Auto-close modals when clicking outside and re-enable scroll
+    // BUT exclude clicks on the status button itself
+    if (this.showStatusModal) {
+      const modal = target.closest('.confirmation-modal');
+      const statusButton = target.closest('.status-action-btn');
+      if (!modal && !statusButton) {
+        this.showStatusModal = false;
+        this.selectedStatus = null;
+        this.newStatus = '';
+        this.enableBodyScroll();
+      }
+    }
+    
+    if (this.showUserActionConfirmPopup) {
+      const modal = target.closest('.confirmation-modal');
+      if (!modal) {
+        this.hideUserActionConfirmPopup();
+      }
+    }
+    
+    if (this.showRejectedUserPopup) {
+      const modal = target.closest('.confirmation-modal');
+      if (!modal) {
+        this.closeRejectedUserPopup();
       }
     }
   }
@@ -152,7 +209,7 @@ export class CompanyDetailComponent implements OnInit {
           this.loading = false;
           
           // Set initial value for status toggle
-          this.newStatus = this.company.status as CompanyStatusType;
+          this.newStatus = this.company.status as string;
           
           // After loading company, fetch users with the same domain
           this.fetchCompanyUsers();
@@ -199,65 +256,109 @@ export class CompanyDetailComponent implements OnInit {
         },
         error: (err) => {
           this.loadingUsers = false;
-          this.companyUsers = []; // Set empty array on error
         }
       });
   }
 
   fetchPendingUsers(): void {
-    if (!this.company || !this.company.email) return;
+    if (!this.company || !this.company.email) {
+      console.log('No company or email for fetching pending users');
+      return;
+    }
     
-    
-    // Extract primary domain from company email
-    const companyEmailParts = this.company.email.split('@');
-    const companyDomain = companyEmailParts[1];
+    // Extract domain from company email for the API query
+    const domain = this.company.email.split('@')[1];
+    console.log('Fetching pending users for domain:', domain);
 
-    // Use the new direct endpoint to get pending users by domain
-    this.apiService.get<any[]>(`users?domain=${companyDomain}&status=PENDING`)
+    // Try multiple endpoints to find pending users
+    const endpoints = [
+      `users/pending?domain=${domain}`,
+      `users?domain=${domain}&status=PENDING`,
+      `users?status=PENDING&domain=${domain}`,
+      `teamleader/users/pending?domain=${domain}`,
+      `teamleader/companies/${this.company.id}/pending-users`
+    ];
+
+    // Try the first endpoint
+    this.apiService.get<any[]>(endpoints[0])
       .subscribe({
-        next: (pendingUsers) => {
-          // Map backend fields to frontend PendingUser interface
-          this.pendingUsers = pendingUsers.map(user => ({
-            id: user.id,
-            name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-            email: user.email,
-            requestedAt: user.dateTimeAdded || user.requestedAt || new Date().toISOString(), // Map dateTimeAdded to requestedAt
-            status: user.status,
-            primaryDomain: user.primaryDomain,
-            roles: user.roles || [],
-            firstName: user.firstName,
-            lastName: user.lastName,
-            picture: user.picture,
-            auth0Id: user.auth0Id,
-            dateTimeAdded: user.dateTimeAdded,
-            dateTimeChanged: user.dateTimeChanged
-          }));
-          
-          this.pendingCount = this.pendingUsers.length;
-          this.hasPendingUsers = this.pendingCount > 0;
+        next: (users) => {
+          console.log('Pending users API response (endpoint 1):', users);
+          this.processPendingUsers(users);
         },
         error: (err) => {
-          this.pendingUsers = [];
-          this.pendingCount = 0;
-          this.hasPendingUsers = false;
+          console.log('Error with endpoint 1, trying endpoint 2:', err);
+          // Try second endpoint
+          this.apiService.get<any[]>(endpoints[1])
+            .subscribe({
+              next: (users) => {
+                console.log('Pending users API response (endpoint 2):', users);
+                const pendingUsers = users.filter(user => user.status === 'PENDING');
+                this.processPendingUsers(pendingUsers);
+              },
+              error: (err2) => {
+                console.log('Error with endpoint 2, trying endpoint 3:', err2);
+                // Try third endpoint
+                this.apiService.get<any[]>(endpoints[2])
+                  .subscribe({
+                    next: (users) => {
+                      console.log('Pending users API response (endpoint 3):', users);
+                      this.processPendingUsers(users);
+                    },
+                    error: (err3) => {
+                      console.log('All endpoints failed:', err3);
+                      this.processPendingUsers([]);
+                    }
+                  });
+              }
+            });
         }
       });
   }
 
+  private processPendingUsers(users: any[]): void {
+    this.pendingUsers = users.map(user => ({
+      id: user.id,
+      name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+      email: user.email,
+      picture: user.picture || '',
+      requestedAt: user.dateTimeAdded || user.createdAt || new Date().toISOString(),
+      primaryDomain: user.primaryDomain || this.company?.email?.split('@')[1] || 'unknown',
+      roles: user.roles || []
+    }));
+    this.pendingCount = this.pendingUsers.length;
+    this.hasPendingUsers = this.pendingUsers.length > 0;
+    console.log('Processed pending users:', {
+      count: this.pendingCount,
+      hasPending: this.hasPendingUsers,
+      users: this.pendingUsers
+    });
+  }
 
   toggleNotificationPopup(event: MouseEvent): void {
     // Prevent this click from being captured by the document click handler
     event.stopPropagation();
+    console.log('Notification popup toggled. Current state:', this.showNotificationPopup);
+    console.log('Pending users data:', {
+      count: this.pendingCount,
+      hasPending: this.hasPendingUsers,
+      users: this.pendingUsers
+    });
     this.showNotificationPopup = !this.showNotificationPopup;
   }
 
   toggleStatus(): void {
-    this.showStatusPopup = true;
+    console.log('toggleStatus called - before:', { showStatusModal: this.showStatusModal });
+    this.showStatusModal = true;
+    this.selectedStatus = null;
+    this.newStatus = '';
     this.disableBodyScroll();
+    console.log('toggleStatus called - after:', { showStatusModal: this.showStatusModal });
   }
 
-  selectStatus(status: CompanyStatusType): void {
+  selectStatus(status: string): void {
     this.newStatus = status;
+    this.selectedStatus = status;
   }
 
   showStatusConfirmationDialog(): void {
@@ -269,58 +370,68 @@ export class CompanyDetailComponent implements OnInit {
   }
 
   getStatusIcon(status: string): string {
-    switch (status) {
-      case 'ACTIVE':
-        return 'check_circle';
-      case 'DEACTIVATED':
-        return 'pause_circle';
-      case 'SUSPENDED':
-        return 'block';
-      default:
-        return 'help_outline';
+    switch (status?.toLowerCase()) {
+      case 'active': return 'check_circle';
+      case 'inactive': return 'pause_circle';
+      case 'suspended': return 'block';
+      default: return 'help';
     }
   }
 
   getStatusButtonClass(status: string): string {
-    switch (status) {
-      case 'ACTIVE':
-        return 'btn-success';
-      case 'DEACTIVATED':
-        return 'btn-warning';
-      case 'SUSPENDED':
-        return 'btn-danger';
-      default:
-        return 'btn-primary';
+    switch (status?.toLowerCase()) {
+      case 'active': return 'btn-success';
+      case 'inactive': return 'btn-warning';
+      case 'suspended': return 'btn-danger';
+      default: return 'btn-primary';
     }
   }
 
   confirmStatusChange(): void {
+    if (!this.selectedStatus || !this.company) {
+      return;
+    }
+    
     this.updatingStatus = true;
     
-    this.apiService.put(`teamleader/companies/${this.company?.id}/status`, { status: this.newStatus })
+    const updateData = {
+      status: this.selectedStatus
+    };
+    
+    this.apiService.put(`teamleader/companies/${this.company.id}/status`, updateData)
       .subscribe({
         next: (response) => {
-          if (this.company) {
-            this.company.status = this.newStatus;
-          }
-          this.showToastNotification('Company status updated successfully', 'success');
-          this.showStatusPopup = false;
-          this.showStatusConfirmation = false;
+          this.company!.status = this.selectedStatus!;
+          this.showStatusModal = false;
+          this.selectedStatus = null;
+          this.newStatus = '';
           this.updatingStatus = false;
           this.enableBodyScroll();
+          this.showToastNotification(
+            'Success',
+            `Company status updated to ${this.getStatusDisplayName(this.selectedStatus!)}`,
+            'success'
+          );
         },
         error: (err) => {
-          this.showToastNotification('Failed to update company status', 'error');
           this.updatingStatus = false;
+          this.showToastNotification(
+            'Error',
+            'Failed to update company status. Please try again.',
+            'error'
+          );
         }
       });
   }
 
   cancelStatusChange(): void {
-    this.showStatusPopup = false;
-    this.showStatusConfirmation = false;
-    this.newStatus = this.company?.status as CompanyStatusType || CompanyStatusType.ACTIVE;
-    this.enableBodyScroll();
+    if (this.selectedStatus) {
+      this.selectedStatus = null;
+      this.newStatus = '';
+    } else {
+      this.showStatusModal = false;
+      this.enableBodyScroll();
+    }
   }
 
   showPendingUserActions(user: PendingUser): void {
@@ -340,62 +451,87 @@ export class CompanyDetailComponent implements OnInit {
     this.enableBodyScroll();
   }
 
-  showToastNotification(message: string, type: 'success' | 'error' = 'success'): void {
-    this.toastMessage = message;
-    this.toastType = type;
-    this.showToast = true;
+  showToastNotification(title: string, message: string, type: 'success' | 'error' = 'success'): void {
+    const toast: Toast = {
+      id: ++this.toastIdCounter,
+      title,
+      message,
+      type
+    };
+    this.toasts.push(toast);
     
-    // Auto-hide the toast after 3 seconds
+    // Auto remove after 5 seconds
     setTimeout(() => {
-      this.showToast = false;
-    }, 3000);
+      this.removeToast(toast.id);
+    }, 5000);
+  }
+
+  removeToast(id: number): void {
+    this.toasts = this.toasts.filter(toast => toast.id !== id);
   }
 
   approveUser(userId: string): void {
-    this.pendingUserId = userId;
     this.confirmAction = 'approve';
+    this.selectedUser = this.pendingUsers.find(u => u.id === userId) || null;
     this.showUserActionConfirmPopup = true;
-    this.showNotificationPopup = false;
-    
-    // Find and set the selectedPendingUser for the popup
-    const user = this.pendingUsers.find(u => u.id === userId);
-    if (user) {
-      this.selectedPendingUser = user;
-    }
-    
-    // Prevent background scrolling
     this.disableBodyScroll();
   }
 
   rejectUser(userId: string): void {
-    this.pendingUserId = userId;
     this.confirmAction = 'reject';
+    this.selectedUser = this.pendingUsers.find(u => u.id === userId) || null;
     this.showUserActionConfirmPopup = true;
-    this.showNotificationPopup = false;
-    
-    // Find and set the selectedPendingUser for the popup
-    const user = this.pendingUsers.find(u => u.id === userId);
-    if (user) {
-      this.selectedPendingUser = user;
-    }
-    
-    // Prevent background scrolling
     this.disableBodyScroll();
   }
 
-  cancelQuickAction(): void {
-    this.showQuickConfirm = false;
-    this.showNotificationPopup = true;
+  hideUserActionConfirmPopup(): void {
+    this.showUserActionConfirmPopup = false;
+    this.confirmAction = undefined;
+    this.selectedUser = null;
+    this.enableBodyScroll();
   }
 
-  async confirmQuickAction(): Promise<void> {
-    if (this.quickConfirmAction === 'approve') {
-      await this.handleApproveUser(this.quickConfirmUserId);
-    } else {
-      await this.handleRejectUser(this.quickConfirmUserId);
-    }
-    this.showQuickConfirm = false;
-    this.showNotificationPopup = true;
+  confirmUserAction(): void {
+    if (!this.selectedUser || !this.confirmAction) return;
+    
+    this.updatingUser = true;
+    const action = this.confirmAction;
+    const userId = this.selectedUser.id;
+    
+    const apiCall = action === 'approve' 
+      ? this.apiService.put(`users/${userId}/approve`, {})
+      : this.apiService.put(`users/${userId}/reject`, {});
+    
+    apiCall.subscribe({
+      next: () => {
+        // Remove from pending users list
+        this.pendingUsers = this.pendingUsers.filter(u => u.id !== userId);
+        this.pendingCount = this.pendingUsers.length;
+        this.hasPendingUsers = this.pendingCount > 0;
+        
+        this.updatingUser = false;
+        this.hideUserActionConfirmPopup();
+        
+        this.showToastNotification(
+          'Success',
+          `User ${action === 'approve' ? 'approved' : 'rejected'} successfully`,
+          'success'
+        );
+        
+        // Refresh company users to show the newly approved user
+        if (action === 'approve') {
+          this.fetchCompanyUsers();
+        }
+      },
+      error: () => {
+        this.updatingUser = false;
+        this.showToastNotification(
+          'Error',
+          `Failed to ${action} user. Please try again.`,
+          'error'
+        );
+      }
+    });
   }
 
   formatRole(role: string): string {
@@ -567,7 +703,7 @@ export class CompanyDetailComponent implements OnInit {
       return;
     }
 
-    this.selectedUser = user;
+    this.selectedUserDetail = user;
     
     // Convert to UserDetailData format
     this.selectedUserForModal = {
@@ -647,27 +783,27 @@ export class CompanyDetailComponent implements OnInit {
     this.showUserDetailPopup = false;
     this.enableBodyScroll();
     setTimeout(() => {
-      this.selectedUser = null;
+      this.selectedUserDetail = null;
       this.selectedUserForModal = null;
     }, 200); // Small delay to allow animation to complete
   }
 
   // Method to update user role
   updateUserRole(newRole: string): void {
-    if (!this.selectedUser) return;
+    if (!this.selectedUserDetail) return;
     
     this.updatingUser = true;
         
     // Call the API to update the user role
-    this.apiService.put(`users/${this.selectedUser.id}/role`, { role: newRole })
+    this.apiService.put(`users/${this.selectedUserDetail.id}/role`, { role: newRole })
       .subscribe({
         next: (response) => {
           this.updateRoleLocally(newRole);
-          this.showToastNotification('User role updated successfully', 'success');
+          this.showToastNotification('Success', 'User role updated successfully', 'success');
           this.updatingUser = false;
         },
         error: (err) => {
-          this.showToastNotification('Failed to update user role', 'error');
+          this.showToastNotification('Error', 'Failed to update user role', 'error');
           this.updatingUser = false;
         }
       });
@@ -675,10 +811,10 @@ export class CompanyDetailComponent implements OnInit {
 
   // Update role locally in the UI
   private updateRoleLocally(newRole: string): void {
-    if (!this.selectedUser) return;
+    if (!this.selectedUserDetail) return;
         
     // Update the selected user's role
-    this.selectedUser.role = newRole;
+    this.selectedUserDetail.role = newRole;
     
     // Also update selectedUserForModal to sync the modal
     if (this.selectedUserForModal) {
@@ -686,7 +822,7 @@ export class CompanyDetailComponent implements OnInit {
     }
     
     // Also update in the main users array for consistency
-    const userIndex = this.companyUsers.findIndex(u => u.id === this.selectedUser?.id);
+    const userIndex = this.companyUsers.findIndex(u => u.id === this.selectedUserDetail?.id);
     if (userIndex >= 0) {
       this.companyUsers[userIndex].role = newRole;
     }
@@ -694,7 +830,7 @@ export class CompanyDetailComponent implements OnInit {
 
   // Method to update user status
   updateUserStatus(newStatus: string): void {
-    if (!this.selectedUser) return;
+    if (!this.selectedUserDetail) return;
     
     this.updatingUser = true;
     
@@ -702,15 +838,15 @@ export class CompanyDetailComponent implements OnInit {
     const backendStatus = newStatus === 'Active' ? 'ACTIVATED' : 'DEACTIVATED';
     
     // Call the API to update the user status
-    this.apiService.put(`users/${this.selectedUser.id}/status`, { status: backendStatus })
+    this.apiService.put(`users/${this.selectedUserDetail.id}/status`, { status: backendStatus })
       .subscribe({
         next: (response) => {
           this.updateStatusLocally(newStatus);
-          this.showToastNotification('User status updated successfully', 'success');
+          this.showToastNotification('Success', 'User status updated successfully', 'success');
           this.updatingUser = false;
         },
         error: (err) => {
-          this.showToastNotification('Failed to update user status', 'error');
+          this.showToastNotification('Error', 'Failed to update user status', 'error');
           this.updatingUser = false;
         }
       });
@@ -718,10 +854,10 @@ export class CompanyDetailComponent implements OnInit {
 
   // Update status locally in the UI
   private updateStatusLocally(newStatus: string): void {
-    if (!this.selectedUser) return;
+    if (!this.selectedUserDetail) return;
     
     // Update the selected user's status
-    this.selectedUser.status = newStatus;
+    this.selectedUserDetail.status = newStatus;
     
     // Also update selectedUserForModal to sync the modal
     if (this.selectedUserForModal) {
@@ -729,7 +865,7 @@ export class CompanyDetailComponent implements OnInit {
     }
     
     // Also update in the main users array for consistency
-    const userIndex = this.companyUsers.findIndex(u => u.id === this.selectedUser?.id);
+    const userIndex = this.companyUsers.findIndex(u => u.id === this.selectedUserDetail?.id);
     if (userIndex >= 0) {
       this.companyUsers[userIndex].status = newStatus;
     }
@@ -769,92 +905,71 @@ export class CompanyDetailComponent implements OnInit {
     return normalizedRole === 'SYSTEM_ADMIN';
   }
 
-  async handleApproveUser(userId: string): Promise<void> {
+  // Utility methods
+  formatDate(date: string | Date | undefined): string {
+    if (!date) return 'Unknown';
     try {
-      await this.apiService.post(`users/pending/${userId}/approve`, {}).toPromise();
-      this.showToastNotification('User approved successfully', 'success');
-      this.fetchPendingUsers(); // Refresh the pending users list
-    } catch (err: any) {
-      this.showToastNotification('Failed to approve user', 'error');
+      return new Date(date).toLocaleDateString();
+    } catch {
+      return 'Invalid date';
     }
-  }
-
-  async handleRejectUser(userId: string): Promise<void> {
-    try {
-      await this.apiService.post(`users/pending/${userId}/reject`, {}).toPromise();
-      this.showToastNotification('User rejected successfully', 'success');
-      this.fetchPendingUsers(); // Refresh the pending users list
-    } catch (err: any) {
-      this.showToastNotification('Failed to reject user', 'error');
-    }
-  }
-
-  confirmUserAction(): void {
-    // Hide the confirmation popup but keep scroll locked until API completes
-    this.showUserActionConfirmPopup = false;
-    
-    // Show loading indicator
-    this.updatingUser = true;
-    
-    if (this.confirmAction === 'approve') {
-      this.handleApproveUser(this.pendingUserId)
-        .then(() => {
-          this.updatingUser = false;
-          this.enableBodyScroll();
-        })
-        .catch(() => {
-          this.updatingUser = false;
-          this.enableBodyScroll();
-        });
-    } else {
-      this.handleRejectUser(this.pendingUserId)
-        .then(() => {
-          this.updatingUser = false;
-          this.enableBodyScroll();
-        })
-        .catch(() => {
-          this.updatingUser = false;
-          this.enableBodyScroll();
-        });
-    }
-  }
-  
-  cancelUserAction(): void {
-    this.showUserActionConfirmPopup = false;
-    this.selectedPendingUser = null;
-    this.pendingUserId = '';
-    
-    // Enable scrolling
-    this.enableBodyScroll();
   }
 
   // Add scroll lock methods
   private disableBodyScroll(): void {
+    if (typeof window === 'undefined') return;
+    
     const scrollY = window.scrollY;
-    document.body.classList.add('body-no-scroll');
-    document.body.style.position = 'fixed';
-    document.body.style.top = `-${scrollY}px`;
-    document.body.style.width = '100%';
-    document.body.style.overflow = 'hidden';
+    const body = document.body;
+    const html = document.documentElement;
+    
+    // Add no-scroll class
+    body.classList.add('body-no-scroll');
+    
+    // Set scroll position and prevent scrolling
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.left = '0';
+    body.style.right = '0';
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+    
+    // Also prevent scrolling on html
+    html.style.overflow = 'hidden';
     
     // Set scrollbar width as CSS variable to prevent layout shift
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    document.documentElement.style.setProperty('--scrollbar-width', `${scrollbarWidth}px`);
-    document.documentElement.style.setProperty('--scroll-position', `${scrollY}px`);
+    html.style.setProperty('--scrollbar-width', `${scrollbarWidth}px`);
+    html.style.setProperty('--scroll-position', `${scrollY}px`);
   }
   
   private enableBodyScroll(): void {
-    const scrollY = document.documentElement.style.getPropertyValue('--scroll-position') || '0';
-    document.body.classList.remove('body-no-scroll');
-    document.body.style.position = '';
-    document.body.style.top = '';
-    document.body.style.width = '';
-    document.body.style.overflow = '';
+    if (typeof window === 'undefined') return;
+    
+    const body = document.body;
+    const html = document.documentElement;
+    const scrollY = html.style.getPropertyValue('--scroll-position') || '0';
+    
+    // Remove no-scroll class
+    body.classList.remove('body-no-scroll');
+    
+    // Reset body styles
+    body.style.position = '';
+    body.style.top = '';
+    body.style.left = '';
+    body.style.right = '';
+    body.style.width = '';
+    body.style.overflow = '';
+    
+    // Reset html styles
+    html.style.overflow = '';
+    
+    // Restore scroll position
     window.scrollTo(0, parseInt(scrollY || '0'));
     
     // Remove the CSS custom properties
-    document.documentElement.style.removeProperty('--scrollbar-width');
-    document.documentElement.style.removeProperty('--scroll-position');
+    html.style.removeProperty('--scrollbar-width');
+    html.style.removeProperty('--scroll-position');
   }
 
   // Helper method to get readable status names
@@ -907,21 +1022,6 @@ export class CompanyDetailComponent implements OnInit {
     
     // Default to https for secure connections
     return `https://${website}`;
-  }
-
-  // Method to hide user action confirmation
-  hideUserActionConfirm(): void {
-    this.showUserActionConfirmPopup = false;
-      this.selectedPendingUser = null;
-      this.pendingUserId = '';
-    
-    // Enable scrolling
-    this.enableBodyScroll();
-  }
-
-  // Handle table sorting
-  onSort(event: SortEvent): void {
-    this.sortUsers(event.column);
   }
 
   // Method to show rejected user detail popup
@@ -979,6 +1079,7 @@ export class CompanyDetailComponent implements OnInit {
           // Close the popup and reset all states
           this.showRejectedUserPopup = false;
           this.showAcceptConfirmation = false;
+          this.enableBodyScroll();
           setTimeout(() => {
             this.selectedRejectedUser = null;
           }, 200);
@@ -993,5 +1094,24 @@ export class CompanyDetailComponent implements OnInit {
           this.updatingUser = false;
         }
       });
+  }
+
+  // Modern page header methods
+  onHeaderAction(action: PageAction): void {
+    switch (action.action) {
+      case 'refresh':
+        this.fetchCompanyDetails(this.route.snapshot.params['id']);
+        break;
+      // Add more actions as needed
+    }
+  }
+
+  // Handle table sorting
+  onSort(event: SortEvent): void {
+    this.sortUsers(event.column);
+  }
+
+  ngOnDestroy(): void {
+    this.enableBodyScroll();
   }
 } 

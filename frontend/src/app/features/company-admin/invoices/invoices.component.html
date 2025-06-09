@@ -83,6 +83,8 @@
         [tableActions]="tableActions"
         [loading]="loading"
         [rowClickable]="true"
+        [sortColumn]="sortColumn"
+        [sortDirection]="sortDirection"
         [emptyMessage]="'No invoices found for the selected criteria.'"
         [emptyIcon]="'receipt_long'"
         (sort)="onSort($event)"
@@ -220,22 +222,41 @@
         >
           <div
             *ngFor="let creditNote of getRelatedCreditNotes(selectedInvoice.id)"
-            class="credit-note-card"
+            class="credit-note-item"
           >
-            <div class="credit-note-content">
-              <div class="credit-note-header">
-                <div class="credit-note-info">
+            <div class="credit-note-main">
+              <div class="credit-note-details">
+                <div class="credit-note-header">
                   <div class="credit-note-number">
-                    {{ creditNote.creditNoteNumber }}
+                    <span class="material-icons">receipt</span>
+                    <strong>{{
+                      creditNote.creditNoteNumber || creditNote.number
+                    }}</strong>
                   </div>
-                  <div class="credit-note-date">
-                    <span class="material-icons">event</span>
-                    {{ creditNote.date | date : "mediumDate" }}
+                  <div class="credit-note-amount">
+                    <span class="currency">{{
+                      creditNote.currency || "EUR"
+                    }}</span>
+                    <span class="amount">{{
+                      formatAmount(creditNote.totalAmount || creditNote.total)
+                    }}</span>
                   </div>
                 </div>
-                <div class="credit-note-amount">
-                  €{{ formatAmount(creditNote.totalAmount) }}
+                <div class="credit-note-date">
+                  <span class="material-icons">event</span>
+                  {{ creditNote.date | date : "MMM d, yyyy" }}
                 </div>
+              </div>
+
+              <div class="credit-note-actions">
+                <button
+                  class="btn btn-download"
+                  (click)="downloadCreditNote(creditNote, 'pdf')"
+                  title="Download Credit Note PDF"
+                >
+                  <span class="material-icons">file_download</span>
+                  <span class="btn-text">Download PDF</span>
+                </button>
               </div>
             </div>
           </div>
@@ -245,26 +266,24 @@
       <!-- Download Section -->
       <div class="download-section">
         <div class="section-header">
-          <span class="material-icons">download</span>
+          <span class="material-icons">file_download</span>
           <h3>Download Invoice</h3>
         </div>
 
-        <div class="download-actions">
+        <div class="download-container">
+          <div class="download-info">
+            <p class="download-description">
+              Download your invoice as a PDF document for your records.
+            </p>
+          </div>
+
           <button
-            class="btn btn-sm btn-ghost download-action"
+            class="btn btn-download btn-primary"
             (click)="downloadInvoice(selectedInvoice, 'pdf')"
-            title="Download PDF"
+            title="Download Invoice PDF"
           >
-            <span class="material-icons">picture_as_pdf</span>
-            PDF
-          </button>
-          <button
-            class="btn btn-sm btn-ghost download-action"
-            (click)="downloadInvoice(selectedInvoice, 'ubl/e-fff')"
-            title="Download XML (UBL)"
-          >
-            <span class="material-icons">code</span>
-            XML
+            <span class="material-icons">file_download</span>
+            <span class="btn-text">Download Invoice PDF</span>
           </button>
         </div>
       </div>

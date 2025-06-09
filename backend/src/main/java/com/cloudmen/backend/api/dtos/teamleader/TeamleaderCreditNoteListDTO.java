@@ -69,4 +69,22 @@ public class TeamleaderCreditNoteListDTO {
      * Number of the invoice this credit note is related to
      */
     private String invoiceNumber;
+
+    /**
+     * Alternative field name for frontend compatibility
+     */
+    @JsonProperty("relatedInvoiceId")
+    public String getRelatedInvoiceId() {
+        return invoiceId;
+    }
+
+    @JsonProperty("creditNoteNumber")
+    public String getCreditNoteNumber() {
+        return number;
+    }
+
+    @JsonProperty("totalAmount")
+    public BigDecimal getTotalAmount() {
+        return total;
+    }
 }

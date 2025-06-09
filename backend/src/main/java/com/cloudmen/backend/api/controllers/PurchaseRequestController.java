@@ -94,6 +94,37 @@ public class PurchaseRequestController {
     }
 
     /**
+     * Get purchase requests for a specific domain (company).
+     * This allows filtering by company domain to show requests from all users in
+     * the same company.
+     *
+     * @param domain Domain to filter by
+     * @param page   Page number (zero-based)
+     * @param size   Page size
+     * @return ResponseEntity with paginated purchase requests for the domain
+     */
+    @GetMapping("/domain/{domain}")
+    public ResponseEntity<Map<String, Object>> getPurchaseRequestsByDomain(
+            @PathVariable String domain,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        log.info("Getting purchase requests for domain: {}, page: {}, size: {}", domain, page, size);
+
+        try {
+            Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "requestDate"));
+            Page<PurchaseRequest> purchaseRequests = purchaseRequestService.getPurchaseRequestsByDomain(domain,
+                    pageable);
+
+            Map<String, Object> response = createPaginatedResponse(purchaseRequests);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Error getting purchase requests for domain: " + domain, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    /**
      * Get a purchase request by ID.
      *
      * @param id Purchase request ID

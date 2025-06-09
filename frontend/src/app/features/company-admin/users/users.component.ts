@@ -106,8 +106,8 @@ export class UsersComponent implements OnInit {
 
   tableColumns: TableColumn[] = [
     {
-      key: 'user',
-      label: 'User',
+      key: 'name',
+      label: 'Name', 
       sortable: true,
       type: 'avatar'
     },
@@ -127,12 +127,13 @@ export class UsersComponent implements OnInit {
       key: 'status',
       label: 'Status',
       sortable: true,
-      type: 'badge'
+      type: 'badge',
+      badgeType: 'status'
     },
     {
       key: 'lastLogin',
       label: 'Last Login',
-      sortable: false,
+      sortable: true,
       type: 'date',
       hideOnMobile: true
     }
@@ -230,7 +231,7 @@ export class UsersComponent implements OnInit {
 
   onSort(event: SortEvent): void {
     // Map avatar column to name for sorting
-    const sortColumn = event.column === 'user' ? 'name' : event.column;
+    const sortColumn = event.column === 'name' ? 'name' : event.column;
     this.sortUsers(sortColumn, false);
     this.sortDirection = event.direction;
   }
@@ -290,24 +291,15 @@ export class UsersComponent implements OnInit {
         next: (users) => {
           try {
             // Map API response to User interface format
-            this.companyUsers = users.map(user => {
-              const processedUser = {
+            this.companyUsers = Array.isArray(users) ? users.map(user => {
+              const processedUser: CompanyUser = {
                 id: user.id,
                 name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
                 email: user.email,
-                role: user.roles && user.roles.length > 0 ? user.roles[0] : 'COMPANY_USER',
-                status: user.status === 'ACTIVATED' ? 'Active' : 
-                       user.status === 'DEACTIVATED' ? 'Inactive' : 
-                       user.status === 'REJECTED' ? 'Rejected' :
-                       user.status,
+                role: user.role || user.roles?.[0] || 'COMPANY_USER',
+                status: user.status,
                 lastLogin: user.lastLogin || undefined,
-                picture: user.picture || '',
-                // Add user object for avatar column
-                user: {
-                  name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-                  email: user.email,
-                  picture: user.picture ? this.getProxyImageUrl(user.picture) : ''
-                }
+                picture: user.picture || ''
               };
               
               // Process profile image URL if it exists
@@ -316,7 +308,7 @@ export class UsersComponent implements OnInit {
               }
               
               return processedUser;
-            });
+            }) : [];
             
             // Initialize filtered users with all users
             this.filteredUsers = [...this.companyUsers];
@@ -794,6 +786,12 @@ export class UsersComponent implements OnInit {
           break;
         case 'status':
           comparison = this.formatStatus(a.status).localeCompare(this.formatStatus(b.status));
+          break;
+        case 'lastLogin':
+          // Handle lastLogin sorting - treat null/undefined as oldest dates
+          const dateA = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+          const dateB = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+          comparison = dateA - dateB;
           break;
         default:
           comparison = 0;

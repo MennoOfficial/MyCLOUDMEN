@@ -53,6 +53,7 @@
           <div class="profile-name-container">
             <span class="profile-name">{{ user.name }}</span>
           </div>
+
           <div class="role-pills">
             <div
               *ngFor="let role of user.roles"
@@ -61,6 +62,32 @@
             >
               {{ formatRole(role) }}
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Company Information at bottom of profile -->
+      <div class="company-section" *ngIf="userRole !== 'SYSTEM_ADMIN'">
+        <div class="company-header" *ngIf="!isLoadingCompany && userCompany">
+          <div class="icon-wrapper">
+            <span class="material-icons company-icon" [title]="userCompany"
+              >business</span
+            >
+          </div>
+          <div class="company-info">
+            <div class="company-name-container">
+              <span class="company-name">{{ userCompany }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading state -->
+        <div class="company-header" *ngIf="isLoadingCompany">
+          <div class="icon-wrapper">
+            <span class="material-icons company-icon loading">business</span>
+          </div>
+          <div class="company-info">
+            <span class="company-name-loading">Loading...</span>
           </div>
         </div>
       </div>

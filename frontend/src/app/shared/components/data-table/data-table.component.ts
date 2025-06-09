@@ -72,17 +72,17 @@ export interface PaginationEvent {
                 <ng-container [ngSwitch]="column.type">
                   <!-- Avatar -->
                   <div *ngSwitchCase="'avatar'" class="avatar-cell">
-                    <div class="user-avatar" *ngIf="!getNestedValue(item, column.key + '.picture')">
-                      {{ getNestedValue(item, column.key + '.name')?.charAt(0)?.toUpperCase() }}
+                    <div class="user-avatar" *ngIf="!getAvatarPicture(item, column.key)">
+                      {{ getAvatarName(item, column.key).charAt(0).toUpperCase() }}
                     </div>
                     <img 
-                      *ngIf="getNestedValue(item, column.key + '.picture')"
-                      [src]="getNestedValue(item, column.key + '.picture')"
-                      [alt]="getNestedValue(item, column.key + '.name')"
+                      *ngIf="getAvatarPicture(item, column.key)"
+                      [src]="getAvatarPicture(item, column.key)"
+                      [alt]="getAvatarName(item, column.key)"
                       class="user-avatar-img"
                     />
                     <div class="avatar-info">
-                      <div class="avatar-name">{{ getNestedValue(item, column.key + '.name') }}</div>
+                      <div class="avatar-name">{{ getAvatarName(item, column.key) }}</div>
                     </div>
                   </div>
                   
@@ -146,17 +146,17 @@ export interface PaginationEvent {
               <ng-container [ngSwitch]="column.type">
                 <!-- Avatar -->
                 <div *ngSwitchCase="'avatar'" class="avatar-cell">
-                  <div class="user-avatar" *ngIf="!getNestedValue(item, column.key + '.picture')">
-                    {{ getNestedValue(item, column.key + '.name')?.charAt(0)?.toUpperCase() }}
+                  <div class="user-avatar" *ngIf="!getAvatarPicture(item, column.key)">
+                    {{ getAvatarName(item, column.key).charAt(0).toUpperCase() }}
                   </div>
                   <img 
-                    *ngIf="getNestedValue(item, column.key + '.picture')"
-                    [src]="getNestedValue(item, column.key + '.picture')"
-                    [alt]="getNestedValue(item, column.key + '.name')"
+                    *ngIf="getAvatarPicture(item, column.key)"
+                    [src]="getAvatarPicture(item, column.key)"
+                    [alt]="getAvatarName(item, column.key)"
                     class="user-avatar-img"
                   />
                   <div class="avatar-info">
-                    <div class="avatar-name">{{ getNestedValue(item, column.key + '.name') }}</div>
+                    <div class="avatar-name">{{ getAvatarName(item, column.key) }}</div>
                   </div>
                 </div>
                 
@@ -395,10 +395,13 @@ export class DataTableComponent implements OnInit {
     }
     
     // Handle specific company status values - Check inactive first to prevent substring matching
-    if (stringValue === 'DEACTIVATED' || lowerValue === 'deactivated' || lowerValue === 'inactive' || stringValue === 'Inactive' || lowerValue.includes('error') || lowerValue.includes('failed') || lowerValue.includes('rejected')) {
+    if (stringValue === 'INACTIVE' || lowerValue === 'inactive') {
+      return 'badge-danger'; // Red for inactive as requested
+    }
+    if (stringValue === 'DEACTIVATED' || lowerValue === 'deactivated' || lowerValue.includes('error') || lowerValue.includes('failed') || lowerValue.includes('rejected')) {
       return 'badge-warning'; // Orange for deactivated (left on good terms)
     }
-    if (stringValue === 'ACTIVE' || stringValue === 'Active' || lowerValue === 'active') {
+    if (stringValue === 'ACTIVE' || stringValue === 'Active' || stringValue === 'ACTIVATED' || lowerValue === 'active' || lowerValue === 'activated') {
       return 'badge-success';
     }
     if (stringValue === 'SUSPENDED' || lowerValue.includes('suspended')) {
@@ -435,16 +438,24 @@ export class DataTableComponent implements OnInit {
     // Convert to string for further processing
     const stringValue = String(value);
     
-    // Format purchase request statuses
+    // Format status values from backend
     switch (stringValue) {
+      case 'ACTIVATED':
+        return 'Active';
+      case 'ACTIVE':
+        return 'Active';
+      case 'INACTIVE':
+        return 'Inactive';
+      case 'DEACTIVATED':
+        return 'Inactive';
+      case 'REJECTED':
+        return 'Rejected';
       case 'PENDING':
         return 'Pending';
       case 'AWAITING_CONFIRMATION':
         return 'Awaiting Confirmation';
       case 'APPROVED':
         return 'Approved';
-      case 'REJECTED':
-        return 'Rejected';
       // Convert role values to display format
       case 'COMPANY_ADMIN':
         return 'Admin';
@@ -512,18 +523,31 @@ export class DataTableComponent implements OnInit {
   }
   
   shouldShowBadgeIcon(value: any, column?: TableColumn): boolean {
-    // Always show icons for status badges
-    if (column?.badgeType === 'status') return true;
+    // Don't show icons for status badges as requested by user
+    if (column?.badgeType === 'status') return false;
     
-    // For other types, only show if value has a corresponding icon
-    if (value === null || value === undefined) return false;
+    // For auth badges, still show icons for boolean values
+    if (column?.badgeType === 'auth' && typeof value === 'boolean') return true;
     
-    const stringValue = String(value);
-    return ['PENDING', 'AWAITING_CONFIRMATION', 'APPROVED', 'REJECTED', 'ACTIVE', 'INACTIVE', 'DEACTIVATED', 'SUSPENDED'].includes(stringValue) ||
-      stringValue.toLowerCase().includes('success') ||
-      stringValue.toLowerCase().includes('error') ||
-      stringValue.toLowerCase().includes('fail') ||
-      stringValue.toLowerCase().includes('warning') ||
-      stringValue.toLowerCase().includes('processing');
+    // Don't show icons for any other badge types
+    return false;
+  }
+
+  getAvatarName(item: any, columnKey: string): string {
+    // For 'name' column, use the direct name property
+    if (columnKey === 'name') {
+      return item.name || '';
+    }
+    // For other columns, try nested approach first, then direct
+    return this.getNestedValue(item, columnKey + '.name') || this.getNestedValue(item, columnKey) || '';
+  }
+
+  getAvatarPicture(item: any, columnKey: string): string {
+    // For 'name' column, use the direct picture property
+    if (columnKey === 'name') {
+      return item.picture || '';
+    }
+    // For other columns, try nested approach
+    return this.getNestedValue(item, columnKey + '.picture') || '';
   }
 } 

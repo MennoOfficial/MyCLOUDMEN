@@ -206,7 +206,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       key: 'quantity',
       label: 'Quantity',
       type: 'text',
-      sortable: false
+      sortable: true
     },
     {
       key: 'cost',
@@ -303,11 +303,11 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         this.fetchPendingRequests();
       }
     });
-  }
-
+      }
+      
   ngOnInit(): void {
-    this.handleModeActions();
-
+      this.handleModeActions();
+    
     // Load data only for normal mode
     if (this.mode === 'normal') {
       this.fetchUserInfo();
@@ -329,7 +329,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.showError('Missing request ID for purchase acceptance');
           return;
         }
-
+        
         if (this.customerId) {
           this.requestType = 'license';
           this.acceptGoogleWorkspaceLicense();
@@ -338,7 +338,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.acceptPurchase();
         }
         break;
-
+        
       case 'confirm':
         if (!this.requestId) {
           this.showError('Missing request ID for confirmation');
@@ -346,25 +346,25 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         }
         this.confirmPurchase(this.requestId);
         break;
-
+        
       case 'approve-license':
         if (!this.requestId) {
           this.showError('Missing request ID for license approval');
           return;
         }
-        this.approveLicense(this.requestId);
+          this.approveLicense(this.requestId);
         break;
-
+        
       case 'purchase-success':
       case 'license-success':
         this.showSuccess(this.mode);
         break;
-
+        
       case 'purchase-error':
       case 'license-error':
         this.showError(this.errorMessage || 'An error occurred during processing');
         break;
-
+        
       default:
         // Normal mode - continue with regular component initialization
         break;
@@ -399,7 +399,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       setTimeout(() => this.acceptPurchase(), 1000);
       return;
     }
-
+    
     this.performPurchaseAcceptance();
   }
   
@@ -430,18 +430,18 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         }
       },
       next: (response) => {
-        this.success = true;
-        this.loading = false;
-        this.error = false;
+      this.success = true;
+      this.loading = false;
+      this.error = false;
         this.message = 'Purchase request approved successfully!';
         this.showToast('Purchase approved successfully!', 'success');
         this.fetchPendingRequests();
         
-        setTimeout(() => {
-          this.router.navigate(['/requests'], {
+      setTimeout(() => {
+        this.router.navigate(['/requests'], {
             queryParams: { status: 'success', type: 'purchase' }
           });
-        }, 2000);
+      }, 2000);
       }
     });
   }
@@ -453,7 +453,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       setTimeout(() => this.acceptGoogleWorkspaceLicense(), 1000);
       return;
     }
-
+    
     this.performGoogleWorkspaceLicenseAcceptance();
   }
   
@@ -467,7 +467,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.handleLicenseSuccess();
         } else {
           this.handleLicenseError(error.error?.message || 'License acceptance failed');
-        }
+            }
       },
       next: (response) => {
         try {
@@ -486,23 +486,27 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
   
   private handleLicenseSuccess(): void {
-    this.success = true;
-    this.loading = false;
-    this.error = false;
+            this.success = true;
+            this.loading = false;
+            this.error = false;
     this.message = 'License request approved successfully!';
     this.showToast('License approved successfully!', 'success');
     this.fetchPendingRequests();
-    
-    setTimeout(() => {
-      this.router.navigate(['/requests'], {
-        queryParams: { status: 'success', type: 'license' }
-      });
-    }, 2000);
+            
+            setTimeout(() => {
+              this.router.navigate(['/requests'], {
+        queryParams: {
+                status: 'success',
+                  requestId: this.requestId,
+                type: this.requestType
+                }
+            });
+          }, 2000);
   }
   
   private handleLicenseError(errorMessage: string): void {
     this.success = false;
-    this.loading = false;
+          this.loading = false;
     this.error = true;
     this.message = errorMessage;
     this.showToast(errorMessage, 'error');
@@ -511,25 +515,25 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   startPollingRequestStatus(): void {
     // Add a 2-second delay before starting polling to give backend time to process
     setTimeout(() => {
-      // Poll every 3 seconds to check if request has been approved
-      this.statusCheckInterval = interval(3000).subscribe(() => {
-        this.checkRequestStatusForApproval();
+    // Poll every 3 seconds to check if request has been approved
+    this.statusCheckInterval = interval(3000).subscribe(() => {
+      this.checkRequestStatusForApproval();
+      
+      // Increment attempt counter
+      this.currentAttempt++;
+      
+      // Stop polling after maximum attempts
+      if (this.currentAttempt >= this.maxAttempts) {
+        if (this.statusCheckInterval) {
+          this.statusCheckInterval.unsubscribe();
+          this.statusCheckInterval = null;
+        }
         
-        // Increment attempt counter
-        this.currentAttempt++;
-        
-        // Stop polling after maximum attempts
-        if (this.currentAttempt >= this.maxAttempts) {
-          if (this.statusCheckInterval) {
-            this.statusCheckInterval.unsubscribe();
-            this.statusCheckInterval = null;
-          }
-          
-          // Show error if we've reached max attempts without success
-          if (!this.success && !this.error) {
-            this.error = true;
-            this.loading = false;
-            this.message = 'The approval process is taking longer than expected. Please check your purchase requests page for status updates.';
+        // Show error if we've reached max attempts without success
+        if (!this.success && !this.error) {
+          this.error = true;
+          this.loading = false;
+          this.message = 'The approval process is taking longer than expected. Please check your purchase requests page for status updates.';
             
             // Fetch the requests anyway to see if the status was updated
             this.fetchPendingRequests();
@@ -538,9 +542,9 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
             setTimeout(() => {
               this.router.navigate(['/requests']);
             }, 3000);
-          }
         }
-      });
+      }
+    });
     }, 2000);
   }
   
@@ -601,11 +605,11 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           // Navigate back to the main requests page after showing success message
           setTimeout(() => {
             this.router.navigate(['/requests'], {
-              queryParams: {
+                queryParams: {
                 status: 'success',
-                requestId: this.requestId,
+                  requestId: this.requestId,
                 type: this.requestType
-              }
+                }
             });
           }, 3000);
           
@@ -832,13 +836,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
             // Navigate after showing success
             setTimeout(() => {
               this.router.navigate(['/requests'], {
-                queryParams: {
+          queryParams: {
                   status: 'success',
-                  requestId: this.requestId,
+            requestId: this.requestId,
                   type: 'license'
-                }
-              });
-              this.showToast('License request successfully approved!', 'success');
+          }
+        });
+        this.showToast('License request successfully approved!', 'success');
             }, 2000);
             
           } else if (parsed && parsed.status === 'error') {
@@ -873,7 +877,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
             
             setTimeout(() => {
               this.router.navigate(['/requests'], {
-                queryParams: {
+            queryParams: {
                   status: 'success',
                   requestId: this.requestId,
                   type: 'license'
@@ -1199,14 +1203,21 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     // Using the new API endpoint to fetch real purchase requests
     this.isLoading = true;
     
-    // Get the current user email
+    // Get the current user email and domain
     const userEmail = this.userInfo?.email;
+    const userDomain = this.userInfo?.domain;
     
-    // Use the appropriate endpoint based on the user's role
-    // Admins can see all requests, users can only see their own
-    const endpoint = this.isAdmin() 
-      ? `${this.environmentService.apiUrl}/purchase-requests` 
-      : `${this.environmentService.apiUrl}/purchase-requests/user/${encodeURIComponent(userEmail || 'default@example.com')}`;
+    // All users (including admins) should only see requests from their company
+    // Use domain-based filtering to ensure company isolation
+    let endpoint: string;
+    
+    if (userDomain && userDomain !== 'gmail.com' && userDomain !== 'example.com') {
+      // Filter by domain for company-specific requests
+      endpoint = `${this.environmentService.apiUrl}/purchase-requests/domain/${encodeURIComponent(userDomain)}`;
+    } else {
+      // Fallback to user-specific requests if no valid domain
+      endpoint = `${this.environmentService.apiUrl}/purchase-requests/user/${encodeURIComponent(userEmail || 'default@example.com')}`;
+    }
     
     this.http.get<PaginatedResponse<PurchaseRequestResponse>>(endpoint, {
       params: {
@@ -1956,6 +1967,9 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
             comparison = PurchaseRequestsComponent.formatRequestTypeStatic(a).localeCompare(
               PurchaseRequestsComponent.formatRequestTypeStatic(b)
             );
+            break;
+          case 'quantity':
+            comparison = (a.quantity || 0) - (b.quantity || 0);
             break;
           case 'cost':
             comparison = (a.cost || 0) - (b.cost || 0);

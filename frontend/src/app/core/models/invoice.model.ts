@@ -26,6 +26,12 @@ export interface CreditNote {
   status: string;
   relatedInvoiceId: string;
   type: string;
+  
+  // Additional fields from backend API
+  number?: string;        // Alternative field name from API
+  total?: number;         // Alternative field name for amount
+  currency?: string;      // Currency code
+  invoiceId?: string;     // Alternative field name for relatedInvoiceId
 }
 
 /**

@@ -1,14 +1,54 @@
-<div class="company-detail-container">
-  <!-- Back button and header -->
-  <div class="detail-header">
-    <button class="back-button" (click)="goBack()">
-      <span class="material-icons">arrow_back</span>
-      Back to Companies
-    </button>
-    <div class="header-content">
-      <h1 class="company-name" *ngIf="company">{{ company.name }}</h1>
+<!-- Modern Company Detail Page -->
+<div class="page-container">
+  <!-- Modern Page Header -->
+  <app-page-header
+    [title]="company?.name || 'Company Details'"
+    description="View and manage company information and users"
+    icon="business"
+    [showBackButton]="true"
+    [actions]="headerActions"
+    [hasCustomActions]="true"
+    (backClick)="goBack()"
+    (actionClick)="onHeaderAction($event)"
+  >
+    <!-- Status Badge in Header -->
+    <div slot="subtitle" *ngIf="company">
+      <div class="company-status-info">
+        <span
+          class="status-badge"
+          [ngClass]="getStatusClass(company.status || 'ACTIVE')"
+        >
+          <span class="status-indicator"></span>
+          {{ getStatusDisplayName(company.status || "ACTIVE") }}
+        </span>
+        <button class="status-change-btn" (click)="toggleStatus()">
+          <span class="material-icons">edit</span>
+          Change Status
+        </button>
+      </div>
+    </div>
 
-      <!-- Notification System -->
+    <!-- Notification Bell in Actions -->
+    <div slot="actions" class="header-actions">
+      <!-- Status Change Button -->
+      <button
+        class="status-action-btn"
+        (click)="toggleStatus(); $event.stopPropagation()"
+        *ngIf="company"
+      >
+        <div class="current-status-indicator">
+          <span
+            class="status-dot"
+            [ngClass]="getStatusClass(company.status || 'ACTIVE')"
+          ></span>
+          <span class="status-text">{{
+            getStatusDisplayName(company.status || "ACTIVE")
+          }}</span>
+        </div>
+        <span class="material-icons change-icon">edit</span>
+      </button>
+
+      <!-- Always show notification bell -->
       <div class="notification-section">
         <button
           class="notification-bell"
@@ -16,7 +56,6 @@
           [class.has-notifications]="hasPendingUsers"
         >
           <span class="material-icons">notifications</span>
-          <div *ngIf="hasPendingUsers" class="pulse-ring"></div>
           <span *ngIf="pendingCount > 0" class="notification-badge">{{
             pendingCount
           }}</span>
@@ -96,7 +135,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </app-page-header>
 
   <!-- Loading State -->
   <div *ngIf="loading" class="loading-container">
@@ -117,553 +156,502 @@
 
   <!-- Company Details Content -->
   <div class="detail-content" *ngIf="!loading && !error && company">
-    <div class="company-card">
-      <!-- Basic Information -->
-      <div class="detail-section">
-        <h2 class="section-title">Basic Information</h2>
-        <div class="info-grid">
-          <div class="info-item status-item">
-            <span class="info-label">Status</span>
-            <div class="info-value status-container">
-              <span
-                class="status-badge"
-                [ngClass]="getStatusClass(company.status || 'ACTIVE')"
-              >
-                <span class="status-indicator"></span>
-                {{ getStatusDisplayName(company.status || "ACTIVE") }}
-              </span>
-              <button class="status-change-btn" (click)="toggleStatus()">
-                <span class="material-icons">edit</span>
-                <span class="btn-text">Change</span>
-              </button>
+    <!-- Company Overview Cards -->
+    <div class="overview-section">
+      <div class="overview-cards">
+        <!-- Basic Info Card -->
+        <div class="info-card">
+          <div class="card-header">
+            <span class="material-icons">business</span>
+            <h3>Company Information</h3>
+          </div>
+          <div class="card-content">
+            <div class="info-item" *ngIf="company.email">
+              <span class="info-label">Domain</span>
+              <div class="info-value">{{ company.email.split("@")[1] }}</div>
             </div>
-          </div>
-          <div class="info-item" *ngIf="company.email">
-            <span class="info-label">Domain</span>
-            <div class="info-value">{{ company.email.split("@")[1] }}</div>
-          </div>
-          <div class="info-item" *ngIf="company.vatNumber">
-            <span class="info-label">VAT Number</span>
-            <div class="info-value">{{ company.vatNumber }}</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Contact Information -->
-      <div class="detail-section">
-        <h2 class="section-title">Contact Information</h2>
-        <div class="info-grid">
-          <div class="info-item" *ngIf="company.email">
-            <span class="info-label">Email</span>
-            <div class="info-value contact-value">
-              <span class="material-icons contact-icon">email</span>
-              <a [href]="'mailto:' + company.email">{{ company.email }}</a>
+            <div class="info-item" *ngIf="company.vatNumber">
+              <span class="info-label">VAT Number</span>
+              <div class="info-value">{{ company.vatNumber }}</div>
             </div>
-          </div>
-          <div class="info-item" *ngIf="company.phoneNumber">
-            <span class="info-label">Phone</span>
-            <div class="info-value contact-value">
-              <span class="material-icons contact-icon">phone</span>
-              <a [href]="'tel:' + company.phoneNumber">{{
-                company.phoneNumber
-              }}</a>
-            </div>
-          </div>
-          <div class="info-item" *ngIf="company.website">
-            <span class="info-label">Website</span>
-            <div class="info-value contact-value">
-              <span class="material-icons contact-icon">language</span>
-              <a
-                [href]="formatWebsiteUrl(company.website)"
-                target="_blank"
-                rel="noopener noreferrer"
-                >{{ company.website }}</a
-              >
+            <div class="info-item" *ngIf="company.teamleaderId">
+              <span class="info-label">Teamleader ID</span>
+              <div class="info-value">{{ company.teamleaderId }}</div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Address -->
-      <div
-        class="detail-section"
-        *ngIf="company.address || company.primaryAddress"
-      >
-        <h2 class="section-title">Address</h2>
-        <div class="address-container">
-          <div class="address-icon">
+        <!-- Contact Info Card -->
+        <div class="info-card">
+          <div class="card-header">
+            <span class="material-icons">contact_mail</span>
+            <h3>Contact Information</h3>
+          </div>
+          <div class="card-content">
+            <div class="info-item" *ngIf="company.email">
+              <span class="info-label">Email</span>
+              <div class="info-value contact-value">
+                <span class="material-icons contact-icon">email</span>
+                <a [href]="'mailto:' + company.email">{{ company.email }}</a>
+              </div>
+            </div>
+            <div class="info-item" *ngIf="company.phoneNumber">
+              <span class="info-label">Phone</span>
+              <div class="info-value contact-value">
+                <span class="material-icons contact-icon">phone</span>
+                <a [href]="'tel:' + company.phoneNumber">{{
+                  company.phoneNumber
+                }}</a>
+              </div>
+            </div>
+            <div class="info-item" *ngIf="company.website">
+              <span class="info-label">Website</span>
+              <div class="info-value contact-value">
+                <span class="material-icons contact-icon">language</span>
+                <a
+                  [href]="formatWebsiteUrl(company.website)"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >{{ company.website }}</a
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Address Card -->
+        <div
+          class="info-card"
+          *ngIf="company.address || company.primaryAddress"
+        >
+          <div class="card-header">
             <span class="material-icons">location_on</span>
+            <h3>Address</h3>
           </div>
-          <div class="address-details">
-            <p *ngIf="company.address?.line1">{{ company.address?.line1 }}</p>
-            <p *ngIf="company.address?.line2">
-              {{ company.address?.line2 }}
-            </p>
-            <p>
-              <span *ngIf="company.address?.postalCode"
-                >{{ company.address?.postalCode }}
-              </span>
-              {{ company.primaryAddress?.city || company.address?.city }}
-            </p>
-            <p>
-              {{ company.primaryAddress?.country || company.address?.country }}
-            </p>
-          </div>
-        </div>
-      </div>
+          <div class="card-content">
+            <div class="address-details">
+              <p *ngIf="company.address?.line1">{{ company.address?.line1 }}</p>
+              <p *ngIf="company.address?.line2">{{ company.address?.line2 }}</p>
+              <p *ngIf="company.address?.city">{{ company.address?.city }}</p>
+              <p *ngIf="company.address?.postalCode">
+                {{ company.address?.postalCode }}
+              </p>
+              <p *ngIf="company.address?.country">
+                {{ company.address?.country }}
+              </p>
 
-      <!-- Company Users Section -->
-      <div class="detail-section">
-        <h2 class="section-title">Company Users</h2>
-
-        <!-- Loading state for users -->
-        <div *ngIf="loadingUsers" class="users-loading">
-          <app-loading-spinner
-            size="small"
-            text="Loading users..."
-            [showText]="true"
-          ></app-loading-spinner>
-        </div>
-
-        <!-- Users table using data-table component -->
-        <app-data-table
-          *ngIf="!loadingUsers && companyUsers.length > 0"
-          [data]="companyUsers"
-          [columns]="userTableColumns"
-          [loading]="loadingUsers"
-          [rowClickable]="true"
-          [showPagination]="false"
-          [sortColumn]="sortColumn"
-          [sortDirection]="sortDirection"
-          emptyIcon="person_off"
-          emptyTitle="No users found"
-          emptyMessage="No users found for this company's domain"
-          (sort)="onSort($event)"
-          (rowClick)="showUserDetail($event)"
-        ></app-data-table>
-
-        <!-- Empty state -->
-        <div
-          *ngIf="!loadingUsers && companyUsers.length === 0"
-          class="no-users"
-        >
-          <span class="material-icons">person_off</span>
-          <p>No users found for this company's domain</p>
-        </div>
-      </div>
-
-      <!-- System Information -->
-      <div class="detail-section">
-        <h2 class="section-title">System Information</h2>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="info-label">Teamleader ID</span>
-            <div class="info-value">{{ company.teamleaderId }}</div>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Last Synced</span>
-            <div class="info-value">
-              {{ company.syncedAt | date : "medium" }}
-            </div>
-          </div>
-          <div class="info-item" *ngIf="company.createdAt">
-            <span class="info-label">Created</span>
-            <div class="info-value">
-              {{ company.createdAt | date : "medium" }}
-            </div>
-          </div>
-          <div class="info-item" *ngIf="company.updatedAt">
-            <span class="info-label">Updated</span>
-            <div class="info-value">
-              {{ company.updatedAt | date : "medium" }}
+              <!-- Fallback to primary address -->
+              <p *ngIf="!company.address?.line1 && company.primaryAddress">
+                {{ company.primaryAddress }}
+              </p>
             </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Improved Status Change Modal with Two Steps -->
-  <div *ngIf="showStatusPopup" class="modal-overlay">
-    <div class="confirmation-modal">
-      <!-- Step 1: Select New Status -->
-      <div *ngIf="!showStatusConfirmation" class="modal-header">
-        <div class="header-icon user-icon">
-          <span class="material-icons">business</span>
+    <!-- System Information Section -->
+    <div class="additional-info-section">
+      <div class="info-card full-width">
+        <div class="card-header">
+          <span class="material-icons">settings</span>
+          <h3>System Information</h3>
         </div>
-        <h2>Change Company Status</h2>
-      </div>
-
-      <div *ngIf="!showStatusConfirmation" class="modal-body">
-        <div class="company-summary" *ngIf="company">
-          <div class="company-avatar-large">
-            <span>{{ company.name.charAt(0).toUpperCase() }}</span>
-          </div>
-          <div class="company-details">
-            <h3>{{ company.name }}</h3>
-            <p class="company-domain">
-              {{ company.email?.split('@')?.[1] || 'Unknown Domain' }}
-            </p>
-          </div>
-        </div>
-
-        <div class="status-selection-section">
-          <h4>Choose new status for this company:</h4>
-          <div class="status-options">
-            <div
-              class="status-option"
-              [class.selected]="newStatus === CompanyStatusType.ACTIVE"
-              (click)="selectStatus(CompanyStatusType.ACTIVE)"
-            >
-              <div class="status-icon active">
-                <span class="material-icons">check_circle</span>
-              </div>
-              <div class="status-info">
-                <h5>Active</h5>
-                <p>Company has full access to all platform features</p>
-              </div>
+        <div class="card-content">
+          <div class="info-grid">
+            <div class="info-item" *ngIf="company.teamleaderId">
+              <span class="info-label">Teamleader ID</span>
+              <div class="info-value">{{ company.teamleaderId }}</div>
             </div>
-
-            <div
-              class="status-option"
-              [class.selected]="newStatus === CompanyStatusType.DEACTIVATED"
-              (click)="selectStatus(CompanyStatusType.DEACTIVATED)"
-            >
-              <div class="status-icon warning">
-                <span class="material-icons">pause_circle</span>
-              </div>
-              <div class="status-info">
-                <h5>Deactivated</h5>
-                <p>Company access temporarily disabled (can be reactivated)</p>
-              </div>
+            <div class="info-item" *ngIf="company.syncedAt">
+              <span class="info-label">Last Synced</span>
+              <div class="info-value">{{ formatDate(company.syncedAt) }}</div>
             </div>
-
-            <div
-              class="status-option"
-              [class.selected]="newStatus === CompanyStatusType.SUSPENDED"
-              (click)="selectStatus(CompanyStatusType.SUSPENDED)"
-            >
-              <div class="status-icon danger">
-                <span class="material-icons">block</span>
-              </div>
-              <div class="status-info">
-                <h5>Suspended</h5>
-                <p>Company access blocked due to policy violations</p>
-              </div>
+            <div class="info-item" *ngIf="company.createdAt">
+              <span class="info-label">Created</span>
+              <div class="info-value">{{ formatDate(company.createdAt) }}</div>
+            </div>
+            <div class="info-item" *ngIf="company.updatedAt">
+              <span class="info-label">Updated</span>
+              <div class="info-value">{{ formatDate(company.updatedAt) }}</div>
             </div>
           </div>
         </div>
       </div>
+    </div>
 
-      <div *ngIf="!showStatusConfirmation" class="modal-footer">
-        <button class="btn btn-secondary" (click)="cancelStatusChange()">
-          Cancel
-        </button>
-        <button
-          class="btn btn-primary"
-          [disabled]="!newStatus || newStatus === company?.status"
-          (click)="showStatusConfirmationDialog()"
-        >
-          <span class="material-icons">arrow_forward</span>
-          Continue
-        </button>
-      </div>
-
-      <!-- Step 2: Confirmation -->
-      <div *ngIf="showStatusConfirmation" class="modal-header">
-        <div class="header-icon warning-icon">
-          <span class="material-icons">warning</span>
-        </div>
-        <h2>Confirm Status Change</h2>
-      </div>
-
-      <div *ngIf="showStatusConfirmation" class="modal-body">
-        <div class="confirmation-message">
-          <p>
-            Are you sure you want to change <strong>{{ company?.name }}</strong
-            >'s status from
-            <span class="current-status">{{
-              getStatusDisplayName(company?.status || "ACTIVE")
-            }}</span>
-            to
-            <span class="new-status" [ngClass]="getStatusClass(newStatus)">{{
-              getStatusDisplayName(newStatus)
-            }}</span
-            >?
-          </p>
-
-          <div class="status-impact">
-            <div class="impact-icon">
-              <span class="material-icons">{{ getStatusIcon(newStatus) }}</span>
-            </div>
-            <div class="impact-description">
-              <h5>What this means:</h5>
-              <p>{{ getStatusDescription(newStatus) }}</p>
-            </div>
+    <!-- Company Users Management Section -->
+    <div class="users-section">
+      <div class="info-card full-width">
+        <div class="card-header">
+          <span class="material-icons">people</span>
+          <h3>Company Users</h3>
+          <div class="user-count-badge" *ngIf="companyUsers.length > 0">
+            {{ companyUsers.length }}
+            {{ companyUsers.length === 1 ? "user" : "users" }}
           </div>
         </div>
-      </div>
-
-      <div *ngIf="showStatusConfirmation" class="modal-footer">
-        <button class="btn btn-secondary" (click)="hideStatusConfirmation()">
-          Back
-        </button>
-        <button
-          class="btn"
-          [ngClass]="getStatusButtonClass(newStatus)"
-          (click)="confirmStatusChange()"
-          [disabled]="updatingStatus"
-        >
-          <span *ngIf="updatingStatus" class="loading-indicator">
+        <div class="card-content">
+          <!-- Loading state for users -->
+          <div *ngIf="loadingUsers" class="users-loading">
             <app-loading-spinner
               size="small"
-              [showText]="false"
+              text="Loading users..."
             ></app-loading-spinner>
-          </span>
-          <span class="material-icons" *ngIf="!updatingStatus">{{
-            getStatusIcon(newStatus)
-          }}</span>
-          {{ updatingStatus ? "Updating..." : "Confirm Change" }}
-        </button>
+          </div>
+
+          <!-- Users table using data-table component -->
+          <app-data-table
+            *ngIf="!loadingUsers && companyUsers.length > 0"
+            [data]="companyUsers"
+            [columns]="userTableColumns"
+            [loading]="loadingUsers"
+            [rowClickable]="true"
+            [showPagination]="false"
+            [sortColumn]="sortColumn"
+            [sortDirection]="sortDirection"
+            emptyIcon="person_off"
+            emptyTitle="No users found"
+            emptyMessage="No users found for this company's domain"
+            (sort)="onSort($event)"
+            (rowClick)="showUserDetail($event)"
+          ></app-data-table>
+
+          <!-- Empty state -->
+          <div
+            *ngIf="!loadingUsers && companyUsers.length === 0"
+            class="empty-users-state"
+          >
+            <span class="material-icons">person_off</span>
+            <h4>No Users Found</h4>
+            <p>No users found for this company's domain</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- Use the modern UserDetailModal exactly like the users page -->
-  <app-user-detail-modal
-    [isOpen]="showUserDetailPopup"
-    [user]="selectedUserForModal"
-    [isUpdating]="updatingUser"
-    [allowAdminEdit]="true"
-    (userUpdate)="onUserUpdate($event)"
-    (modalClose)="hideUserDetail()"
-  ></app-user-detail-modal>
-
-  <!-- Professional User Action Confirmation Modal -->
-  <div *ngIf="showUserActionConfirmPopup" class="modal-overlay">
-    <div class="confirmation-modal">
-      <div class="modal-header">
-        <div
-          class="header-icon"
-          [ngClass]="
-            confirmAction === 'approve' ? 'approve-icon' : 'reject-icon'
-          "
-        >
-          <span class="material-icons">
-            {{ confirmAction === "approve" ? "check_circle" : "cancel" }}
-          </span>
-        </div>
-        <h2>
-          {{
-            confirmAction === "approve"
-              ? "Approve User Request"
-              : "Reject User Request"
-          }}
-        </h2>
-      </div>
-
-      <div class="modal-body" *ngIf="selectedPendingUser">
-        <div class="user-summary">
-          <div class="user-avatar-large">
-            <img
-              *ngIf="selectedPendingUser.picture"
-              [src]="selectedPendingUser.picture"
-              [alt]="
-                selectedPendingUser.firstName +
-                ' ' +
-                selectedPendingUser.lastName
-              "
-            />
-            <span *ngIf="!selectedPendingUser.picture">
-              {{
-                (selectedPendingUser.firstName || "").charAt(0).toUpperCase()
-              }}
-            </span>
-          </div>
-          <div class="user-details">
-            <h3>
-              {{ selectedPendingUser.firstName }}
-              {{ selectedPendingUser.lastName }}
-            </h3>
-            <p class="user-email">{{ selectedPendingUser.email }}</p>
-            <div class="user-meta">
-              <span class="material-icons">domain</span>
-              <span>{{ selectedPendingUser.primaryDomain }}</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="confirmation-message">
-          <p *ngIf="confirmAction === 'approve'">
-            This user will be granted access to the system and will receive an
-            email notification. They will be able to log in immediately.
-          </p>
-          <p *ngIf="confirmAction === 'reject'">
-            This user request will be rejected and marked with a "Rejected"
-            status. The user will appear in the users list but won't have access
-            to the system.
-          </p>
-        </div>
-      </div>
-
-      <div class="modal-footer">
-        <button class="btn btn-secondary" (click)="cancelUserAction()">
-          Cancel
-        </button>
-        <button
-          class="btn"
-          [ngClass]="confirmAction === 'approve' ? 'btn-success' : 'btn-danger'"
-          (click)="confirmUserAction()"
-          [disabled]="updatingUser"
-        >
-          <span *ngIf="updatingUser" class="loading-indicator">
-            <app-loading-spinner
-              size="small"
-              [showText]="false"
-            ></app-loading-spinner>
-          </span>
-          <span class="material-icons" *ngIf="!updatingUser">
-            {{ confirmAction === "approve" ? "check" : "close" }}
-          </span>
-          {{
-            updatingUser
-              ? "Processing..."
-              : confirmAction === "approve"
-              ? "Approve User"
-              : "Reject User"
-          }}
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Simple Rejected User Popup -->
-  <div *ngIf="showRejectedUserPopup" class="modal-overlay">
-    <div class="confirmation-modal">
-      <!-- First State: Show rejected user info -->
-      <div *ngIf="!showAcceptConfirmation" class="modal-header">
-        <div class="header-icon rejected-icon">
-          <span class="material-icons">person_off</span>
-        </div>
-        <h2>Rejected User</h2>
-      </div>
-
-      <div *ngIf="!showAcceptConfirmation" class="modal-body">
-        <div class="user-summary" *ngIf="selectedRejectedUser">
-          <div class="user-avatar-large">
-            <img
-              *ngIf="selectedRejectedUser.picture"
-              [src]="selectedRejectedUser.picture"
-              [alt]="
-                selectedRejectedUser.firstName +
-                ' ' +
-                selectedRejectedUser.lastName
-              "
-            />
-            <span *ngIf="!selectedRejectedUser.picture">
-              {{
-                (selectedRejectedUser.firstName || "").charAt(0).toUpperCase()
-              }}
-            </span>
-          </div>
-          <div class="user-details">
-            <h3>
-              {{ selectedRejectedUser.firstName }}
-              {{ selectedRejectedUser.lastName }}
-            </h3>
-            <p class="user-email">{{ selectedRejectedUser.email }}</p>
-          </div>
-        </div>
-
-        <div class="confirmation-message">
-          <p>
-            This user request was previously rejected. You can accept them to
-            grant system access.
-          </p>
-        </div>
-      </div>
-
-      <div *ngIf="!showAcceptConfirmation" class="modal-footer">
-        <button class="btn btn-secondary" (click)="closeRejectedUserPopup()">
-          Close
-        </button>
-        <button
-          class="btn btn-success"
-          (click)="showAcceptConfirmationDialog()"
-        >
-          <span class="material-icons">check</span>
-          Accept User
-        </button>
-      </div>
-
-      <!-- Second State: Confirmation dialog -->
-      <div *ngIf="showAcceptConfirmation" class="modal-header">
-        <div class="header-icon approve-icon">
-          <span class="material-icons">check_circle</span>
-        </div>
-        <h2>Accept User</h2>
-      </div>
-
-      <div *ngIf="showAcceptConfirmation" class="modal-body">
-        <div class="confirmation-message" *ngIf="selectedRejectedUser">
-          <p>
-            Are you sure you want to accept
-            <strong
-              >{{ selectedRejectedUser.firstName }}
-              {{ selectedRejectedUser.lastName }}</strong
-            >?
-          </p>
-          <p>They will be granted access to the system immediately.</p>
-        </div>
-      </div>
-
-      <div *ngIf="showAcceptConfirmation" class="modal-footer">
-        <button class="btn btn-secondary" (click)="hideAcceptConfirmation()">
-          Cancel
-        </button>
-        <button
-          class="btn btn-success"
-          (click)="acceptRejectedUser()"
-          [disabled]="updatingUser"
-        >
-          <span *ngIf="updatingUser" class="loading-indicator">
-            <app-loading-spinner
-              size="small"
-              [showText]="false"
-            ></app-loading-spinner>
-          </span>
-          <span class="material-icons" *ngIf="!updatingUser">check</span>
-          {{ updatingUser ? "Processing..." : "Yes, Accept" }}
-        </button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Professional Toast Notifications -->
-  <div *ngIf="showToast" class="toast-container">
-    <div class="toast-notification" [ngClass]="'toast-' + toastType">
-      <div class="toast-icon">
+<!-- Keep all existing modals and functionality -->
+<!-- Professional User Action Confirmation Modal -->
+<div *ngIf="showUserActionConfirmPopup" class="modal-overlay">
+  <div class="confirmation-modal">
+    <div class="modal-header">
+      <div
+        class="header-icon"
+        [ngClass]="confirmAction === 'approve' ? 'approve-icon' : 'reject-icon'"
+      >
         <span class="material-icons">
-          {{ toastType === "success" ? "check_circle" : "error" }}
+          {{ confirmAction === "approve" ? "check_circle" : "cancel" }}
         </span>
       </div>
-      <div class="toast-content">
-        <div class="toast-title">
-          {{ toastType === "success" ? "Success" : "Error" }}
+      <h2>
+        {{ confirmAction === "approve" ? "Approve User" : "Reject User" }}
+      </h2>
+    </div>
+
+    <div class="modal-body" *ngIf="selectedUser">
+      <div class="company-summary">
+        <div class="company-avatar-large">
+          <img
+            *ngIf="selectedUser.picture"
+            [src]="selectedUser.picture"
+            [alt]="selectedUser.name"
+          />
+          <span *ngIf="!selectedUser.picture">{{
+            selectedUser.name.charAt(0).toUpperCase()
+          }}</span>
         </div>
-        <div class="toast-message">{{ toastMessage }}</div>
+        <div class="company-details">
+          <h3>{{ selectedUser.name }}</h3>
+          <p class="company-domain">{{ selectedUser.email }}</p>
+        </div>
       </div>
-      <button class="toast-close" (click)="showToast = false">
-        <span class="material-icons">close</span>
+
+      <div class="confirmation-message">
+        <p>
+          Are you sure you want to
+          <span [class]="confirmAction">{{ confirmAction }}</span>
+          this user's request to join your company?
+        </p>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="hideUserActionConfirmPopup()">
+        Cancel
+      </button>
+      <button
+        class="btn"
+        [ngClass]="confirmAction === 'approve' ? 'btn-success' : 'btn-danger'"
+        (click)="confirmUserAction()"
+        [disabled]="updatingUser"
+      >
+        <div *ngIf="updatingUser" class="loading-indicator">
+          <app-loading-spinner size="small"></app-loading-spinner>
+        </div>
+        <span *ngIf="!updatingUser" class="material-icons">
+          {{ confirmAction === "approve" ? "check" : "close" }}
+        </span>
+        {{
+          updatingUser
+            ? "Processing..."
+            : confirmAction === "approve"
+            ? "Approve User"
+            : "Reject User"
+        }}
       </button>
     </div>
   </div>
+</div>
 
-  <!-- Show loading indicator when updating user -->
-  <div class="updating-overlay" *ngIf="updatingUser">
-    <div class="spinner-container">
-      <div class="spinner"></div>
-      <p>Updating user...</p>
+<!-- Status Change Modal -->
+<div *ngIf="showStatusModal" class="modal-overlay">
+  <div class="confirmation-modal">
+    <div class="modal-header">
+      <div class="header-icon user-icon">
+        <span class="material-icons">business</span>
+      </div>
+      <h2>Change Company Status</h2>
+    </div>
+
+    <div class="modal-body" *ngIf="company">
+      <div class="company-summary">
+        <div class="company-avatar-large">
+          <span>{{ company.name.charAt(0).toUpperCase() }}</span>
+        </div>
+        <div class="company-details">
+          <h3>{{ company.name }}</h3>
+          <p class="company-domain">
+            {{ company.email ? company.email.split("@")[1] : "Unknown Domain" }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Status Selection or Confirmation -->
+      <div *ngIf="!selectedStatus" class="status-selection-section">
+        <h4>Select new status:</h4>
+        <div class="status-options">
+          <div
+            class="status-option"
+            [class.selected]="newStatus === 'ACTIVE'"
+            (click)="selectStatus('ACTIVE')"
+          >
+            <div class="status-icon active">
+              <span class="material-icons">check_circle</span>
+            </div>
+            <div class="status-info">
+              <h5>Active</h5>
+              <p>Company can operate normally with full access</p>
+            </div>
+          </div>
+
+          <div
+            class="status-option"
+            [class.selected]="newStatus === 'INACTIVE'"
+            (click)="selectStatus('INACTIVE')"
+          >
+            <div class="status-icon warning">
+              <span class="material-icons">pause_circle</span>
+            </div>
+            <div class="status-info">
+              <h5>Inactive</h5>
+              <p>Temporarily disable company access</p>
+            </div>
+          </div>
+
+          <div
+            class="status-option"
+            [class.selected]="newStatus === 'SUSPENDED'"
+            (click)="selectStatus('SUSPENDED')"
+          >
+            <div class="status-icon danger">
+              <span class="material-icons">block</span>
+            </div>
+            <div class="status-info">
+              <h5>Suspended</h5>
+              <p>Permanently block company access</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Confirmation Message -->
+      <div *ngIf="selectedStatus" class="confirmation-message">
+        <p>
+          Change company status from
+          <span class="current-status">{{
+            getStatusDisplayName(company.status || "ACTIVE")
+          }}</span>
+          to
+          <span
+            class="new-status"
+            [ngClass]="'status-' + (selectedStatus || '').toLowerCase()"
+            >{{ getStatusDisplayName(selectedStatus!) }}</span
+          >?
+        </p>
+
+        <div class="status-impact">
+          <div class="impact-icon">
+            <span class="material-icons">info</span>
+          </div>
+          <div class="impact-description">
+            <h5>What happens next?</h5>
+            <p>{{ getStatusDescription(selectedStatus!) }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="cancelStatusChange()">
+        {{ selectedStatus ? "Back" : "Cancel" }}
+      </button>
+      <button
+        *ngIf="selectedStatus"
+        class="btn"
+        [ngClass]="getStatusButtonClass(selectedStatus)"
+        (click)="confirmStatusChange()"
+        [disabled]="updatingStatus"
+      >
+        <div *ngIf="updatingStatus" class="loading-indicator">
+          <app-loading-spinner size="small"></app-loading-spinner>
+        </div>
+        <span *ngIf="!updatingStatus" class="material-icons">
+          {{ getStatusIcon(selectedStatus) }}
+        </span>
+        {{
+          updatingStatus
+            ? "Updating..."
+            : "Update to " + getStatusDisplayName(selectedStatus!)
+        }}
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container">
+  <div
+    *ngFor="let toast of toasts"
+    class="toast-notification"
+    [ngClass]="'toast-' + toast.type"
+  >
+    <div class="toast-icon">
+      <span class="material-icons">
+        {{ toast.type === "success" ? "check_circle" : "error" }}
+      </span>
+    </div>
+    <div class="toast-content">
+      <div class="toast-title">{{ toast.title }}</div>
+      <div class="toast-message">{{ toast.message }}</div>
+    </div>
+    <button class="toast-close" (click)="removeToast(toast.id)">
+      <span class="material-icons">close</span>
+    </button>
+  </div>
+</div>
+
+<!-- User Detail Modal -->
+<app-user-detail-modal
+  [isOpen]="showUserDetailPopup"
+  [user]="selectedUserForModal"
+  [isUpdating]="updatingUser"
+  [allowAdminEdit]="true"
+  (userUpdate)="onUserUpdate($event)"
+  (modalClose)="hideUserDetail()"
+></app-user-detail-modal>
+
+<!-- Rejected User Popup -->
+<div *ngIf="showRejectedUserPopup" class="modal-overlay">
+  <div class="confirmation-modal">
+    <!-- First State: Show rejected user info -->
+    <div *ngIf="!showAcceptConfirmation" class="modal-header">
+      <div class="header-icon rejected-icon">
+        <span class="material-icons">person_off</span>
+      </div>
+      <h2>Rejected User</h2>
+    </div>
+
+    <div *ngIf="!showAcceptConfirmation" class="modal-body">
+      <div class="company-summary" *ngIf="selectedRejectedUser">
+        <div class="company-avatar-large">
+          <img
+            *ngIf="selectedRejectedUser.picture"
+            [src]="selectedRejectedUser.picture"
+            [alt]="
+              selectedRejectedUser.firstName +
+              ' ' +
+              selectedRejectedUser.lastName
+            "
+          />
+          <span *ngIf="!selectedRejectedUser.picture">
+            {{ (selectedRejectedUser.firstName || "").charAt(0).toUpperCase() }}
+          </span>
+        </div>
+        <div class="company-details">
+          <h3>
+            {{ selectedRejectedUser.firstName }}
+            {{ selectedRejectedUser.lastName }}
+          </h3>
+          <p class="company-domain">{{ selectedRejectedUser.email }}</p>
+        </div>
+      </div>
+
+      <div class="confirmation-message">
+        <p>
+          This user request was previously rejected. You can accept them to
+          grant system access.
+        </p>
+      </div>
+    </div>
+
+    <div *ngIf="!showAcceptConfirmation" class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeRejectedUserPopup()">
+        Close
+      </button>
+      <button class="btn btn-success" (click)="showAcceptConfirmationDialog()">
+        <span class="material-icons">check</span>
+        Accept User
+      </button>
+    </div>
+
+    <!-- Second State: Confirmation dialog -->
+    <div *ngIf="showAcceptConfirmation" class="modal-header">
+      <div class="header-icon approve-icon">
+        <span class="material-icons">check_circle</span>
+      </div>
+      <h2>Accept User</h2>
+    </div>
+
+    <div *ngIf="showAcceptConfirmation" class="modal-body">
+      <div class="confirmation-message" *ngIf="selectedRejectedUser">
+        <p>
+          Are you sure you want to accept
+          <strong
+            >{{ selectedRejectedUser.firstName }}
+            {{ selectedRejectedUser.lastName }}</strong
+          >?
+        </p>
+        <p>They will be granted access to the system immediately.</p>
+      </div>
+    </div>
+
+    <div *ngIf="showAcceptConfirmation" class="modal-footer">
+      <button class="btn btn-secondary" (click)="hideAcceptConfirmation()">
+        Cancel
+      </button>
+      <button
+        class="btn btn-success"
+        (click)="acceptRejectedUser()"
+        [disabled]="updatingUser"
+      >
+        <span *ngIf="updatingUser" class="loading-indicator">
+          <app-loading-spinner size="small"></app-loading-spinner>
+        </span>
+        <span class="material-icons" *ngIf="!updatingUser">check</span>
+        {{ updatingUser ? "Processing..." : "Yes, Accept" }}
+      </button>
     </div>
   </div>
 </div>
