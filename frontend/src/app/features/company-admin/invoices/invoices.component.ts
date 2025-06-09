@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ElementRef, Renderer2 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
@@ -11,6 +11,11 @@ import { UiStateService } from '../../../core/services/ui-state.service';
 import { Invoice, CreditNote, TeamleaderInvoiceResponse, InvoiceDetails } from '../../../core/models/invoice.model';
 import { Company } from '../../../core/models/company.model';
 
+// Import standardized components
+import { PageHeaderComponent, PageAction } from '../../../shared/components/page-header/page-header.component';
+import { DataTableComponent, TableColumn, TableAction, SortEvent, PaginationEvent } from '../../../shared/components/data-table/data-table.component';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
+
 // For production build, define a simple environment object
 const environment = {
   production: false
@@ -19,7 +24,15 @@ const environment = {
 @Component({
   selector: 'app-invoices',
   standalone: true,
-  imports: [CommonModule, FormsModule, ReactiveFormsModule, RouterModule],
+  imports: [
+    CommonModule, 
+    FormsModule, 
+    ReactiveFormsModule, 
+    RouterModule,
+    PageHeaderComponent,
+    DataTableComponent,
+    LoadingSpinnerComponent
+  ],
   templateUrl: './invoices.component.html',
   styleUrl: './invoices.component.scss'
 })
@@ -59,7 +72,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   
   // Sorting
   sortColumn: string = 'paymentReference';
-  sortDirection: string = 'asc';
+  sortDirection: 'asc' | 'desc' = 'asc';
   
   // Company identification
   private currentUserEmail: string = '';
@@ -72,10 +85,10 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   
   // Add logger property to avoid 'this.log is undefined' errors
   private log = {
-    debug: (msg: string) => console.debug(msg),
-    info: (msg: string) => console.info(msg),
-    warn: (msg: string) => console.warn(msg),
-    error: (msg: string) => console.error(msg)
+    debug: (msg: string) => {},
+    info: (msg: string) => {},
+    warn: (msg: string) => {},
+    error: (msg: string) => {}
   };
 
   // Add missing properties used in the displayInvoiceDetails method
@@ -86,10 +99,53 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   // New property for download options
   showDownloadOptions: boolean = false;
   
+  // Configuration for standardized components
+  headerActions: PageAction[] = [
+    // Removed Download All button as requested
+  ];
+
+  tableColumns: TableColumn[] = [
+    {
+      key: 'paymentReference',
+      label: 'Payment Reference',
+      sortable: false,
+      type: 'text'
+    },
+    {
+      key: 'dueDate',
+      label: 'Due Date',
+      sortable: true,
+      type: 'date'
+    },
+    {
+      key: 'totalAmount',
+      label: 'Amount',
+      sortable: true,
+      type: 'currency'
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      type: 'badge'
+    }
+  ];
+
+  tableActions: TableAction[] = [
+    {
+      label: 'Download',
+      icon: 'download',
+      action: 'download',
+      variant: 'ghost'
+    }
+  ];
+
   constructor(
     private apiService: ApiService,
     private authService: AuthService,
-    private uiStateService: UiStateService
+    private uiStateService: UiStateService,
+    private elementRef: ElementRef,
+    private renderer: Renderer2
   ) {}
 
   ngOnInit(): void {
@@ -115,7 +171,6 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     this.apiService.get<any>(`teamleader/companies`)
       .pipe(
         catchError(error => {
-          console.error('Error fetching companies:', error);
           this.generateTestData();
           return of(null);
         })
@@ -170,8 +225,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   async loadInvoices() {
     this.loading = true;
     this.errorMessage = '';
-    this.allCreditNotes = [];
-
+    
     const companyId = this.getApiCompanyId();
     if (!companyId) {
       this.loading = false;
@@ -180,29 +234,23 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     }
     
     try {
-      // Set the base endpoint
+      // Load all invoices at once instead of filtering by tab
       const baseEndpoint = `teamleader/finance/company/${companyId}/invoices`;
       
-      // Determine which status filter to use based on active tab
-      const status = this.activeTab === 'paid' ? 'paid' : 'unpaid';
+      // Get both paid and unpaid invoices
+      const [paidResponse, unpaidResponse] = await Promise.all([
+        this.apiService.get<TeamleaderInvoiceResponse[]>(`${baseEndpoint}?status=paid`).toPromise(),
+        this.apiService.get<TeamleaderInvoiceResponse[]>(`${baseEndpoint}?status=unpaid`).toPromise()
+      ]);
       
-      const response = await this.apiService.get<TeamleaderInvoiceResponse[]>(`${baseEndpoint}?status=${status}`).toPromise();
+      // Process both responses
+      const paidInvoices = this.processInvoicesData(paidResponse || []);
+      const unpaidInvoices = this.processInvoicesData(unpaidResponse || []);
       
-      if (!response || !Array.isArray(response)) {
-        throw new Error('Invalid response format');
-      }
-      
-      // Process the invoice data using processInvoicesData
-      this.allInvoices = this.processInvoicesData(response);
-      
-      // Set invoices based on active tab
-      if (this.activeTab === 'paid') {
-        this.paidInvoices = [...this.allInvoices];
-        this.outstandingInvoices = [];
-      } else {
-        this.outstandingInvoices = [...this.allInvoices];
-        this.paidInvoices = [];
-      }
+      // Store all invoices
+      this.allInvoices = [...paidInvoices, ...unpaidInvoices];
+      this.paidInvoices = paidInvoices;
+      this.outstandingInvoices = unpaidInvoices;
       
       // Update counts
       this.outstandingCount = this.outstandingInvoices.length;
@@ -211,12 +259,9 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       // Set filtered invoices based on active tab
       this.filteredInvoices = [...this.getActiveInvoices()];
       
-      // Generate test credit notes if needed - for real API responses
-      if (this.allInvoices.length > 0 && this.allCreditNotes.length === 0) {
-        this.generateTestCreditNotes();
-      }
+      // Credit notes are now loaded on-demand when viewing invoice details
+      // No longer generate test credit notes here
     } catch (error) {
-      console.error('Error loading invoices:', error);
       this.errorMessage = 'Failed to load invoices. Please try again later.';
       
       // Always generate test data for now to ensure UI works
@@ -301,6 +346,14 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       // Extract due date
       const dueDate = this.formatApiDate(invoice.dueOn);
       
+      // Determine status for badge display
+      let status = 'Outstanding';
+      if (invoice.isPaid) {
+        status = 'Paid';
+      } else if (invoice.isOverdue) {
+        status = 'Overdue';
+      }
+      
       // Create and return our Invoice object
       return {
         id: invoice.id,
@@ -312,7 +365,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         isPaid: invoice.isPaid || false,
         isOverdue: invoice.isOverdue || false,
         type: 'invoice',
-        customer: 'Customer' // We don't have customer info in simplified DTO
+        customer: 'Customer', // We don't have customer info in simplified DTO
+        status: status // Add status for badge display
       } as Invoice;
     });
   }
@@ -333,10 +387,19 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         // Create a credit note for a portion of the invoice amount
         const creditNoteAmount = invoice.totalAmount * (0.15 + (i * 0.10));
         
+        // Generate a realistic credit note date - between invoice due date and today
+        const invoiceDueDate = invoice.dueDate instanceof Date ? invoice.dueDate : new Date(invoice.dueDate || Date.now());
+        const today = new Date();
+        const daysBetween = Math.floor((today.getTime() - invoiceDueDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Credit note should be issued after the invoice, but not necessarily recently
+        const daysAfterInvoice = Math.floor(Math.random() * Math.max(1, daysBetween * 0.7)) + 5; // 5+ days after invoice
+        const creditNoteDate = new Date(invoiceDueDate.getTime() + (daysAfterInvoice * 24 * 60 * 60 * 1000));
+        
         this.allCreditNotes.push({
           id: `-${invoice.id}-${i+1}`,
           creditNoteNumber: `${invoice.invoiceNumber}-CN${i+1}`,
-          date: new Date(),
+          date: creditNoteDate,
           totalAmount: creditNoteAmount,
           status: invoice.isPaid ? 'paid' : 'outstanding',
           relatedInvoiceId: invoice.id,
@@ -379,15 +442,14 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   switchTab(tab: 'outstanding' | 'paid'): void {
     this.activeTab = tab;
     this.selectedInvoice = null;
+    this.isDetailViewVisible = false;
     
-    // Reset search and filter states
+    // Reset search state
     this.searchText = '';
-    this.statusFilter = 'all';
-    this.dateRangeFilter = 'all';
-    this.amountRangeFilter = 'all';
     
-    // Load invoices for the selected tab
-    this.loadInvoices();
+    // Update filtered invoices based on the new active tab
+    this.filteredInvoices = [...this.getActiveInvoices()];
+    this.applyFilters();
   }
 
   // For backward compatibility
@@ -522,7 +584,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     
     this.filteredInvoices = filteredList;
     
-    // Apply sorting
+    // Apply sorting to maintain sort order
     this.sortInvoices();
   }
 
@@ -548,68 +610,71 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     this.statusFilter = status;
   }
 
-  // Show invoice details
+  // Enhanced showInvoiceDetails with mobile optimization
   showInvoiceDetails(invoice: Invoice): void {
-    if (!invoice || !invoice.id) {
-      return;
-    }
+    // Calculate amount breakdown
+    const total = invoice.totalAmount;
+    const subtotal = Math.round((total / 1.21) * 100) / 100; // Assuming 21% VAT
+    const tax = Math.round((total - subtotal) * 100) / 100;
     
-    // Use the real API endpoint for invoice details
-    this.apiService.get<any>(`teamleader/finance/company/${this.getApiCompanyId()}/invoices/${invoice.id}`)
-      .pipe(
-        catchError(error => {
-          console.error('Error fetching invoice details from API:', error);
-          // If API call fails, use our local data + fallbacks
-          if (this.getRelatedCreditNotes(invoice.id).length === 0) {
-            this.generateTestCreditNotes();
-          }
-          this.displayInvoiceDetails(invoice, this.getRelatedCreditNotes(invoice.id));
-          return of(null);
-        })
-      )
-      .subscribe(response => {
-        if (response) {
-          // Map API response to our internal format
-          const detailsFromApi = this.mapApiResponseToInvoiceDetails(response, invoice);
-          this.displayInvoiceDetails(detailsFromApi, this.getRelatedCreditNotes(invoice.id));
-        }
-      });
-  }
-
-  /**
-   * Display the invoice details panel
-   * @param invoice The invoice details to display
-   * @param creditNotes Any related credit notes
-   */
-  private displayInvoiceDetails(invoice: Invoice | InvoiceDetails, creditNotes: CreditNote[]): void {
-    this.selectedInvoice = invoice as InvoiceDetails;
-    
-    // If we have credit notes, attach them to the invoice details
-    if (creditNotes && creditNotes.length > 0) {
-      // Ensure the amount property exists
-      if (!this.selectedInvoice.amount) {
-        this.selectedInvoice.amount = {
-          total: this.selectedInvoice.totalAmount,
-          tax: Math.round(this.selectedInvoice.totalAmount * 0.21 * 100) / 100,
-          subtotal: Math.round(this.selectedInvoice.totalAmount / 1.21 * 100) / 100
-        };
+    this.selectedInvoice = {
+      ...invoice,
+      invoiceDate: new Date(invoice.dueDate), // Use dueDate as invoiceDate if not available
+      dueDate: new Date(invoice.dueDate),
+      paymentDate: invoice.isPaid ? new Date() : undefined, // Mock payment date if paid
+      amount: {
+        total: total,
+        subtotal: subtotal,
+        tax: tax
       }
-      
-      // Map credit notes to the format expected in the details view
-      this.selectedInvoice.creditNotes = creditNotes.map(note => ({
-        id: note.id,
-        number: note.creditNoteNumber,
-        creditNoteNumber: note.creditNoteNumber,
-        amount: note.totalAmount,
-        date: note.date instanceof Date ? note.date : new Date(note.date),
-        downloadUrl: `${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${this.getApiCompanyId()}/credit-note/${note.id}/pdf`
-      }));
-    }
+    } as InvoiceDetails;
     
     this.isDetailViewVisible = true;
-    this.uiStateService.setDetailViewOpen(true);
-    this.selectedInvoiceId = invoice.id;
-    this.isShowingInvoiceDetails = true;
+    
+    // Load real credit notes for this invoice
+    this.loadCreditNotesForInvoice(invoice.id);
+    
+    // Prevent body scroll on mobile when detail panel is open
+    if (this.isMobileView()) {
+      this.renderer.addClass(document.body, 'modal-open');
+    }
+  }
+
+  // Enhanced closeInvoiceDetails with mobile optimization
+  closeInvoiceDetails(): void {
+    this.isDetailViewVisible = false;
+    this.selectedInvoice = null;
+    
+    // Re-enable body scroll on mobile
+    if (this.isMobileView()) {
+      this.renderer.removeClass(document.body, 'modal-open');
+    }
+  }
+
+  // Check if current view is mobile
+  private isMobileView(): boolean {
+    return window.innerWidth <= 768;
+  }
+
+  // Handle window resize to adjust mobile behavior
+  @HostListener('window:resize', ['$event'])
+  onResize(event: any): void {
+    // Close detail panel if switching from mobile to desktop with panel open
+    if (this.isDetailViewVisible && !this.isMobileView()) {
+      // Remove mobile-specific body class if switching to desktop
+      this.renderer.removeClass(document.body, 'modal-open');
+    } else if (this.isDetailViewVisible && this.isMobileView()) {
+      // Add mobile-specific body class if switching to mobile
+      this.renderer.addClass(document.body, 'modal-open');
+    }
+  }
+
+  // Handle escape key to close detail panel
+  @HostListener('document:keydown.escape', ['$event'])
+  onEscapeKey(event: KeyboardEvent): void {
+    if (this.isDetailViewVisible) {
+      this.closeInvoiceDetails();
+    }
   }
 
   // Map API response to our internal format
@@ -679,8 +744,47 @@ export class InvoicesComponent implements OnInit, OnDestroy {
 
   // Download invoice
   downloadInvoice(invoice: Invoice | InvoiceDetails, format: string = 'pdf'): void {
-    // Use the redirect parameter to open the download link directly without an extra AJAX call
+    // Construct URL for invoice download with company context
     window.open(`${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${this.getApiCompanyId()}/invoice/${invoice.id}/download?format=${format}&redirect=true`, '_blank');
+  }
+
+  // Download credit note in the specified format
+  downloadCreditNote(creditNote: CreditNote, format: string = 'pdf'): void {
+    const companyId = this.getApiCompanyId();
+    if (!companyId) {
+      console.error('No company ID available for credit note download');
+      return;
+    }
+
+    // Log the credit note data to debug
+    console.log('Downloading credit note:', creditNote);
+    console.log('Credit note ID:', creditNote.id);
+    console.log('Credit note number:', creditNote.creditNoteNumber || creditNote.number);
+    console.log('Company ID:', companyId);
+    console.log('Format:', format);
+
+    // Try to use credit note ID first, fallback to number if needed
+    const creditNoteIdentifier = creditNote.id || creditNote.creditNoteNumber || creditNote.number;
+    
+    if (!creditNoteIdentifier) {
+      console.error('No valid credit note identifier found');
+      alert('Cannot download credit note: No valid identifier found');
+      return;
+    }
+
+    // Construct URL for credit note download with company context
+    const downloadUrl = `${this.apiService['environmentService'].apiUrl}/teamleader/finance/company/${companyId}/credit-note/${creditNoteIdentifier}/download?format=${format}&redirect=true`;
+    
+    console.log('Download URL:', downloadUrl);
+    console.log('Using identifier:', creditNoteIdentifier);
+    
+    // Try to open the URL and log any issues
+    try {
+      window.open(downloadUrl, '_blank');
+      console.log('Successfully opened download URL');
+    } catch (error) {
+      console.error('Error opening download URL:', error);
+    }
   }
 
   // Helper to get active invoices based on current tab
@@ -704,16 +808,27 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     const sortFn = (a: Invoice, b: Invoice) => {
       let valA: any, valB: any;
       
-      // Special case for amount sorting
-      if (this.sortColumn === 'amount') {
-        valA = a.totalAmount;
-        valB = b.totalAmount;
-      } else if (this.sortColumn === 'dueDate') {
-        valA = a.dueDate instanceof Date ? a.dueDate : new Date(a.dueDate || 0);
-        valB = b.dueDate instanceof Date ? b.dueDate : new Date(b.dueDate || 0);
-      } else {
-        valA = a[this.sortColumn as keyof Invoice];
-        valB = b[this.sortColumn as keyof Invoice];
+      // Handle different column types
+      switch (this.sortColumn) {
+        case 'totalAmount':
+          valA = a.totalAmount;
+          valB = b.totalAmount;
+          break;
+        case 'dueDate':
+          valA = a.dueDate instanceof Date ? a.dueDate : new Date(a.dueDate || 0);
+          valB = b.dueDate instanceof Date ? b.dueDate : new Date(b.dueDate || 0);
+          break;
+        case 'status':
+          valA = a.status || (a.isPaid ? 'Paid' : (a.isOverdue ? 'Overdue' : 'Outstanding'));
+          valB = b.status || (b.isPaid ? 'Paid' : (b.isOverdue ? 'Overdue' : 'Outstanding'));
+          break;
+        case 'paymentReference':
+          valA = a.paymentReference || '';
+          valB = b.paymentReference || '';
+          break;
+        default:
+          valA = a[this.sortColumn as keyof Invoice];
+          valB = b[this.sortColumn as keyof Invoice];
       }
       
       // Convert dates to timestamps for comparison
@@ -733,7 +848,10 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       }
     };
     
-    // Sort both invoice lists
+    // Sort the filtered invoices list directly
+    this.filteredInvoices.sort(sortFn);
+    
+    // Also update the source arrays to maintain consistency
     this.outstandingInvoices.sort(sortFn);
     this.paidInvoices.sort(sortFn);
   }
@@ -780,7 +898,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       isPaid: true,
       isOverdue: false,
       type: 'invoice',
-      customer: 'Test Customer 1'
+      customer: 'Test Customer 1',
+      status: 'Paid'
     });
     
     // Outstanding invoice
@@ -794,7 +913,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       isPaid: false,
       isOverdue: false,
       type: 'invoice',
-      customer: 'Test Customer 1'
+      customer: 'Test Customer 1',
+      status: 'Outstanding'
     });
     
     // Overdue invoice
@@ -808,7 +928,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       isPaid: false,
       isOverdue: true,
       type: 'invoice',
-      customer: 'Test Customer 1'
+      customer: 'Test Customer 1',
+      status: 'Overdue'
     });
     
     // Another paid invoice
@@ -822,7 +943,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       isPaid: true,
       isOverdue: false,
       type: 'invoice',
-      customer: 'Test Customer 2'
+      customer: 'Test Customer 2',
+      status: 'Paid'
     });
     
     return testInvoices;
@@ -837,10 +959,18 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   }
 
   // Get status class for styling
-  getStatusClass(invoice: any) {
-    if (invoice.isPaid) return 'active';
-    if (invoice.isOverdue) return 'pending';
-    return 'inactive'; // outstanding
+  getStatusClass(invoice: any): string {
+    if (!invoice || !invoice.status) return '';
+    
+    const status = invoice.status.toLowerCase();
+    
+    if (status.includes('overdue')) {
+      return 'overdue';
+    }
+    if (status.includes('paid')) {
+      return 'paid';
+    }
+    return 'unpaid';
   }
 
   // Check if any filters are active
@@ -858,6 +988,11 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     this.subscriptions.forEach(sub => sub.unsubscribe());
     this.subscriptions = [];
     this.uiStateService.setDetailViewOpen(false);
+    
+    // Clean up mobile body class if detail panel was open
+    if (this.isDetailViewVisible) {
+      this.renderer.removeClass(document.body, 'modal-open');
+    }
   }
 
   // UI helpers
@@ -890,11 +1025,27 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     this.showInvoiceDetails(invoice);
   }
 
-  // Clean closure of invoice details
-  closeInvoiceDetails(): void {
-    this.selectedInvoice = null;
-    this.isDetailViewVisible = false;
-    this.uiStateService.setDetailViewOpen(false);
+  // Event handlers for standardized components
+  onHeaderAction(action: PageAction): void {
+    // No header actions currently available
+  }
+
+  onSort(event: SortEvent): void {
+    this.sortColumn = event.column;
+    this.sortDirection = event.direction;
+    this.sortInvoices();
+  }
+
+  onTableAction(event: { action: string, item: any }): void {
+    switch (event.action) {
+      case 'download':
+        this.downloadInvoice(event.item);
+        break;
+    }
+  }
+
+  onRowClick(invoice: Invoice): void {
+    this.showInvoiceDetails(invoice);
   }
 
   // Format date from API
@@ -929,5 +1080,40 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         document.addEventListener('click', closeDropdown);
       }, 0);
     }
+  }
+
+  // Load credit notes for an invoice
+  private loadCreditNotesForInvoice(invoiceId: string): void {
+    const companyId = this.getApiCompanyId();
+    if (!companyId) {
+      this.log.warn('No company ID available for loading credit notes');
+      return;
+    }
+
+    console.log(`Loading credit notes for invoice ${invoiceId} and company ${companyId}`);
+
+    this.apiService.get<CreditNote[]>(`teamleader/finance/company/${companyId}/invoices/${invoiceId}/credit-notes`)
+      .pipe(
+        catchError(error => {
+          this.log.warn('Failed to load credit notes for invoice: ' + (error?.message || 'Unknown error'));
+          return of([]);
+        })
+      )
+      .subscribe(creditNotes => {
+        console.log('Received credit notes from API:', creditNotes);
+        
+        // Filter credit notes for this specific invoice
+        const invoiceCreditNotes = creditNotes.filter(note => note.relatedInvoiceId === invoiceId);
+        
+        console.log('Filtered credit notes for this invoice:', invoiceCreditNotes);
+        
+        // Update the allCreditNotes array, keeping other invoice's credit notes
+        this.allCreditNotes = this.allCreditNotes.filter(note => note.relatedInvoiceId !== invoiceId);
+        this.allCreditNotes.push(...invoiceCreditNotes);
+        
+        console.log('All credit notes after update:', this.allCreditNotes);
+        
+        this.log.info(`Loaded ${invoiceCreditNotes.length} credit notes for invoice ${invoiceId}`);
+      });
   }
 }

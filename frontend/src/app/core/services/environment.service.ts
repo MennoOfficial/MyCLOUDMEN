@@ -28,7 +28,6 @@ export class EnvironmentService {
     
     // Double check that we're using the correct API URL
     if (this.environment.production && !this.environment.apiUrl.includes('mycloudmen.mennoplochaet.be')) {
-      console.warn('Production environment detected but using non-production API URL. Correcting...');
       this.environment.apiUrl = 'https://mycloudmen.mennoplochaet.be/api';
     }
   }

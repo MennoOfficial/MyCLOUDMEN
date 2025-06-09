@@ -1,5 +1,7 @@
 package com.cloudmen.backend.api.controllers;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +17,7 @@ import java.net.URISyntaxException;
 @CrossOrigin(origins = "*")
 public class ProxyController {
 
+    private static final Logger logger = LoggerFactory.getLogger(ProxyController.class);
     private final WebClient webClient;
 
     public ProxyController(WebClient webClient) {
@@ -35,7 +38,7 @@ public class ProxyController {
                     .doOnError(e -> {
                         if (e instanceof WebClientResponseException) {
                             WebClientResponseException ex = (WebClientResponseException) e;
-                            System.err.println("Error status: " + ex.getStatusCode());
+                            logger.error("Error fetching image from URL {}: HTTP {}", imageUrl, ex.getStatusCode());
                         }
                     })
                     .block();
@@ -48,8 +51,10 @@ public class ProxyController {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
             }
         } catch (URISyntaxException e) {
+            logger.error("Invalid URL format: {}", imageUrl);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(null);
         } catch (Exception e) {
+            logger.error("Error proxying image from URL {}: {}", imageUrl, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }

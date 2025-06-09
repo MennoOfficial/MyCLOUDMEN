@@ -1,4 +1,4 @@
-// Pending Account Component Styles
+// Account Pending Component Styles - Aqua Spring Theme
 // Using variables from styles.scss
 
 html, body {
@@ -13,7 +13,7 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 2rem;
   width: 100%;
   min-height: 100vh;
   box-sizing: border-box;
@@ -22,93 +22,176 @@ html, body {
 }
 
 .logo-container {
-  position: absolute;
-  top: 2rem;
-  left: 0;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1;
-  
-  .logo {
-    max-width: 150px;
-    height: auto;
-    filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.2));
-    
-    @media (max-width: 480px) {
-      max-width: 120px;
-    }
-  }
+  display: none; // Hide the separate logo container
 }
 
 .content-card {
   background-color: white;
-  border-radius: var(--radius-lg);
-  padding: 2.5rem 2rem;
-  max-width: 500px;
+  border-radius: 24px;
+  padding: 0;
+  max-width: 480px;
   width: 90%;
   text-align: center;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-  margin-top: 3rem;
-  animation: fadeIn 0.4s ease-out;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  animation: fadeInUp 0.6s ease-out;
+  border: 3px solid var(--aqua-spring); // Aqua spring border for pending approval
+  position: relative;
+  overflow: hidden;
   
   @media (max-width: 768px) {
-    padding: 2rem 1.5rem;
     width: 85%;
   }
   
   @media (max-width: 480px) {
-    padding: 1.5rem 1rem 2rem;
-    width: 100%;
-    margin-top: 7rem;
-    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-    max-width: none;
+    width: 95%;
+    margin: 1rem;
+    border-radius: 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  // Logo header section at top of card
+  &::before {
+    content: '';
     position: absolute;
-    bottom: 0;
-    top: auto;
-    box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.15);
-  }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.icon-container {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 20px;
-  background-color: var(--deep-ocean-soft);
-  border-radius: var(--radius-circle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  
-  @media (max-width: 480px) {
-    width: 70px;
-    height: 70px;
-    margin-top: -45px;
-    margin-bottom: 15px;
-    background-color: white;
-    border: 8px solid var(--deep-ocean);
-  }
-  
-  i {
-    font-size: 40px;
-    color: var(--deep-ocean);
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background-color: var(--aqua-spring); // Aqua spring header
+    border-radius: 21px 21px 0 0;
+    z-index: 1;
     
     @media (max-width: 480px) {
-      font-size: 32px;
+      height: 70px;
+      border-radius: 17px 17px 0 0;
+    }
+  }
+  
+  // Logo styling within the card
+  .card-logo {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--aqua-spring); // Aqua spring header
+    border-radius: 21px 21px 0 0;
+    margin-bottom: 0;
+    
+    @media (max-width: 480px) {
+      height: 70px;
+      border-radius: 17px 17px 0 0;
+    }
+    
+    img {
+      height: 40px;
+      width: auto;
+      filter: brightness(0) invert(1);
+      
+      @media (max-width: 480px) {
+        height: 35px;
+      }
+    }
+  }
+  
+  // Main content area
+  .card-content {
+    padding: 2rem 2rem 2rem;
+    position: relative;
+    z-index: 2;
+    
+    @media (max-width: 768px) {
+      padding: 1.5rem 1.5rem;
+    }
+    
+    @media (max-width: 480px) {
+      padding: 1.25rem 1rem 1.5rem;
     }
   }
 }
 
+@keyframes fadeInUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px) scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+.icon-container {
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 16px;
+  background-color: rgba(84, 191, 174, 0.1); // Light aqua spring background
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--aqua-spring);
+  
+  // Slow pulse animation for pending state
+  animation: slowPulse 3s infinite;
+  
+  @media (max-width: 480px) {
+    width: 60px;
+    height: 60px;
+    margin-top: -35px;
+    margin-bottom: 12px;
+    background-color: white;
+    border: 6px solid var(--aqua-spring);
+    box-shadow: 0 4px 16px rgba(84, 191, 174, 0.3);
+  }
+  
+  i {
+    font-size: 32px;
+    color: var(--aqua-spring);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    
+    @media (max-width: 480px) {
+      font-size: 24px;
+    }
+  }
+}
+
+@keyframes slowPulse {
+  0%, 100% { 
+    transform: scale(1); 
+    box-shadow: 0 0 0 0 rgba(84, 191, 174, 0.4); 
+  }
+  50% { 
+    transform: scale(1.02); 
+    box-shadow: 0 0 0 8px rgba(84, 191, 174, 0); 
+  }
+}
+
+.centered-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  height: 100% !important;
+  width: 100% !important;
+  padding-top: 4px !important;
+  box-sizing: border-box !important;
+}
+
 h1 {
-  color: var(--deep-ocean);
+  color: var(--aqua-spring);
   font-size: 24px;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: var(--space-md);
   
   @media (max-width: 480px) {
@@ -117,12 +200,12 @@ h1 {
 }
 
 .message-container {
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-lg);
   
-  p {
-    color: var(--slate);
+  .main-message {
+    color: var(--deep-ocean);
     font-size: 16px;
-    line-height: 1.6;
+    line-height: 1.5;
     margin-bottom: 16px;
     
     @media (max-width: 480px) {
@@ -130,30 +213,11 @@ h1 {
     }
   }
   
-  .welcome-message {
-    font-weight: 500;
-    color: var(--deep-ocean);
-    font-size: 18px;
-    
-    @media (max-width: 480px) {
-      font-size: 16px;
-    }
-  }
-  
-  .info-message {
-    color: var(--slate);
-    max-width: 400px;
-    margin: 0 auto 1rem;
-    
-    @media (max-width: 480px) {
-      max-width: none;
-    }
-  }
-  
   .action-message {
-    font-style: italic;
     color: var(--aqua-spring);
     font-weight: 500;
+    font-size: 15px;
+    margin-top: 12px;
   }
 }
 
@@ -175,49 +239,53 @@ h1 {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 0.7rem 1.5rem;
+  padding: 0.8rem 1.5rem;
   border-radius: var(--radius-md);
-  font-weight: 500;
+  font-weight: 600;
   font-size: 15px;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid transparent;
+  box-shadow: var(--shadow-md);
+  border: 2px solid transparent;
   
   i {
     font-size: 18px;
   }
   
-  @media (max-width: 480px) {
-    width: 100%;
-    margin-bottom: 0.5rem;
-    padding: 0.8rem 1rem;
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
   }
   
-  &:hover {
-    transform: none;
+  &:active {
+    transform: translateY(0);
+  }
+  
+  @media (max-width: 480px) {
+    padding: 0.9rem 1.5rem;
+    font-size: 16px;
   }
 }
 
 .btn-primary {
-  background-color: var(--deep-ocean-soft);
-  color: var(--deep-ocean);
-  border-color: var(--deep-ocean);
+  background-color: var(--aqua-spring);
+  color: white;
+  border-color: var(--aqua-spring);
   
   &:hover {
-    background-color: var(--deep-ocean);
-    color: white;
+    background-color: #47a79a; // Darker aqua spring for hover
+    border-color: #47a79a;
   }
 }
 
 .btn-secondary {
-  background-color: var(--aqua-spring-soft);
-  color: var(--aqua-spring);
-  border-color: var(--aqua-spring);
+  background: white;
+  color: var(--deep-ocean);
+  border-color: var(--silver-lining);
   
   &:hover {
-    background-color: var(--aqua-spring);
-    color: white;
+    background: var(--arctic-dawn);
+    border-color: var(--mist);
   }
 }
 

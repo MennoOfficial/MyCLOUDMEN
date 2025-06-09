@@ -12,6 +12,7 @@ export interface Invoice {
   isOverdue: boolean;
   type: string;           // Always 'invoice'
   customer?: string;      // Added in processInvoicesData
+  status?: string;        // Added for badge display
 }
 
 /**
@@ -25,6 +26,12 @@ export interface CreditNote {
   status: string;
   relatedInvoiceId: string;
   type: string;
+  
+  // Additional fields from backend API
+  number?: string;        // Alternative field name from API
+  total?: number;         // Alternative field name for amount
+  currency?: string;      // Currency code
+  invoiceId?: string;     // Alternative field name for relatedInvoiceId
 }
 
 /**
@@ -53,6 +60,7 @@ export interface InvoiceDetails {
   customer?: string;
   paymentReference: string;
   currency: string;
+  status?: string;        // Added for badge display
   
   // Extended properties
   companyName?: string;

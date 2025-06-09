@@ -21,69 +21,6 @@ export class CallbackComponent implements OnInit {
   ) {}
   
   ngOnInit(): void {
-    // Process the authentication callback with improved profile loading
-    this.processAuthCallback();
-  }
-
-  private processAuthCallback(): void {
-    // First handle the callback
     this.authService.handleAuthCallback();
-    
-    // Wait for user profile to be loaded before proceeding
-    // This helps prevent the double login issue
-    this.authService.user$.pipe(
-      // Delay a bit to ensure auth0 processes are complete
-      switchMap(user => {
-        if (user) {
-          return of(user);
-        }
-        
-        // Give some time for the user profile to load
-        return timer(1000).pipe(
-          switchMap(() => this.authService.user$.pipe(take(1)))
-        );
-      }),
-      // Only proceed when we have a user
-      filter(user => !!user),
-      // Limit to first value
-      first(),
-      // Add timeout to prevent indefinite hanging
-      timeout(10000),
-      // Make sure we trigger a refresh if needed
-      tap(user => {
-        if (!user || !user.roles || user.roles.length === 0) {
-          this.authService.refreshUserProfile();
-        }
-      })
-    ).subscribe({
-      next: (user) => {
-        // Navigate based on roles once we have a proper user
-        this.navigateBasedOnRoles(user);
-      },
-      error: () => {
-        // Fallback on timeout or error
-        this.router.navigate(['/purchase-requests']);
-      }
-    });
-  }
-
-  private navigateBasedOnRoles(user: User): void {
-    if (user.roles.includes('SYSTEM_ADMIN')) {
-      this.router.navigate(['/companies']);
-    } else if (user.roles.includes('COMPANY_ADMIN')) {
-      this.router.navigate(['/users']);
-    } else {
-      this.router.navigate(['/requests']);
-    }
-  }
-
-  private redirectToDefaultPage(user: User): void {
-    if (user.roles.includes('SYSTEM_ADMIN')) {
-      this.router.navigate(['/companies']);
-    } else if (user.roles.includes('COMPANY_ADMIN')) {
-      this.router.navigate(['/users']);
-    } else {
-      this.router.navigate(['/requests']);
-    }
   }
 }

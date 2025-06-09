@@ -1,30 +1,20 @@
-<!-- Companies Overview Page -->
-<div class="companies-container">
-  <!-- Header with Title -->
-  <div class="page-header">
-    <h1 class="page-title">Companies</h1>
-  </div>
+<!-- Companies Overview Page - Refactored with Standardized Components -->
+<div class="page-container">
+  <!-- Standardized Page Header -->
+  <app-page-header
+    title="Companies"
+    [actions]="headerActions"
+    (actionClick)="onHeaderAction($event)"
+  ></app-page-header>
 
-  <!-- Simplified Search -->
-  <div class="filters-container">
-    <div class="search-box">
-      <span class="material-icons search-icon">search</span>
-      <input
-        type="text"
-        [(ngModel)]="searchQuery"
-        (keyup.enter)="onSearch()"
-        placeholder="Search companies..."
-        class="search-input"
-      />
-      <button
-        *ngIf="searchQuery"
-        (click)="searchQuery = ''; onSearch()"
-        class="clear-search"
-      >
-        <span class="material-icons">close</span>
-      </button>
-    </div>
-  </div>
+  <!-- Standardized Search and Filter -->
+  <app-search-filter
+    searchPlaceholder="Search companies..."
+    [filterConfigs]="filterConfigs"
+    [showResultsSummary]="false"
+    [totalResults]="totalCompanies"
+    (searchFilter)="onSearchFilter($event)"
+  ></app-search-filter>
 
   <!-- Loading State -->
   <app-loading-spinner
@@ -48,175 +38,28 @@
     </button>
   </div>
 
-  <!-- Companies Table -->
-  <div
-    class="table-responsive"
-    *ngIf="!loading && !error && filteredCompanies.length > 0"
-  >
-    <table class="companies-table">
-      <thead>
-        <tr>
-          <th class="company-col">Company</th>
-          <th class="email-col">Email</th>
-          <th class="phone-col">Phone</th>
-          <th class="vat-col hide-mobile">VAT Number</th>
-          <th class="status-col">Status</th>
-          <th class="actions-col">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          *ngFor="let company of filteredCompanies; let i = index"
-          class="company-row animate-row"
-          [style.--row-index]="i"
-        >
-          <td class="company-col" data-label="Company">
-            <span class="company-name">{{ company.name }}</span>
-          </td>
-          <td class="email-col" data-label="Email">
-            <div class="email-container" *ngIf="company.email">
-              <span class="email-value">{{ company.email }}</span>
-            </div>
-            <span *ngIf="!company.email">-</span>
-          </td>
-          <td class="phone-col" data-label="Phone">
-            <div class="phone-number" *ngIf="company.phoneNumber">
-              <span class="material-icons">phone</span>
-              <span>{{ company.phoneNumber }}</span>
-            </div>
-            <span *ngIf="!company.phoneNumber">-</span>
-          </td>
-          <td class="vat-col hide-mobile" data-label="VAT Number">
-            <span class="vat-number">{{ company.vatNumber || "-" }}</span>
-          </td>
-          <td class="status-col" data-label="Status">
-            <span
-              class="status-badge"
-              [ngClass]="{
-                'status-active': company.status === 'Active' || !company.status,
-                'status-inactive': company.status === 'Inactive'
-              }"
-            >
-              {{ company.status || "Active" }}
-            </span>
-          </td>
-          <td class="actions-col" data-label="Actions">
-            <button
-              class="view-details-btn"
-              (click)="navigateToCompanyDetails(company)"
-            >
-              <span class="material-icons">visibility</span>
-              View Details
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-
-  <!-- Empty State -->
-  <div
-    *ngIf="!loading && !error && filteredCompanies.length === 0"
-    class="empty-state"
-  >
-    <span class="material-icons">business</span>
-    <p>No companies found</p>
-    <p *ngIf="searchQuery" class="empty-state-subtitle">
-      Try adjusting your search or filters
-    </p>
-    <button
-      *ngIf="searchQuery || statusFilter !== 'All'"
-      (click)="searchQuery = ''; statusFilter = 'All'; fetchCompanies()"
-      class="btn btn-secondary"
-    >
-      Clear Filters
-    </button>
-  </div>
-
-  <!-- Pagination -->
-  <div
-    *ngIf="!loading && !error && totalCompanies > 0"
-    class="pagination-container"
-  >
-    <div class="pagination-info">
-      Showing {{ pageIndex * pageSize + 1 }} -
-      {{ Math.min((pageIndex + 1) * pageSize, totalCompanies) }} of
-      {{ totalCompanies }} companies
-    </div>
-
-    <div class="pagination-controls">
-      <button
-        [disabled]="pageIndex === 0"
-        (click)="
-          onPageChange({
-            pageIndex: pageIndex - 1,
-            pageSize: pageSize,
-            length: totalCompanies
-          })
-        "
-        class="pagination-btn"
-        [class.disabled]="pageIndex === 0"
-      >
-        <span class="material-icons arrow-icon">chevron_left</span>
-      </button>
-
-      <div class="page-numbers">
-        <button
-          *ngFor="let page of getPaginationArray()"
-          [class.active]="page === pageIndex + 1"
-          (click)="
-            onPageChange({
-              pageIndex: page - 1,
-              pageSize: pageSize,
-              length: totalCompanies
-            })
-          "
-          class="page-number-btn"
-        >
-          {{ page }}
-        </button>
-      </div>
-
-      <button
-        [disabled]="pageIndex >= Math.ceil(totalCompanies / pageSize) - 1"
-        (click)="
-          onPageChange({
-            pageIndex: pageIndex + 1,
-            pageSize: pageSize,
-            length: totalCompanies
-          })
-        "
-        class="pagination-btn"
-        [class.disabled]="pageIndex >= Math.ceil(totalCompanies / pageSize) - 1"
-      >
-        <span class="material-icons arrow-icon">chevron_right</span>
-      </button>
-    </div>
-
-    <div class="page-size-selector">
-      <label for="pageSize">Items per page:</label>
-      <select
-        id="pageSize"
-        [(ngModel)]="pageSize"
-        (change)="
-          onPageChange({
-            pageIndex: 0,
-            pageSize: pageSize,
-            length: totalCompanies
-          })
-        "
-        class="page-size-select"
-      >
-        <option *ngFor="let size of pageSizeOptions" [value]="size">
-          {{ size }}
-        </option>
-      </select>
-    </div>
-  </div>
-
-  <!-- Toast Notification -->
-  <div class="toast-notification" *ngIf="showToast">
-    <span class="material-icons">check_circle</span>
-    <span class="toast-message">{{ toastMessage }}</span>
-  </div>
+  <!-- Standardized Data Table -->
+  <app-data-table
+    *ngIf="!loading && !error"
+    [data]="filteredCompanies"
+    [columns]="tableColumns"
+    [tableActions]="tableActions"
+    [loading]="loading"
+    [rowClickable]="true"
+    [showPagination]="true"
+    [totalItems]="totalCompanies"
+    [currentPage]="pageIndex + 1"
+    [pageSize]="pageSize"
+    [sortColumn]="sortColumn"
+    [sortDirection]="sortDirection"
+    emptyIcon="business"
+    emptyTitle="No companies found"
+    emptyMessage="Try adjusting your search or filters to find companies."
+    emptyAction="Clear Filters"
+    (sort)="onSort($event)"
+    (rowClick)="navigateToCompanyDetails($event)"
+    (action)="onTableAction($event)"
+    (pageChange)="onPageChange($event)"
+    (emptyActionClick)="clearAllFilters()"
+  ></app-data-table>
 </div>

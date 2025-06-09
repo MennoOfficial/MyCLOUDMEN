@@ -127,26 +127,10 @@ public class PurchaseEmailService {
 
             helper.setText(htmlContent, true);
 
-            // Add null check before accessing getFrom() - a common issue in tests
-            try {
-                if (helper.getMimeMessage().getFrom() != null && helper.getMimeMessage().getAllRecipients() != null) {
-                    log.debug("About to send email with subject: '{}' from: '{}' to: '{}'",
-                            helper.getMimeMessage().getSubject(),
-                            helper.getMimeMessage().getFrom()[0],
-                            helper.getMimeMessage().getAllRecipients()[0]);
-                } else {
-                    log.debug("About to send email with subject: '{}' (from/to info not available in test environment)",
-                            helper.getMimeMessage().getSubject());
-                }
-            } catch (Exception e) {
-                log.debug("Could not log email details: {}", e.getMessage());
-            }
-
             mailSender.send(message);
             log.info("Purchase request email sent successfully to: {}", to);
         } catch (MailException e) {
             log.error("Failed to send purchase request email: {}", e.getMessage(), e);
-            // Log mail configuration for debugging
             log.debug("Email configuration - from: {}, to: {}, baseUrl: {}, apiBaseUrl: {}",
                     fromEmail, to, baseUrl, apiBaseUrl);
             throw new MessagingException("Failed to send email: " + e.getMessage(), e);
@@ -190,21 +174,6 @@ public class PurchaseEmailService {
                     "</div></body></html>";
 
             helper.setText(htmlContent, true);
-
-            // Add null check before accessing getFrom() - a common issue in tests
-            try {
-                if (helper.getMimeMessage().getFrom() != null && helper.getMimeMessage().getAllRecipients() != null) {
-                    log.debug("About to send email with subject: '{}' from: '{}' to: '{}'",
-                            helper.getMimeMessage().getSubject(),
-                            helper.getMimeMessage().getFrom()[0],
-                            helper.getMimeMessage().getAllRecipients()[0]);
-                } else {
-                    log.debug("About to send email with subject: '{}' (from/to info not available in test environment)",
-                            helper.getMimeMessage().getSubject());
-                }
-            } catch (Exception e) {
-                log.debug("Could not log email details: {}", e.getMessage());
-            }
 
             mailSender.send(message);
             log.info("Purchase confirmation email sent successfully to: {}", to);
@@ -316,21 +285,6 @@ public class PurchaseEmailService {
                     "</div></body></html>";
 
             helper.setText(htmlContent, true);
-
-            // Add null check before accessing getFrom() - a common issue in tests
-            try {
-                if (helper.getMimeMessage().getFrom() != null && helper.getMimeMessage().getAllRecipients() != null) {
-                    log.debug("About to send email with subject: '{}' from: '{}' to: '{}'",
-                            helper.getMimeMessage().getSubject(),
-                            helper.getMimeMessage().getFrom()[0],
-                            helper.getMimeMessage().getAllRecipients()[0]);
-                } else {
-                    log.debug("About to send email with subject: '{}' (from/to info not available in test environment)",
-                            helper.getMimeMessage().getSubject());
-                }
-            } catch (Exception e) {
-                log.debug("Could not log email details: {}", e.getMessage());
-            }
 
             mailSender.send(message);
             log.info("Google Workspace license request email sent successfully to: {}", to);

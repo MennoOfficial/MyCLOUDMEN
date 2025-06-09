@@ -135,7 +135,8 @@
   color: var(--arctic-dawn);
 }
 .nav-text {
-  font-weight: 500;
+  font-weight: normal !important;
+  font-family: "Inter", "Roboto", -apple-system, BlinkMacSystemFont, sans-serif;
   white-space: nowrap;
   opacity: 0;
   transform: translateX(10px);
@@ -360,9 +361,25 @@
 @media (max-width: 768px) {
   .sidebar-nav {
     transform: translateX(-100%);
+    width: 100%;
+    max-width: 300px;
     
     &.expanded {
       transform: translateX(0);
+    }
+    
+    // On mobile, make nav items stack properly
+    .nav-items {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    
+    // Ensure logout appears right after nav items on mobile
+    .nav-footer {
+      margin-top: 0;
+      padding-top: 8px;
     }
   }
   
@@ -388,8 +405,9 @@
 // User Profile Styling
 .user-profile-container {
   padding: 0 12px;
-  padding-bottom: var(--space-md);
+  padding-bottom: var(--space-lg);
   border-bottom: 1px solid var(--silver-lining);
+  margin-bottom: var(--space-md);
 }
 
 .profile-header {
@@ -514,4 +532,103 @@
     font-size: 16px;
     color: var(--deep-ocean);
   }
+}
+
+// Company Information Styles
+.company-section {
+  margin-top: 16px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.company-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 48px;
+  overflow: hidden;
+  
+  .icon-wrapper {
+    width: 56px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  
+  .company-icon {
+    font-size: 20px !important;
+    color: var(--aqua-spring);
+    background: rgba(69, 190, 174, 0.12);
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    
+    &.loading {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    &:hover {
+      background: rgba(69, 190, 174, 0.18);
+    }
+  }
+  
+  .company-info {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    gap: 4px;
+    min-width: 0;
+    
+    .company-name-container {
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    
+    .company-name {
+      font-size: 14px;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--deep-ocean);
+      opacity: 0;
+      transform: translateX(10px);
+      transition: all 0.3s ease;
+    }
+    
+    .company-name-loading {
+      font-size: 14px;
+      color: var(--slate);
+      opacity: 0;
+      transform: translateX(10px);
+      transition: all 0.3s ease;
+    }
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.95);
+  }
+}
+
+// Show company info when sidebar is expanded or hovered
+.sidebar-nav.expanded .company-info .company-name,
+.sidebar-nav.expanded .company-info .company-name-loading,
+.sidebar-nav:hover .company-info .company-name,
+.sidebar-nav:hover .company-info .company-name-loading {
+  opacity: 1;
+  transform: translateX(0);
 }

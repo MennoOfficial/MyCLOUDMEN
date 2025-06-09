@@ -1,29 +1,23 @@
 <div class="auth-container">
-  <div class="auth-logo">
+  <!-- Hide logo during loading -->
+  <div class="auth-logo" [class.hidden]="loading">
     <img
       src="https://media.licdn.com/dms/image/v2/C4E0BAQFsdaRGkQ6aCQ/company-logo_200_200/company-logo_200_200/0/1658846403183/cloudmen_logo?e=2147483647&v=beta&t=dnRjkGfxx74Gr0eTamE0EiNx7Io3nMmAn9HTXsAWlAM"
       alt="CLOUDMEN Logo"
     />
   </div>
 
-  <!-- Loading Animation -->
+  <!-- Professional Loading Animation - Clean and centered -->
   <div class="loading-overlay" *ngIf="loading">
     <div class="loading-background"></div>
     <div class="loading-container">
-      <div class="loading-animation">
-        <div class="cloud-loader">
-          <div class="cloud-base"></div>
-          <div class="cloud-circle circle-1"></div>
-          <div class="cloud-circle circle-2"></div>
-          <div class="cloud-circle circle-3"></div>
-        </div>
-      </div>
-      <div class="loading-text">
-        <span>Connecting to MyCLOUDMEN</span>
-        <span class="ellipsis"></span>
-      </div>
-      <div class="loading-progress">
-        <div class="progress-bar"></div>
+      <div class="loading-content">
+        <app-loading-spinner
+          size="large"
+          text="Connecting to MyCLOUDMEN"
+          [showText]="true"
+        >
+        </app-loading-spinner>
       </div>
     </div>
   </div>

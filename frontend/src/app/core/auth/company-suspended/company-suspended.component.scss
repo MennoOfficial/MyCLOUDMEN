@@ -1,0 +1,346 @@
+// Company Suspended Component Styles - Clean Design
+// Using variables from styles.scss
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.suspended-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background-color: var(--deep-ocean);
+  position: relative;
+}
+
+.logo-container {
+  display: none; // Hide the separate logo container
+}
+
+.content-card {
+  background-color: white;
+  border-radius: 24px;
+  padding: 0;
+  max-width: 480px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  animation: fadeInUp 0.6s ease-out;
+  border: 3px solid var(--fire-red);
+  position: relative;
+  overflow: hidden;
+  
+  @media (max-width: 768px) {
+    width: 85%;
+  }
+  
+  @media (max-width: 480px) {
+    width: 95%;
+    margin: 1rem;
+    border-radius: 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  // Logo header section at top of card
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 80px;
+    background-color: var(--fire-red);
+    border-radius: 21px 21px 0 0;
+    z-index: 1;
+    
+    @media (max-width: 480px) {
+      height: 70px;
+      border-radius: 17px 17px 0 0;
+    }
+  }
+  
+  // Logo styling within the card
+  .card-logo {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--fire-red);
+    border-radius: 21px 21px 0 0;
+    margin-bottom: 0;
+    
+    @media (max-width: 480px) {
+      height: 70px;
+      border-radius: 17px 17px 0 0;
+    }
+    
+    img {
+      height: 40px;
+      width: auto;
+      filter: brightness(0) invert(1);
+      
+      @media (max-width: 480px) {
+        height: 35px;
+      }
+    }
+  }
+  
+  // Main content area
+  .card-content {
+    padding: 2rem 2rem 2rem;
+    position: relative;
+    z-index: 2;
+    
+    @media (max-width: 768px) {
+      padding: 1.5rem 1.5rem;
+    }
+    
+    @media (max-width: 480px) {
+      padding: 1.25rem 1rem 1.5rem;
+    }
+  }
+}
+
+@keyframes fadeInUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px) scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+.icon-container {
+  width: 70px;
+  height: 70px;
+  margin: 0 auto 16px;
+  background-color: var(--fire-red-soft);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--fire-red);
+  position: relative;
+  
+  // Pulsing animation for suspended state
+  animation: pulse 2s infinite;
+  
+  @media (max-width: 480px) {
+    width: 60px;
+    height: 60px;
+    margin-top: -35px;
+    margin-bottom: 12px;
+    background: white;
+    border: 6px solid var(--fire-red);
+    box-shadow: 0 4px 16px rgba(244, 67, 54, 0.3);
+  }
+  
+  i {
+    font-size: 32px;
+    color: var(--fire-red);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    
+    @media (max-width: 480px) {
+      font-size: 24px;
+    }
+  }
+}
+
+@keyframes pulse {
+  0%, 100% { 
+    transform: scale(1); 
+    box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.4); 
+  }
+  50% { 
+    transform: scale(1.02); 
+    box-shadow: 0 0 0 8px rgba(244, 67, 54, 0); 
+  }
+}
+
+.centered-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  height: 100% !important;
+  width: 100% !important;
+  padding-top: 4px !important;
+  box-sizing: border-box !important;
+}
+
+h1 {
+  color: var(--fire-red);
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: var(--space-md);
+  
+  @media (max-width: 480px) {
+    font-size: 20px;
+  }
+}
+
+.message-container {
+  margin-bottom: var(--space-lg);
+  
+  .main-message {
+    color: var(--deep-ocean);
+    font-size: 16px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    
+    @media (max-width: 480px) {
+      font-size: 14px;
+    }
+    
+    strong {
+      color: var(--fire-red);
+      font-weight: 600;
+    }
+  }
+  
+  .warning-box {
+    background-color: var(--fire-red-soft);
+    border: 2px solid var(--fire-red);
+    border-radius: var(--radius-md);
+    padding: var(--space-lg);
+    margin: var(--space-lg) 0;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-md);
+    text-align: left;
+    position: relative;
+    
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--fire-red);
+      border-radius: 2px 0 0 2px;
+    }
+    
+    .material-icons {
+      color: var(--fire-red);
+      font-size: 24px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    
+    div {
+      flex: 1;
+      
+      p {
+        margin: 0 0 var(--space-sm) 0;
+        color: var(--fire-red);
+        font-size: 14px;
+        line-height: 1.5;
+        
+        &:last-child {
+          margin-bottom: 0;
+        }
+        
+        strong {
+          font-weight: 600;
+        }
+      }
+    }
+  }
+  
+  .action-message {
+    color: var(--fire-red);
+    font-weight: 500;
+    font-size: 15px;
+    margin-top: 12px;
+  }
+}
+
+.button-group {
+  display: flex;
+  gap: var(--space-md);
+  justify-content: center;
+  
+  @media (max-width: 480px) {
+    flex-direction: column;
+    width: 100%;
+    max-width: 280px;
+    margin: 0 auto;
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.8rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 15px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  border: 2px solid transparent;
+  
+  i {
+    font-size: 18px;
+  }
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+  
+  @media (max-width: 480px) {
+    padding: 0.9rem 1.5rem;
+    font-size: 16px;
+  }
+}
+
+.btn-primary {
+  background-color: var(--fire-red);
+  color: white;
+  border-color: var(--fire-red);
+  
+  &:hover {
+    background-color: var(--fire-red-hover);
+    border-color: var(--fire-red-hover);
+  }
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--deep-ocean);
+  border-color: var(--silver-lining);
+  
+  &:hover {
+    background: var(--arctic-dawn);
+    border-color: var(--mist);
+  }
+} 

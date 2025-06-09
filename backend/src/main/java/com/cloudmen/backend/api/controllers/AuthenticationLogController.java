@@ -26,6 +26,7 @@ public class AuthenticationLogController {
      * 
      * @param page       Page number (0-based)
      * @param size       Page size
+     * @param sort       Sort parameter in format "field,direction" (optional)
      * @param email      Filter by email (optional)
      * @param domain     Filter by domain (optional)
      * @param successful Filter by success status (optional)
@@ -37,13 +38,16 @@ public class AuthenticationLogController {
     public ResponseEntity<Page<AuthenticationLog>> getLogs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sort,
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String domain,
             @RequestParam(required = false) Boolean successful,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
 
-        PageRequest pageRequest = PageRequest.of(page, size, Sort.by("timestamp").descending());
+        // Parse sort parameter or use default
+        Sort sortOrder = parseSort(sort);
+        PageRequest pageRequest = PageRequest.of(page, size, sortOrder);
 
         // If no filters are provided, return all logs
         if (email == null && domain == null && successful == null && startDate == null && endDate == null) {
@@ -53,6 +57,52 @@ public class AuthenticationLogController {
         // Otherwise, use the filtered search
         return ResponseEntity.ok(authenticationLogService.getFilteredLogs(
                 email, domain, successful, startDate, endDate, pageRequest));
+    }
+
+    /**
+     * Parse sort parameter from frontend format "field,direction"
+     * 
+     * @param sortParam Sort parameter string
+     * @return Sort object
+     */
+    private Sort parseSort(String sortParam) {
+        if (sortParam == null || sortParam.trim().isEmpty()) {
+            // Default sort: timestamp descending
+            return Sort.by("timestamp").descending();
+        }
+
+        String[] parts = sortParam.split(",");
+        if (parts.length != 2) {
+            // Invalid format, use default
+            return Sort.by("timestamp").descending();
+        }
+
+        String field = parts[0].trim();
+        String direction = parts[1].trim().toLowerCase();
+
+        // Validate field names to prevent injection
+        if (!isValidSortField(field)) {
+            field = "timestamp";
+        }
+
+        // Create sort direction
+        Sort.Direction sortDirection = "asc".equals(direction) ? Sort.Direction.ASC : Sort.Direction.DESC;
+
+        return Sort.by(sortDirection, field);
+    }
+
+    /**
+     * Validate that the sort field is allowed
+     * 
+     * @param field Field name to validate
+     * @return true if field is valid
+     */
+    private boolean isValidSortField(String field) {
+        return field.equals("timestamp") ||
+                field.equals("email") ||
+                field.equals("primaryDomain") ||
+                field.equals("successful") ||
+                field.equals("ipAddress");
     }
 
     /**
@@ -188,7 +238,11 @@ public class AuthenticationLogController {
     @GetMapping("/user/{userId}/last-login")
     public ResponseEntity<LocalDateTime> getLastLoginByUserId(@PathVariable String userId) {
         LocalDateTime lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
-        return ResponseEntity.ok(lastLogin);
+        if (lastLogin != null) {
+            return ResponseEntity.ok(lastLogin);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
     }
 
     /**
@@ -200,6 +254,10 @@ public class AuthenticationLogController {
     @GetMapping("/email/{email}/last-login")
     public ResponseEntity<LocalDateTime> getLastLoginByEmail(@PathVariable String email) {
         LocalDateTime lastLogin = authenticationLogService.getLastSuccessfulLoginByEmail(email);
-        return ResponseEntity.ok(lastLogin);
+        if (lastLogin != null) {
+            return ResponseEntity.ok(lastLogin);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

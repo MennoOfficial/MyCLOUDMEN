@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -37,6 +38,7 @@ public class TeamleaderCreditNoteService {
     // Constants for common values and messages
     private static final int DEFAULT_PAGE_SIZE = 100;
     private static final String CREDIT_NOTES_LIST_ENDPOINT = "/creditNotes.list";
+    private static final String CREDIT_NOTES_DOWNLOAD_ENDPOINT = "/creditNotes.download";
     private static final String AUTH_HEADER = "Authorization";
     private static final String CONTENT_TYPE_HEADER = "Content-Type";
     private static final String BEARER_PREFIX = "Bearer ";
@@ -72,16 +74,104 @@ public class TeamleaderCreditNoteService {
             return Collections.emptyList();
         }
 
-        // Using the standard TeamLeader API format for filtering by invoice ID
-        String requestBody = String.format(
+        log.info("Searching for credit notes for invoice ID: {}", invoiceId);
+
+        // Try the format from the API documentation first
+        String requestBody1 = String.format(
+                "{\"page\":{\"size\":%d,\"number\":1},\"filter\":{\"invoice_id\":\"%s\"}}",
+                DEFAULT_PAGE_SIZE, invoiceId);
+
+        log.debug("Credit notes API request body (format 1): {}", requestBody1);
+
+        List<TeamleaderCreditNoteListDTO> result = executeApiCall(
+                CREDIT_NOTES_LIST_ENDPOINT,
+                requestBody1,
+                this::parseApiResponseToList,
+                Collections.emptyList());
+
+        if (!result.isEmpty()) {
+            log.info("Found {} credit notes for invoice {} using format 1", result.size(), invoiceId);
+            return result;
+        }
+
+        // Try alternative format
+        String requestBody2 = String.format(
                 "{\"page\":{\"size\":%d,\"number\":1},\"filter\":{\"invoice\":{\"type\":\"invoice\",\"id\":\"%s\"}}}",
                 DEFAULT_PAGE_SIZE, invoiceId);
 
-        return executeApiCall(
+        log.debug("Credit notes API request body (format 2): {}", requestBody2);
+
+        result = executeApiCall(
                 CREDIT_NOTES_LIST_ENDPOINT,
-                requestBody,
+                requestBody2,
                 this::parseApiResponseToList,
                 Collections.emptyList());
+
+        log.info("Found {} credit notes for invoice {} using format 2", result.size(), invoiceId);
+        return result;
+    }
+
+    /**
+     * Download a credit note from TeamLeader API
+     * 
+     * @param creditNoteId The ID of the credit note to download
+     * @param format       The format for download (pdf, ubl)
+     * @return Byte array of the credit note file
+     */
+    public byte[] downloadCreditNote(String creditNoteId, String format) {
+        if (creditNoteId == null || creditNoteId.isEmpty()) {
+            log.warn("Cannot download credit note: creditNoteId is null or empty");
+            return new byte[0];
+        }
+
+        // Default to PDF if format not specified or invalid
+        String downloadFormat = (format != null && ("pdf".equals(format) || "ubl".equals(format))) ? format : "pdf";
+
+        String requestBody = String.format(
+                "{\"id\":\"%s\",\"format\":\"%s\"}",
+                creditNoteId, downloadFormat);
+
+        log.info("Attempting to download credit note {} in {} format", creditNoteId, downloadFormat);
+        log.debug("Download request body: {}", requestBody);
+
+        String accessToken = getAccessToken();
+        if (accessToken == null) {
+            log.error("Cannot download credit note: {}", ERROR_NO_ACCESS_TOKEN);
+            return new byte[0];
+        }
+
+        try {
+            log.info("Making download request to TeamLeader API for credit note {}", creditNoteId);
+
+            byte[] response = webClient.post()
+                    .uri(CREDIT_NOTES_DOWNLOAD_ENDPOINT)
+                    .header(AUTH_HEADER, BEARER_PREFIX + accessToken)
+                    .header(CONTENT_TYPE_HEADER, JSON_CONTENT_TYPE)
+                    .bodyValue(requestBody)
+                    .retrieve()
+                    .onStatus(status -> !status.is2xxSuccessful(), clientResponse -> {
+                        log.error("TeamLeader API returned error status: {} for credit note {}",
+                                clientResponse.statusCode(), creditNoteId);
+                        return clientResponse.bodyToMono(String.class)
+                                .doOnNext(body -> log.error("Error response body: {}", body))
+                                .then(Mono.error(new RuntimeException(
+                                        "Download failed with status: " + clientResponse.statusCode())));
+                    })
+                    .bodyToMono(byte[].class)
+                    .block();
+
+            if (response != null && response.length > 0) {
+                log.info("Successfully downloaded credit note {} ({} bytes)", creditNoteId, response.length);
+                return response;
+            } else {
+                log.warn("Empty response received for credit note download: {}", creditNoteId);
+                return new byte[0];
+            }
+
+        } catch (Exception e) {
+            log.error("Error downloading credit note {}: {}", creditNoteId, e.getMessage(), e);
+            return new byte[0];
+        }
     }
 
     /**
@@ -284,8 +374,11 @@ public class TeamleaderCreditNoteService {
      */
     private List<TeamleaderCreditNoteListDTO> parseApiResponseToList(JsonNode response) {
         if (response == null || !response.has("data")) {
+            log.warn("No data field in credit notes API response");
             return Collections.emptyList();
         }
+
+        log.info("Credit notes API response data: {}", response.get("data").toString());
 
         return StreamSupport.stream(response.get("data").spliterator(), false)
                 .map(this::mapToCreditNoteListDto)
@@ -335,39 +428,90 @@ public class TeamleaderCreditNoteService {
      */
     private TeamleaderCreditNoteListDTO mapToCreditNoteListDto(JsonNode node) {
         try {
+            log.debug("Mapping credit note node: {}", node.toString());
+
             TeamleaderCreditNoteListDTO dto = new TeamleaderCreditNoteListDTO();
 
             dto.setId(getTextOrNull(node, "id"));
-            dto.setNumber(getTextOrNull(node, "number"));
+
+            // Try different field names for credit note number
+            dto.setNumber(getTextOrNull(node, "credit_note_number"));
+            if (dto.getNumber() == null) {
+                dto.setNumber(getTextOrNull(node, "number"));
+            }
+
             dto.setStatus(getTextOrNull(node, "status"));
 
-            // Map date
-            if (node.has("date")) {
+            // Map date - try different field names
+            if (node.has("credit_note_date")) {
+                dto.setDate(parseLocalDate(node.get("credit_note_date")));
+            } else if (node.has("date")) {
                 dto.setDate(parseLocalDate(node.get("date")));
             }
 
-            // Map total amount
+            // Initialize total to ensure it's never null
             dto.setTotal(BigDecimal.ZERO);
+
+            // Map total amount - try multiple approaches
             if (node.has("total")) {
                 JsonNode total = node.get("total");
-                if (total.has("amount")) {
-                    dto.setTotal(parseBigDecimal(total.get("amount")));
-                }
-                if (total.has("currency")) {
-                    dto.setCurrency(getTextOrNull(total, "currency"));
+                log.debug("Total node: {}", total.toString());
+
+                if (total.isObject()) {
+                    // Try tax_inclusive first (most common in TeamLeader)
+                    if (total.has("tax_inclusive")) {
+                        JsonNode taxInclusive = total.get("tax_inclusive");
+                        if (taxInclusive.has("amount")) {
+                            BigDecimal amount = parseBigDecimal(taxInclusive.get("amount"));
+                            dto.setTotal(amount);
+                            log.debug("Set total from tax_inclusive.amount: {}", dto.getTotal());
+                        }
+                    }
+                    // Fallback to direct amount
+                    else if (total.has("amount")) {
+                        BigDecimal amount = parseBigDecimal(total.get("amount"));
+                        dto.setTotal(amount);
+                        log.debug("Set total from amount: {}", dto.getTotal());
+                    }
+
+                    // Get currency
+                    if (total.has("currency")) {
+                        dto.setCurrency(getTextOrNull(total, "currency"));
+                    } else if (total.has("tax_inclusive") && total.get("tax_inclusive").has("currency")) {
+                        dto.setCurrency(getTextOrNull(total.get("tax_inclusive"), "currency"));
+                    }
+                } else if (total.isNumber()) {
+                    // If total is directly a number
+                    BigDecimal amount = parseBigDecimal(total);
+                    dto.setTotal(amount);
+                    log.debug("Set total from direct number: {}", dto.getTotal());
                 }
             }
 
-            // Map customer name
-            if (node.has("customer")) {
-                dto.setCustomerName(getTextOrNull(node.get("customer"), "name"));
+            // Map customer name - try different possible fields
+            if (node.has("invoicee")) {
+                JsonNode invoicee = node.get("invoicee");
+                dto.setCustomerName(getTextOrNull(invoicee, "name"));
+            } else if (node.has("customer")) {
+                JsonNode customer = node.get("customer");
+                if (customer.isObject()) {
+                    dto.setCustomerName(getTextOrNull(customer, "name"));
+                } else {
+                    dto.setCustomerName(getTextOrNull(node, "customer"));
+                }
             }
 
-            // Map invoice info (using either for_invoice or invoice field)
-            JsonNode invoiceNode = node.has("for_invoice") ? node.get("for_invoice")
-                    : node.has("invoice") ? node.get("invoice") : null;
+            // Map invoice info
+            JsonNode invoiceNode = null;
+            if (node.has("invoice")) {
+                invoiceNode = node.get("invoice");
+                log.debug("Found invoice node: {}", invoiceNode.toString());
+            } else if (node.has("for_invoice")) {
+                invoiceNode = node.get("for_invoice");
+                log.debug("Found for_invoice node: {}", invoiceNode.toString());
+            }
 
-            if (invoiceNode != null) {
+            if (invoiceNode != null && invoiceNode.isObject()) {
                 dto.setInvoiceId(getTextOrNull(invoiceNode, "id"));
                 dto.setInvoiceNumber(getTextOrNull(invoiceNode, "number"));
 
@@ -377,9 +521,12 @@ public class TeamleaderCreditNoteService {
                 }
             }
 
+            log.info("Mapped credit note DTO: id={}, number={}, total={}, currency={}, invoiceId={}",
+                    dto.getId(), dto.getNumber(), dto.getTotal(), dto.getCurrency(), dto.getInvoiceId());
+
             return dto;
         } catch (Exception e) {
-            log.error(ERROR_MAPPING_CREDIT_NOTE, e.getMessage());
+            log.error(ERROR_MAPPING_CREDIT_NOTE, e.getMessage(), e);
             return null;
         }
     }
@@ -410,12 +557,19 @@ public class TeamleaderCreditNoteService {
     private BigDecimal parseBigDecimal(JsonNode node) {
         if (node != null && !node.isNull()) {
             try {
-                return new BigDecimal(node.asText());
+                if (node.isNumber()) {
+                    return new BigDecimal(node.asDouble());
+                } else if (node.isTextual()) {
+                    String text = node.asText().trim();
+                    if (!text.isEmpty()) {
+                        return new BigDecimal(text);
+                    }
+                }
             } catch (Exception e) {
                 log.debug(DEBUG_PARSE_DECIMAL, node.asText());
             }
         }
-        return null;
+        return BigDecimal.ZERO; // Return zero instead of null for amounts
     }
 
     /**

@@ -1,20 +1,35 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { EnvironmentService } from '../../../core/services/environment.service';
 import { AuthService } from '../../../core/auth/auth.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { AuthenticationLog, PageResponse } from '../../../core/models/user.model';
+import { Subscription } from 'rxjs';
+
+// Import standardized components
+import { PageHeaderComponent, PageAction } from '../../../shared/components/page-header/page-header.component';
+import { SearchFilterComponent, FilterConfig, SearchFilterEvent } from '../../../shared/components/search-filter/search-filter.component';
+import { DataTableComponent, TableColumn, TableAction, SortEvent, PaginationEvent } from '../../../shared/components/data-table/data-table.component';
+import { ModalComponent } from '../../../shared/components/modal/modal.component';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 
 @Component({
   selector: 'app-auth-logs',
   templateUrl: './auth-logs.component.html',
   styleUrls: ['./auth-logs.component.scss'],
-  imports: [CommonModule, FormsModule, LoadingSpinnerComponent],
+  imports: [
+    CommonModule, 
+    FormsModule, 
+    PageHeaderComponent,
+    SearchFilterComponent,
+    DataTableComponent,
+    ModalComponent,
+    LoadingSpinnerComponent
+  ],
   standalone: true
 })
-export class AuthLogsComponent implements OnInit {
+export class AuthLogsComponent implements OnInit, OnDestroy {
   logs: AuthenticationLog[] = [];
   loading = true;
   error = '';
@@ -24,148 +39,265 @@ export class AuthLogsComponent implements OnInit {
   pageSize = 10;
   totalItems = 0;
   totalPages = 0;
-  pageSizeOptions = [5, 10, 25, 50];
   
   // Filters
-  emailFilter = '';
-  domainFilter = '';
-  successFilter: boolean | null = null;
+  searchText = '';
   startDate: string | null = null;
   endDate: string | null = null;
   
-  // Display
-  displayedColumns = ['timestamp', 'email', 'domain', 'ipAddress', 'status', 'actions'];
+  // Sorting
+  sortColumn = 'timestamp';
+  sortDirection: 'asc' | 'desc' = 'desc';
+  
+  // Modal
   selectedLog: AuthenticationLog | null = null;
   showDetailModal = false;
-  filtersOpen = false; // Default to closed on all screen sizes
   
   // Toast notification
   showToast = false;
   toastMessage = '';
+  
+  // Subscriptions
+  private subscriptions: Subscription[] = [];
+  
+  // Configuration for standardized components
+  headerActions: PageAction[] = [
+    // Removed refresh and export buttons as requested
+  ];
+
+  filterConfigs: FilterConfig[] = [
+    {
+      key: 'startDate',
+      label: 'Start Date',
+      type: 'date'
+    },
+    {
+      key: 'endDate',
+      label: 'End Date',
+      type: 'date'
+    }
+  ];
+
+  tableColumns: TableColumn[] = [
+    {
+      key: 'timestamp',
+      label: 'Time',
+      sortable: true,
+      type: 'date'
+    },
+    {
+      key: 'email',
+      label: 'Email',
+      sortable: true,
+      type: 'text'
+    },
+    {
+      key: 'primaryDomain',
+      label: 'Domain',
+      sortable: true,
+      type: 'text'
+    },
+    {
+      key: 'ipAddress',
+      label: 'IP Address',
+      sortable: false,
+      type: 'text'
+    },
+    {
+      key: 'successful',
+      label: 'Result',
+      sortable: true,
+      type: 'badge',
+      badgeType: 'auth'
+    }
+  ];
+
+  tableActions: TableAction[] = [
+    {
+      label: 'View Details',
+      icon: 'visibility',
+      action: 'view',
+      variant: 'ghost'
+    }
+  ];
 
   constructor(
     private http: HttpClient,
     private authService: AuthService,
-    private environmentService: EnvironmentService
+    private environmentService: EnvironmentService,
+    private elementRef: ElementRef
   ) { }
 
   ngOnInit(): void {
+    this.setStartDateToYesterday();
     this.loadLogs();
-    this.setStartDateOneWeekAgo();
+  }
+
+  ngOnDestroy(): void {
+    this.subscriptions.forEach(sub => sub.unsubscribe());
   }
 
   loadLogs(): void {
+    // Cancel any previous requests to prevent race conditions
+    this.subscriptions.forEach(sub => {
+      if (!sub.closed) {
+        sub.unsubscribe();
+      }
+    });
+    this.subscriptions = [];
+    
     this.loading = true;
     this.error = '';
     
     let url = `${this.environmentService.apiUrl}/auth-logs?page=${this.currentPage}&size=${this.pageSize}`;
     
-    // Apply filters if set
+    // Apply filters to server
     const params: string[] = [];
     
-    if (this.emailFilter) {
-      params.push(`email=${encodeURIComponent(this.emailFilter)}`);
-    }
-    
-    if (this.domainFilter) {
-      params.push(`domain=${encodeURIComponent(this.domainFilter)}`);
-    }
-    
-    if (this.successFilter !== null) {
-      params.push(`successful=${this.successFilter}`);
+    // Handle search text by determining if it's an email, domain, or IP
+    if (this.searchText && this.searchText.trim().length > 0) {
+      const searchValue = this.searchText.trim();
+      
+      // Check if it looks like an email
+      if (searchValue.includes('@')) {
+        params.push(`email=${encodeURIComponent(searchValue)}`);
+      }
+      // Check if it looks like an IP address
+      else if (/^\d+\.\d+\.\d+\.\d+$/.test(searchValue)) {
+        params.push(`ipAddress=${encodeURIComponent(searchValue)}`);
+      }
+      // Otherwise treat it as a domain search (backend expects 'domain' not 'primaryDomain')
+      else {
+        params.push(`domain=${encodeURIComponent(searchValue)}`);
+      }
     }
     
     if (this.startDate) {
-      params.push(`startDate=${encodeURIComponent(this.startDate)}`);
+      // Convert date to LocalDateTime format (add time)
+      const startDateTime = this.startDate.includes('T') ? this.startDate : `${this.startDate}T00:00:00`;
+      params.push(`startDate=${encodeURIComponent(startDateTime)}`);
     }
     
     if (this.endDate) {
-      params.push(`endDate=${encodeURIComponent(this.endDate)}`);
+      // Convert date to LocalDateTime format (add end of day time)
+      const endDateTime = this.endDate.includes('T') ? this.endDate : `${this.endDate}T23:59:59`;
+      params.push(`endDate=${encodeURIComponent(endDateTime)}`);
+    }
+    
+    // Add sorting parameters
+    if (this.sortColumn) {
+      params.push(`sort=${this.sortColumn},${this.sortDirection}`);
     }
     
     if (params.length > 0) {
       url += `&${params.join('&')}`;
     }
-  
     
-    this.authService.getAccessToken().subscribe({
+    const tokenSub = this.authService.getAccessToken().subscribe({
       next: (token) => {
-        
-        this.http.get<PageResponse<AuthenticationLog>>(url, {
+        const httpSub = this.http.get<PageResponse<AuthenticationLog>>(url, {
           headers: {
             Authorization: `Bearer ${token}`
           }
         }).subscribe({
           next: (response) => {
-            this.logs = response.content;
-            this.totalItems = response.totalElements;
-            this.totalPages = response.totalPages;
+            this.logs = response.content || [];
+            this.totalItems = response.totalElements || 0;
+            this.totalPages = response.totalPages || 0;
             this.loading = false;
           },
           error: (err) => {
-            console.error('Error loading logs:', err);
-            this.error = `Failed to load authentication logs: ${err.status} ${err.statusText}`;
-            if (err.error && err.error.message) {
-              this.error += ` - ${err.error.message}`;
-            }
             this.loading = false;
+            this.error = 'Failed to load authentication logs. Please try again.';
           }
         });
+        this.subscriptions.push(httpSub);
       },
       error: (err) => {
-        console.error('Error getting token:', err);
-        this.error = 'Failed to get authentication token. Please try logging out and back in.';
         this.loading = false;
+        this.error = 'Failed to get authentication token. Please try logging out and back in.';
       }
     });
+    this.subscriptions.push(tokenSub);
   }
 
-  onPageChange(page: number): void {
-    if (page >= 0 && page < this.totalPages) {
-      this.currentPage = page;
+  // Event handlers for standardized components
+  onHeaderAction(action: PageAction): void {
+    // No actions available now
+  }
+
+  onSearchFilter(event: SearchFilterEvent): void {
+    // Handle search query
+    const newSearchQuery = event.searchQuery ? event.searchQuery.trim() : '';
+    const searchChanged = newSearchQuery !== this.searchText.trim();
+    
+    if (searchChanged) {
+      this.searchText = newSearchQuery;
+    }
+    
+    // Handle filter values
+    let filtersChanged = false;
+    if (event.filters) {
+      const newStartDate = event.filters['startDate'] || null;
+      const newEndDate = event.filters['endDate'] || null;
+      
+      if (newStartDate !== this.startDate || newEndDate !== this.endDate) {
+        this.startDate = newStartDate;
+        this.endDate = newEndDate;
+        filtersChanged = true;
+      }
+    }
+    
+    // Reload if anything changed
+    if (searchChanged || filtersChanged) {
+      this.currentPage = 0; // Reset to first page
       this.loadLogs();
     }
   }
-  
-  onPageSizeChange(size: number): void {
-    this.pageSize = size;
-    this.currentPage = 0; // Reset to first page
+
+  onSort(event: SortEvent): void {
+    // Map frontend column names to backend field names if needed
+    let backendColumn = event.column;
+    switch (event.column) {
+      case 'successful':
+        backendColumn = 'successful'; // Ensure this matches backend field
+        break;
+      case 'timestamp':
+        backendColumn = 'timestamp'; // Ensure this matches backend field
+        break;
+      case 'email':
+        backendColumn = 'email'; // Ensure this matches backend field
+        break;
+      case 'primaryDomain':
+        backendColumn = 'primaryDomain'; // Ensure this matches backend field
+        break;
+      default:
+        backendColumn = event.column;
+    }
+    
+    this.sortColumn = backendColumn;
+    this.sortDirection = event.direction;
+    this.currentPage = 0; // Reset to first page when sorting
+    
     this.loadLogs();
   }
 
-  applyFilters(): void {
-    this.currentPage = 0; // Reset to first page
+  onPagination(event: PaginationEvent): void {
+    this.currentPage = event.pageIndex;
+    this.pageSize = event.pageSize;
     this.loadLogs();
-    
-    // Close filters on mobile after applying
-    if (window.innerWidth <= 768) {
-      this.filtersOpen = false;
+  }
+
+  onTableAction(event: { action: string, item: any }): void {
+    switch (event.action) {
+      case 'view':
+        this.showDetails(event.item);
+        break;
     }
   }
 
-  /**
-   * Toggle the visibility of filters on all screen sizes
-   */
-  toggleFilters(): void {
-    this.filtersOpen = !this.filtersOpen;
-  }
-
-  /**
-   * Clear all filters
-   * @param event Optional event to stop propagation when clicked inside the header
-   */
-  clearFilters(event?: Event): void {
-    if (event) {
-      event.stopPropagation(); // Prevent toggling filters when clicking the clear button
-    }
-    
-    this.emailFilter = '';
-    this.domainFilter = '';
-    this.successFilter = null;
-    this.startDate = null;
-    this.endDate = null;
-    
-    this.applyFilters();
+  onRowClick(log: AuthenticationLog): void {
+    this.showDetails(log);
   }
 
   formatDate(dateString: string): string {
@@ -178,16 +310,23 @@ export class AuthLogsComponent implements OnInit {
   }
 
   getStatusText(successful: boolean): string {
-    return successful ? 'Success' : 'Failed';
+    return successful ? 'Login Success' : 'Login Failed';
   }
   
   showDetails(log: AuthenticationLog): void {
-    this.selectedLog = log;
-    this.showDetailModal = true;
+    // Ensure clean state before opening new modal
+    this.closeDetails();
+    
+    // Small delay to ensure DOM updates before opening new modal
+    setTimeout(() => {
+      this.selectedLog = log;
+      this.showDetailModal = true;
+    }, 10);
   }
   
   closeDetails(): void {
     this.showDetailModal = false;
+    // Reset selected log immediately to prevent state issues
     this.selectedLog = null;
   }
   
@@ -217,37 +356,10 @@ export class AuthLogsComponent implements OnInit {
     if (userAgent.includes('Tablet')) return 'Tablet';
     return 'Desktop';
   }
-  
-  // Generate pagination array for template
-  getPaginationArray(): number[] {
-    const paginationArray: number[] = [];
-    const maxPagesToShow = 5;
-    
-    if (this.totalPages <= maxPagesToShow) {
-      // Show all pages if there are few
-      for (let i = 0; i < this.totalPages; i++) {
-        paginationArray.push(i);
-      }
-    } else {
-      // Show a window of pages around current page
-      let startPage = Math.max(0, this.currentPage - Math.floor(maxPagesToShow / 2));
-      let endPage = Math.min(this.totalPages - 1, startPage + maxPagesToShow - 1);
-      
-      // Adjust if we're near the end
-      if (endPage - startPage < maxPagesToShow - 1) {
-        startPage = Math.max(0, endPage - maxPagesToShow + 1);
-      }
-      
-      for (let i = startPage; i <= endPage; i++) {
-        paginationArray.push(i);
-      }
-    }
-    
-    return paginationArray;
-  }
-  setStartDateOneWeekAgo() {
+
+  setStartDateToYesterday() {
     const currentDate = new Date();
-    currentDate.setDate(currentDate.getDate() - 7); // Subtract 7 days for 1 week ago
+    currentDate.setDate(currentDate.getDate() - 1); // Show last 24 hours instead of 7 days
 
     // Format the date to match the datetime-local input format (YYYY-MM-DDTHH:MM)
     const year = currentDate.getFullYear();
@@ -265,15 +377,11 @@ export class AuthLogsComponent implements OnInit {
    * @param text The text to copy
    */
   copyToClipboard(text: string): void {
-    navigator.clipboard.writeText(text).then(
-      () => {
-        this.showToastNotification('Copied to clipboard');
-      },
-      (err) => {
-        console.error('Could not copy text: ', err);
-        this.showToastNotification('Failed to copy text');
-      }
-    );
+    navigator.clipboard.writeText(text).then(() => {
+      // Successfully copied
+    }).catch(err => {
+      // Copy failed
+    });
   }
   
   /**

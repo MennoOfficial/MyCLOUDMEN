@@ -403,4 +403,30 @@ public class AuthenticationLogService {
             throw new RuntimeException("Failed to retrieve last login for email", e);
         }
     }
+
+    /**
+     * Get the first successful login time for a user by ID
+     * 
+     * @param userId The ID of the user
+     * @return The timestamp of the first successful login, or null if no successful
+     *         login found
+     */
+    public LocalDateTime getFirstSuccessfulLoginByUserId(String userId) {
+        AuthenticationLog firstLogin = authenticationLogRepository
+                .findTopByUserIdAndSuccessfulOrderByTimestampAsc(userId, true);
+        return firstLogin != null ? firstLogin.getTimestamp() : null;
+    }
+
+    /**
+     * Get the first successful login time for a user by email
+     * 
+     * @param email The email of the user
+     * @return The timestamp of the first successful login, or null if no successful
+     *         login found
+     */
+    public LocalDateTime getFirstSuccessfulLoginByEmail(String email) {
+        AuthenticationLog firstLogin = authenticationLogRepository
+                .findTopByEmailAndSuccessfulOrderByTimestampAsc(email, true);
+        return firstLogin != null ? firstLogin.getTimestamp() : null;
+    }
 }

@@ -131,6 +131,14 @@ TEAMLEADER_REDIRECT_URI=http://localhost:8080/api/teamleader/oauth/callback
 - Use environment variables in production
 - Regularly rotate your Client Secret
 
+## Production Deployment
+
+For production deployment with Docker and proper SSL setup, see the [mycloudmen-deploy](https://github.com/MennoOfficial/mycloudmen-deploy) repository which handles:
+- Environment variable configuration
+- SSL certificate management
+- Service orchestration
+- Secure credential management
+
 ## Resources
 
 - [Teamleader API Documentation](https://developer.teamleader.eu/)

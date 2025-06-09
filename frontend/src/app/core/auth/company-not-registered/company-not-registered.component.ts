@@ -22,12 +22,27 @@ export class CompanyNotRegisteredComponent implements OnInit, OnDestroy {
     private route: ActivatedRoute,
     private authService: AuthService
   ) {
-    // Set the flag immediately in constructor to prevent any race conditions
-    localStorage.setItem('company_not_registered_viewed', 'true');
-    console.log('[CompanyNotRegistered] Flag set in constructor');
+    // Set the flag that user has seen the company not registered page
+    sessionStorage.setItem('has_seen_company_not_registered', 'true');
   }
   
   ngOnInit(): void {
+    // Ensure the flag is set when component initializes
+    sessionStorage.setItem('has_seen_company_not_registered', 'true');
+    
+    // If the flag disappears for some reason, set it again
+    const intervalId = setInterval(() => {
+      const flag = sessionStorage.getItem('has_seen_company_not_registered');
+      if (!flag) {
+        sessionStorage.setItem('has_seen_company_not_registered', 'true');
+      }
+    }, 1000);
+
+    // Clear interval after 30 seconds to avoid running indefinitely
+    setTimeout(() => {
+      clearInterval(intervalId);
+    }, 30000);
+    
     // Get domain from query params
     this.subscriptions.add(
       this.route.queryParams.subscribe(params => {
@@ -36,18 +51,6 @@ export class CompanyNotRegisteredComponent implements OnInit, OnDestroy {
         }
       })
     );
-    
-    // Also set flag in ngOnInit to ensure it's set
-    localStorage.setItem('company_not_registered_viewed', 'true');
-    console.log('[CompanyNotRegistered] Flag set in ngOnInit');
-    
-    // Set up a periodic check to ensure flag stays set
-    this.checkFlagInterval = setInterval(() => {
-      if (localStorage.getItem('company_not_registered_viewed') !== 'true') {
-        console.log('[CompanyNotRegistered] Flag was removed, setting it again');
-        localStorage.setItem('company_not_registered_viewed', 'true');
-      }
-    }, 5000); // Check every 5 seconds
     
     // Get the current user and ensure their company status is set correctly
     this.authService.user$.subscribe(user => {
@@ -64,12 +67,12 @@ export class CompanyNotRegisteredComponent implements OnInit, OnDestroy {
   }
   
   ngOnDestroy(): void {
-    localStorage.removeItem('company_not_registered_viewed');
+    // Keep the flag set even when component is destroyed
+    sessionStorage.setItem('has_seen_company_not_registered', 'true');
     this.subscriptions.unsubscribe();
     if (this.checkFlagInterval) {
       clearInterval(this.checkFlagInterval);
     }
-    console.log('[CompanyNotRegistered] Component destroyed, flag remains set');
   }
   
   contactSupport(): void {

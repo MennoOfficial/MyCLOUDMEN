@@ -80,7 +80,7 @@ public class SecurityConfig {
                     authz
                             // Public endpoints that don't require authentication
                             .requestMatchers("/api/public/**", "/api/auth0/**").permitAll()
-                            // Authentication logs endpoint - temporarily allow all access for debugging
+                            // Authentication logs endpoint
                             .requestMatchers("/api/auth-logs/**").permitAll()
                             // Teamleader OAuth2 endpoints
                             .requestMatchers("/api/teamleader/oauth/**").permitAll()

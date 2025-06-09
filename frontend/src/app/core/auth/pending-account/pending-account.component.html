@@ -1,41 +1,49 @@
 <div class="pending-container">
   <div class="logo-container">
     <img
-      class="logo"
       src="https://images.squarespace-cdn.com/content/v1/5ccbf1d3af468332420ae5e1/29cace80-077c-4a83-b165-c29a38b583d8/embleem_transp_white_1700.png"
       alt="CLOUDMEN Logo"
+      class="logo"
     />
   </div>
 
   <div class="content-card">
-    <div class="icon-container">
-      <i class="material-icons">hourglass_empty</i>
+    <!-- Logo integrated into card header -->
+    <div class="card-logo">
+      <img
+        src="https://images.squarespace-cdn.com/content/v1/5ccbf1d3af468332420ae5e1/29cace80-077c-4a83-b165-c29a38b583d8/embleem_transp_white_1700.png"
+        alt="CLOUDMEN Logo"
+      />
     </div>
 
-    <h1>Account Pending Approval</h1>
+    <!-- Main content area -->
+    <div class="card-content">
+      <div class="icon-container">
+        <i class="material-icons centered-icon">hourglass_empty</i>
+      </div>
 
-    <div class="message-container">
-      <p class="welcome-message">Welcome to CLOUDMEN!</p>
+      <h1>Awaiting Approval</h1>
 
-      <p class="info-message">
-        An administrator of your company needs to review and activate your
-        account. Please contact your administrator to get access.
-      </p>
+      <div class="message-container">
+        <p class="main-message">Your account has been created successfully.</p>
 
-      <p class="action-message">
-        If you have any questions, please contact CLOUDMEN.
-      </p>
-    </div>
+        <p class="action-message">
+          You need approval from an administrator at your company to access the
+          system. Please contact your company administrator or wait for them to
+          approve your account.
+        </p>
+      </div>
 
-    <div class="button-group">
-      <button class="btn btn-primary" (click)="contactAdmin()">
-        <i class="material-icons">email</i>
-        Contact CLOUDMEN
-      </button>
-      <button class="btn btn-secondary" (click)="logout()">
-        <i class="material-icons">logout</i>
-        Logout
-      </button>
+      <div class="button-group">
+        <button class="btn btn-primary" (click)="contactAdmin()">
+          <i class="material-icons">email</i>
+          Contact Support
+        </button>
+        <button class="btn btn-secondary" (click)="logout()">
+          <i class="material-icons">logout</i>
+          Logout
+        </button>
+      </div>
     </div>
   </div>
 </div>

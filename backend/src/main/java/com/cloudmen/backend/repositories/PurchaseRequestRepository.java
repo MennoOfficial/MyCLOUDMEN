@@ -44,4 +44,23 @@ public interface PurchaseRequestRepository extends MongoRepository<PurchaseReque
      * @return List of the 10 most recent purchase requests
      */
     List<PurchaseRequest> findTop10ByOrderByRequestDateDesc();
+
+    /**
+     * Find all purchase requests for a domain with pagination.
+     * This allows filtering by company domain to show requests from all users in
+     * the same company.
+     * 
+     * @param domain   The domain to filter by
+     * @param pageable The pagination information
+     * @return Page of purchase requests for the domain
+     */
+    Page<PurchaseRequest> findByDomain(String domain, Pageable pageable);
+
+    /**
+     * Find all purchase requests for a domain.
+     * 
+     * @param domain The domain to filter by
+     * @return List of purchase requests for the domain
+     */
+    List<PurchaseRequest> findByDomain(String domain);
 }

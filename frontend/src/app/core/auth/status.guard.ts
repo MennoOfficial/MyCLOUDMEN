@@ -27,6 +27,7 @@ export class StatusGuard implements CanActivate {
       state.url.includes('/sign-up') ||
       state.url.includes('/callback') ||
       state.url.includes('/company-inactive') ||
+      state.url.includes('/company-suspended') ||
       state.url.includes('/company-not-registered') ||
       state.url.includes('/pending-account') ||
       state.url.includes('/account-deactivated') ||

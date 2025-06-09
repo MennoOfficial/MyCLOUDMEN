@@ -49,6 +49,21 @@ public class PurchaseRequestService {
     }
 
     /**
+     * Get purchase requests by domain with pagination.
+     * This allows filtering by company domain to show requests from all users in
+     * the same company.
+     *
+     * @param domain   The domain to filter by
+     * @param pageable Pagination information
+     * @return Page of purchase requests for the domain
+     */
+    public Page<PurchaseRequest> getPurchaseRequestsByDomain(String domain, Pageable pageable) {
+        log.info("Getting purchase requests for domain: {}, page: {}, size: {}",
+                domain, pageable.getPageNumber(), pageable.getPageSize());
+        return purchaseRequestRepository.findByDomain(domain, pageable);
+    }
+
+    /**
      * Get a purchase request by ID.
      *
      * @param id The purchase request ID
@@ -65,8 +80,8 @@ public class PurchaseRequestService {
      * @return The saved purchase request
      */
     public PurchaseRequest savePurchaseRequest(PurchaseRequest purchaseRequest) {
-        log.info("Saving purchase request with ID: {}, Status: {}",
-                purchaseRequest.getId(), purchaseRequest.getStatus());
+        log.info("Saving purchase request with ID: {}, Status: {}, Type: {}",
+                purchaseRequest.getId(), purchaseRequest.getStatus(), purchaseRequest.getType());
 
         try {
             // Set the processed date if the status is either approved or rejected
@@ -75,13 +90,19 @@ public class PurchaseRequestService {
             }
 
             PurchaseRequest savedRequest = purchaseRequestRepository.save(purchaseRequest);
+
+            if (savedRequest == null) {
+                throw new RuntimeException("Repository save returned null");
+            }
+
             log.info("Successfully saved purchase request with ID: {}, Status: {}",
                     savedRequest.getId(), savedRequest.getStatus());
             return savedRequest;
+
         } catch (Exception e) {
             log.error("Error saving purchase request with ID {}: {}",
                     purchaseRequest.getId(), e.getMessage(), e);
-            throw e;
+            throw new RuntimeException("Failed to save purchase request: " + e.getMessage(), e);
         }
     }
 
@@ -144,15 +165,26 @@ public class PurchaseRequestService {
         // Generate a new unique ID
         String requestId = UUID.randomUUID().toString();
 
+        // Ensure domain is set - use from request or extract from email
+        String domain = request.getDomain();
+        if (domain == null || domain.trim().isEmpty()) {
+            domain = extractDomainFromEmail(userEmail);
+            log.info("Domain not provided in request, extracted from email: {}", domain);
+        }
+
         // Create a new purchase request
         PurchaseRequest purchaseRequest = new PurchaseRequest(requestId, userEmail);
         purchaseRequest.setType("licenses");
+        purchaseRequest.setSkuId(request.getSkuId());
         purchaseRequest.setLicenseType(request.getLicenseType());
         purchaseRequest.setQuantity(request.getCount());
-        purchaseRequest.setDomain(request.getDomain());
+        purchaseRequest.setDomain(domain);
         purchaseRequest.setCost(request.getCost());
         purchaseRequest.setStatus("PENDING");
         purchaseRequest.setRequestDate(new Date());
+
+        log.info("Created license request with SKU ID: {} and license type: {} for domain: {}",
+                request.getSkuId(), request.getLicenseType(), domain);
 
         // Save and return the request
         return savePurchaseRequest(purchaseRequest);
@@ -172,15 +204,34 @@ public class PurchaseRequestService {
         // Generate a new unique ID
         String requestId = UUID.randomUUID().toString();
 
+        // Extract domain from user email
+        String domain = extractDomainFromEmail(userEmail);
+
         // Create a new purchase request
         PurchaseRequest purchaseRequest = new PurchaseRequest(requestId, userEmail);
         purchaseRequest.setType("credits");
         purchaseRequest.setQuantity(quantity);
         purchaseRequest.setCost(cost);
+        purchaseRequest.setDomain(domain);
         purchaseRequest.setStatus("PENDING");
         purchaseRequest.setRequestDate(new Date());
 
+        log.info("Created credits request for domain: {}", domain);
+
         // Save and return the request
         return savePurchaseRequest(purchaseRequest);
+    }
+
+    /**
+     * Extract domain from email address.
+     * 
+     * @param email The email address
+     * @return The domain part of the email
+     */
+    private String extractDomainFromEmail(String email) {
+        if (email == null || !email.contains("@")) {
+            return "unknown.com";
+        }
+        return email.substring(email.indexOf("@") + 1);
     }
 }

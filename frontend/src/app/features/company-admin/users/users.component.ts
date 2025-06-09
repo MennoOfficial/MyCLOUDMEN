@@ -7,10 +7,25 @@ import { User as AuthUser } from '../../../core/models/auth.model';
 import { EnvironmentService } from '../../../core/services/environment.service';
 import { CompanyUser, PendingUser, SelectedUser } from '../../../core/models/user.model';
 
+// Import standardized components
+import { PageHeaderComponent, PageAction } from '../../../shared/components/page-header/page-header.component';
+import { SearchFilterComponent, FilterConfig, SearchFilterEvent } from '../../../shared/components/search-filter/search-filter.component';
+import { DataTableComponent, TableColumn, TableAction, SortEvent, PaginationEvent } from '../../../shared/components/data-table/data-table.component';
+import { UserDetailModalComponent, UserDetailData, UserUpdateEvent } from '../../../shared/components/user-detail-modal/user-detail-modal.component';
+import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
+
 @Component({
   selector: 'app-users',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [
+    CommonModule, 
+    FormsModule,
+    PageHeaderComponent,
+    SearchFilterComponent,
+    DataTableComponent,
+    UserDetailModalComponent,
+    LoadingSpinnerComponent
+  ],
   templateUrl: './users.component.html',
   styleUrl: './users.component.scss'
 })
@@ -47,18 +62,86 @@ export class UsersComponent implements OnInit {
   // User detail popup
   showUserDetailPopup = false;
   selectedUser: SelectedUser | null = null;
-  availableStatuses = ['Active', 'Inactive'];
+  selectedUserForModal: UserDetailData | null = null;
+  
+  // Rejected user popup
+  showRejectedUserPopup = false;
+  selectedRejectedUser: SelectedUser | null = null;
+  showAcceptConfirmation = false;
+  
+  availableStatuses = ['Active', 'Inactive', 'Rejected'];
   availableRoles = ['COMPANY_USER', 'COMPANY_ADMIN'];
   updatingUser = false;
 
-  // Add these properties at the class level
+  // State management
   showToast = false;
   toastMessage = '';
   toastType: 'success' | 'error' = 'success';
 
-  // Toast notifications
-  showApprovePopup = false;
-  showRejectPopup = false;
+  // Configuration for standardized components
+  headerActions: PageAction[] = [
+    // Can add actions like "Invite User" later if needed
+  ];
+
+  filterConfigs: FilterConfig[] = [
+    {
+      key: 'status',
+      label: 'Status',
+      type: 'select',
+      options: [
+        { value: 'Active', label: 'Active' },
+        { value: 'Inactive', label: 'Inactive' }
+      ]
+    },
+    {
+      key: 'role',
+      label: 'Role',
+      type: 'select',
+      options: [
+        { value: 'COMPANY_USER', label: 'User' },
+        { value: 'COMPANY_ADMIN', label: 'Admin' }
+      ]
+    }
+  ];
+
+  tableColumns: TableColumn[] = [
+    {
+      key: 'name',
+      label: 'Name', 
+      sortable: true,
+      type: 'avatar'
+    },
+    {
+      key: 'email',
+      label: 'Email',
+      sortable: true,
+      type: 'text'
+    },
+    {
+      key: 'role',
+      label: 'Role',
+      sortable: true,
+      type: 'badge'
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      sortable: true,
+      type: 'badge',
+      badgeType: 'status'
+    },
+    {
+      key: 'lastLogin',
+      label: 'Last Login',
+      sortable: true,
+      type: 'date',
+      hideOnMobile: true
+    }
+  ];
+
+  tableActions: TableAction[] = [
+    // Actions will be handled through row clicks for user details
+  ];
 
   constructor(
     private apiService: ApiService,
@@ -68,6 +151,16 @@ export class UsersComponent implements OnInit {
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
+    const target = event.target as Element;
+    
+    // Check if the click is outside the notification system
+    if (this.showNotificationPopup) {
+      const notificationSection = target.closest('.notification-section');
+      if (!notificationSection) {
+        this.showNotificationPopup = false;
+      }
+    }
+
     // Check if click was outside the user detail popup
     if (this.showUserDetailPopup && this.selectedUser) {
       const popupElement = document.querySelector('.user-detail-popup');
@@ -84,21 +177,6 @@ export class UsersComponent implements OnInit {
         
         if (!clickedOnTrigger) {
           this.hideUserDetail();
-        }
-      }
-    }
-
-    // Check if click was outside the notification popup
-    if (this.showNotificationPopup) {
-      const notificationBell = document.querySelector('.notification-bell');
-      const notificationPopup = document.querySelector('.notification-popup');
-      
-      if (notificationBell && notificationPopup) {
-        const clickedInsideBell = notificationBell.contains(event.target as Node);
-        const clickedInsidePopup = notificationPopup.contains(event.target as Node);
-        
-        if (!clickedInsideBell && !clickedInsidePopup && !event.defaultPrevented) {
-          this.showNotificationPopup = false;
         }
       }
     }
@@ -120,10 +198,59 @@ export class UsersComponent implements OnInit {
         this.cancelUserAction();
       }
     }
+    
+    // Check if click was outside the rejected user popup
+    if (this.showRejectedUserPopup) {
+      const rejectedUserPopup = document.querySelector('.rejected-user-modal');
+      if (rejectedUserPopup && !rejectedUserPopup.contains(event.target as Node) && 
+          !event.defaultPrevented) {
+        this.closeRejectedUserPopup();
+      }
+    }
   }
 
   ngOnInit(): void {
     this.initializeCompanyDomain();
+  }
+
+  // Event handlers for standardized components
+  onHeaderAction(action: PageAction): void {
+    switch (action.action) {
+      case 'invite':
+        // Handle invite user action
+        break;
+    }
+  }
+
+  onSearchFilter(event: SearchFilterEvent): void {
+    this.searchQuery = event.searchQuery;
+    this.statusFilter = event.filters['status'] || 'all';
+    this.roleFilter = event.filters['role'] || 'all';
+    this.applyFilters();
+  }
+
+  onSort(event: SortEvent): void {
+    // Map avatar column to name for sorting
+    const sortColumn = event.column === 'name' ? 'name' : event.column;
+    this.sortUsers(sortColumn, false);
+    this.sortDirection = event.direction;
+  }
+
+  onTableAction(event: { action: string, item: any }): void {
+    switch (event.action) {
+      case 'view':
+        this.showUserDetail(event.item);
+        break;
+    }
+  }
+
+  onRowClick(user: CompanyUser): void {
+    // Check if this is a rejected user
+    if (user.status === 'Rejected' || user.status === 'REJECTED') {
+      this.showRejectedUserDetail(user);
+    } else {
+      this.showUserDetail(user);
+    }
   }
 
   private initializeCompanyDomain(): void {
@@ -158,22 +285,20 @@ export class UsersComponent implements OnInit {
     this.loadingUsers = true;
     this.error = false; // Reset error flag
     
-    // Call the API to get users with the company's domain
-    this.apiService.get<any[]>(`users?domain=${this.companyDomain}&excludeStatus=PENDING`)
+    // Call the new API endpoint that includes last login times
+    this.apiService.get<any[]>(`users/with-last-login?domain=${this.companyDomain}&excludeStatus=PENDING`)
       .subscribe({
         next: (users) => {
           try {
             // Map API response to User interface format
-            this.companyUsers = users.map(user => {
-              const processedUser = {
+            this.companyUsers = Array.isArray(users) ? users.map(user => {
+              const processedUser: CompanyUser = {
                 id: user.id,
                 name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
                 email: user.email,
-                role: user.roles && user.roles.length > 0 ? user.roles[0] : 'COMPANY_USER',
-                status: user.status === 'ACTIVATED' ? 'Active' : 
-                       user.status === 'DEACTIVATED' ? 'Inactive' : 
-                       user.status,
-                lastLogin: user.lastLogin || null,
+                role: user.role || user.roles?.[0] || 'COMPANY_USER',
+                status: user.status,
+                lastLogin: user.lastLogin || undefined,
                 picture: user.picture || ''
               };
               
@@ -183,7 +308,7 @@ export class UsersComponent implements OnInit {
               }
               
               return processedUser;
-            });
+            }) : [];
             
             // Initialize filtered users with all users
             this.filteredUsers = [...this.companyUsers];
@@ -210,7 +335,7 @@ export class UsersComponent implements OnInit {
     }
     
     // Call the API to get pending users for the domain
-    this.apiService.get<PendingUser[]>(`users?domain=${encodeURIComponent(this.companyDomain)}&status=PENDING`)
+    this.apiService.get<any[]>(`users?domain=${encodeURIComponent(this.companyDomain)}&status=PENDING`)
       .subscribe({
         next: (pendingUsers) => {
           // Process the results
@@ -218,11 +343,24 @@ export class UsersComponent implements OnInit {
             this.pendingUsers = pendingUsers
               .filter(user => user != null) // Filter nulls just in case
               .map(user => {
-                // Process profile image URL if it exists
-                if (user.picture) {
-                  user.picture = this.getProxyImageUrl(user.picture);
-                }
-                return user;
+                // Map backend fields to frontend PendingUser interface
+                const mappedUser: PendingUser = {
+                  id: user.id,
+                  name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+                  email: user.email,
+                  requestedAt: user.dateTimeAdded || user.requestedAt || new Date().toISOString(), // Map dateTimeAdded to requestedAt
+                  status: user.status,
+                  primaryDomain: user.primaryDomain,
+                  roles: user.roles || [],
+                  firstName: user.firstName,
+                  lastName: user.lastName,
+                  picture: user.picture ? this.getProxyImageUrl(user.picture) : '',
+                  auth0Id: user.auth0Id,
+                  dateTimeAdded: user.dateTimeAdded,
+                  dateTimeChanged: user.dateTimeChanged
+                };
+                
+                return mappedUser;
               });
             
             this.pendingCount = this.pendingUsers.length;
@@ -302,7 +440,10 @@ export class UsersComponent implements OnInit {
       roles: user.roles
     };
     
-    this.showApprovePopup = true;
+    // Set up confirmation popup
+    this.confirmAction = 'approve';
+    this.showUserActionConfirmPopup = true;
+    this.showNotificationPopup = false; // Close notification dropdown
   }
 
   rejectUser(userId: string): void {
@@ -328,7 +469,10 @@ export class UsersComponent implements OnInit {
       roles: user.roles
     };
     
-    this.showRejectPopup = true;
+    // Set up confirmation popup
+    this.confirmAction = 'reject';
+    this.showUserActionConfirmPopup = true;
+    this.showNotificationPopup = false; // Close notification dropdown
   }
   
   confirmUserAction(): void {
@@ -397,40 +541,16 @@ export class UsersComponent implements OnInit {
       this.filteredUsers = [...this.companyUsers];
     }
     
-    // Close the approval popup
-    this.showApprovePopup = false;
-    
     // Call the API to approve the pending user
-    
-    // Use the correct API endpoint format - users/pending/{id}/approve
-    this.apiService.post(`users/pending/${userId}/approve`, {})
-      .subscribe({
-        next: (response) => {
-          // Display success message using toast
-          this.showToastNotification('User has been approved successfully', 'success');
-          
-          // Refresh the company users list to ensure data consistency
-          this.fetchCompanyUsers();
-        },
-        error: (err) => {
-          // Show error toast
-          this.showToastNotification(`Failed to approve user: ${err.message || 'Unknown error'}`, 'error');
-          
-          // Revert the optimistic update if the API call fails
-          if (this.selectedUser) {
-            // Add back to pending users
-            if (this.pendingUsers) {
-              this.pendingUsers.push(pendingUser);
-              this.pendingCount = this.pendingUsers.length;
-              this.hasPendingUsers = true;
-            }
-            
-            // Remove from company users
-            this.companyUsers = this.companyUsers.filter(u => u.id !== userId);
-            this.filteredUsers = [...this.companyUsers];
-          }
-        }
-      });
+    this.apiService.post(`users/pending/${userId}/approve`, {}).subscribe({
+      next: (response) => {
+        this.showToastNotification('User approved successfully', 'success');
+        this.fetchPendingUsers();
+      },
+      error: (error) => {
+        this.showToastNotification('Error approving user: ' + (error.error?.message || error.message), 'error');
+      }
+    });
   }
   
   processRejection(): void {
@@ -456,27 +576,16 @@ export class UsersComponent implements OnInit {
       this.hasPendingUsers = this.pendingCount > 0;
     }
     
-    // Close the rejection popup
-    this.showRejectPopup = false;
-    
     // Call the API to reject the pending user
-    this.apiService.post(`users/pending/${userId}/reject`, {})
-      .subscribe({
-        next: (response) => {
-          this.showToastNotification('User has been rejected successfully', 'success');
-        },
-        error: (err) => {
-          // Show error toast
-          this.showToastNotification(`Failed to reject user: ${err.message || 'Unknown error'}`, 'error');
-          
-          // Revert the optimistic update if the API call fails
-          if (this.selectedUser && this.pendingUsers) {
-            this.pendingUsers.push(pendingUser);
-            this.pendingCount = this.pendingUsers.length;
-            this.hasPendingUsers = true;
-          }
-        }
-      });
+    this.apiService.post(`users/pending/${userId}/reject`, {}).subscribe({
+      next: (response: any) => {
+        this.showToastNotification('User rejected successfully', 'success');
+        this.fetchPendingUsers();
+      },
+      error: (error) => {
+        this.showToastNotification('Error rejecting user: ' + (error.error?.message || error.message), 'error');
+      }
+    });
   }
 
   /**
@@ -560,6 +669,10 @@ export class UsersComponent implements OnInit {
         return 'Active';
       case 'DEACTIVATED':
         return 'Inactive';
+      case 'REJECTED':
+        return 'Rejected';
+      case 'PENDING':
+        return 'Pending';
       default:
         return status;
     }
@@ -674,6 +787,12 @@ export class UsersComponent implements OnInit {
         case 'status':
           comparison = this.formatStatus(a.status).localeCompare(this.formatStatus(b.status));
           break;
+        case 'lastLogin':
+          // Handle lastLogin sorting - treat null/undefined as oldest dates
+          const dateA = a.lastLogin ? new Date(a.lastLogin).getTime() : 0;
+          const dateB = b.lastLogin ? new Date(b.lastLogin).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
         default:
           comparison = 0;
       }
@@ -698,8 +817,20 @@ export class UsersComponent implements OnInit {
 
   // Method to show user detail popup
   showUserDetail(user: any): void {
-    // Convert the CompanyUser to SelectedUser format
+    // Convert the CompanyUser to SelectedUser format (for backward compatibility)
     this.selectedUser = {
+      id: user.id,
+      firstName: user.name.split(' ')[0] || '',
+      lastName: user.name.split(' ').slice(1).join(' ') || '',
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      picture: user.picture,
+      lastLogin: user.lastLogin
+    };
+
+    // Convert to UserDetailData format for the new modal
+    this.selectedUserForModal = {
       id: user.id,
       firstName: user.name.split(' ')[0] || '',
       lastName: user.name.split(' ').slice(1).join(' ') || '',
@@ -713,50 +844,6 @@ export class UsersComponent implements OnInit {
     this.showUserDetailPopup = true;
   }
 
-  /**
-   * Fetch the last login time for a user, trying by ID first and then falling back to email if needed
-   * @param user The user to fetch last login for
-   */
-  private fetchLastLoginTime(user: CompanyUser): void {
-    // The API returns a LocalDateTime which is serialized as a string
-    this.apiService.get<string>(`auth-logs/user/${user.id}/last-login`).subscribe({
-      next: (lastLoginTime) => {
-        if (lastLoginTime && this.selectedUser) {
-          this.selectedUser.lastLogin = lastLoginTime;
-        } else if (this.selectedUser) {
-          // If no login found by ID, try by email as fallback
-          this.fetchLastLoginByEmail(user.email);
-        }
-      },
-      error: (err) => {
-        // On error, try by email as fallback
-        if (this.selectedUser) {
-          this.fetchLastLoginByEmail(user.email);
-        }
-      }
-    });
-  }
-  
-  /**
-   * Fetch the last login time for a user by email
-   * @param email The user's email
-   */
-  private fetchLastLoginByEmail(email: string): void {
-    // Encode the email for URL safety
-    const encodedEmail = encodeURIComponent(email);
-    
-    this.apiService.get<string>(`auth-logs/email/${encodedEmail}/last-login`).subscribe({
-      next: (lastLoginTime) => {
-        if (lastLoginTime && this.selectedUser) {
-          this.selectedUser.lastLogin = lastLoginTime;
-        }
-      },
-      error: (err) => {
-        // Silent failure - last login time is not critical
-      }
-    });
-  }
-
   // Method to hide user detail popup
   hideUserDetail(): void {
     this.showUserDetailPopup = false;
@@ -765,6 +852,75 @@ export class UsersComponent implements OnInit {
       // Restore body scrolling
       document.body.style.overflow = '';
     }, 200); // Small delay to allow animation to complete
+  }
+
+  // Method to show rejected user detail popup
+  showRejectedUserDetail(user: CompanyUser): void {
+    this.selectedRejectedUser = {
+      id: user.id,
+      firstName: user.name.split(' ')[0] || '',
+      lastName: user.name.split(' ').slice(1).join(' ') || '',
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      picture: user.picture,
+      lastLogin: user.lastLogin,
+      primaryDomain: this.companyDomain,
+      requestedAt: user.lastLogin || new Date().toISOString() // Use lastLogin as fallback for requestedAt
+    };
+    
+    this.showRejectedUserPopup = true;
+    this.showAcceptConfirmation = false; // Reset confirmation state
+  }
+
+  // Method to close rejected user popup
+  closeRejectedUserPopup(): void {
+    this.showRejectedUserPopup = false;
+    this.showAcceptConfirmation = false;
+    setTimeout(() => {
+      this.selectedRejectedUser = null;
+    }, 200);
+  }
+
+  // Method to show accept confirmation dialog
+  showAcceptConfirmationDialog(): void {
+    this.showAcceptConfirmation = true;
+  }
+
+  // Method to hide accept confirmation and go back to main dialog
+  hideAcceptConfirmation(): void {
+    this.showAcceptConfirmation = false;
+  }
+
+  // Method to accept a rejected user (change status from REJECTED to ACTIVATED)
+  acceptRejectedUser(): void {
+    if (!this.selectedRejectedUser) return;
+    
+    this.updatingUser = true;
+    
+    // Call the API to update user status from REJECTED to ACTIVATED
+    this.apiService.put(`users/${this.selectedRejectedUser.id}/status`, { status: 'ACTIVATED' })
+      .subscribe({
+        next: (response) => {
+          this.showToastNotification('User has been accepted successfully', 'success');
+          
+          // Close the popup and reset all states
+          this.showRejectedUserPopup = false;
+          this.showAcceptConfirmation = false;
+          setTimeout(() => {
+            this.selectedRejectedUser = null;
+          }, 200);
+          
+          // Refresh the users list to reflect the status change
+          this.fetchCompanyUsers();
+          
+          this.updatingUser = false;
+        },
+        error: (err) => {
+          this.showToastNotification(`Failed to accept user: ${err.error?.message || err.message || 'Unknown error'}`, 'error');
+          this.updatingUser = false;
+        }
+      });
   }
 
   // Method to check if the current user can modify another user
@@ -797,6 +953,11 @@ export class UsersComponent implements OnInit {
             this.selectedUser.status = newStatus;
           }
           
+          // Also update selectedUserForModal to sync the modal
+          if (this.selectedUserForModal) {
+            this.selectedUserForModal.status = newStatus;
+          }
+          
           // Also update in the main users array for consistency
           const userIndex = this.companyUsers.findIndex(u => u.id === this.selectedUser?.id);
           if (userIndex >= 0) {
@@ -825,6 +986,11 @@ export class UsersComponent implements OnInit {
           // Update the UI
           if (this.selectedUser) {
             this.selectedUser.role = newRole;
+          }
+          
+          // Also update selectedUserForModal to sync the modal
+          if (this.selectedUserForModal) {
+            this.selectedUserForModal.role = newRole;
           }
           
           // Also update in the main users array for consistency
@@ -891,5 +1057,14 @@ export class UsersComponent implements OnInit {
     setTimeout(() => {
       this.showToast = false;
     }, 3000);
+  }
+
+  // Handle user updates from the modal
+  onUserUpdate(event: UserUpdateEvent): void {
+    if (event.type === 'status') {
+      this.updateUserStatus(event.value);
+    } else if (event.type === 'role') {
+      this.updateUserRole(event.value);
+    }
   }
 }

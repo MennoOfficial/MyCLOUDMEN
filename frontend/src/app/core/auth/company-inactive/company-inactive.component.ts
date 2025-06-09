@@ -11,7 +11,6 @@ import { AuthService } from '../auth.service';
   styleUrls: ['./company-inactive.component.scss']
 })
 export class CompanyInactiveComponent implements OnInit {
-  companyStatus: string = 'DEACTIVATED';
   companyName: string = '';
   
   constructor(
@@ -22,9 +21,6 @@ export class CompanyInactiveComponent implements OnInit {
   
   ngOnInit(): void {
     this.route.queryParams.subscribe(params => {
-      if (params['status']) {
-        this.companyStatus = params['status'];
-      }
       if (params['company']) {
         this.companyName = params['company'];
       }
@@ -32,8 +28,8 @@ export class CompanyInactiveComponent implements OnInit {
   }
   
   contactSupport(): void {
-    // Open email client with subject about company status
-    window.location.href = `mailto:help@cloudmen.com?subject=Company ${this.companyStatus.toLowerCase()} issue`;
+    // Open email client with subject about company deactivation
+    window.location.href = `mailto:help@cloudmen.com?subject=Account reactivation request - ${this.companyName || 'Company Name'}`;
   }
   
   logout(): void {

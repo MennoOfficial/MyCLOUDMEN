@@ -1,120 +1,180 @@
-# MyCLOUDMEN - Company Management System
+# MyCLOUDMEN - Business Management Platform
 
-A modern web application for managing companies and their users, built with Angular and Spring Boot.
+A modern business management platform built with Angular and Spring Boot, designed to streamline company operations, purchase requests, and financial management across multiple organizations.
 
-## Features
+## 🎯 What is MyCLOUDMEN?
 
-### Company Management
-- View detailed company information
-- Toggle company status (Active/Inactive)
-- View company users and their roles
-- Sort users by various criteria (name, email, role, status)
+MyCLOUDMEN is a comprehensive platform that helps businesses manage their operations efficiently. It handles everything from user management and purchase requests to invoicing and company administration, all in one unified system.
 
-### User Management
-- View all users associated with a company
-- Manage user roles (Company User, Company Admin, System Admin)
-- Toggle user status (Active/Inactive)
-- View user authentication logs
-- Handle pending user requests
+### Who Uses MyCLOUDMEN?
+- **👤 Company Users**: Make and track purchase requests
+- **👨‍💼 Company Admins**: Manage users, invoices, and company operations  
+- **🔧 System Admins**: Oversee multiple companies and system-wide operations
 
-### Authentication & Authorization
+## 🚀 Key Features
+
+### 🏢 Company Management
+- Multi-company support with isolated data
+- Company profile and status management
+- Automated synchronization with TeamLeader CRM
+- User role and permission management
+
+### 🛒 Purchase Requests
+- **Signature Satori Credits**: Digital document signing credits
+- **Google Workspace Licenses**: Business productivity licenses
+- Email-based approval workflow
+- Complete request history and tracking
+
+### 💰 Financial Management
+- Invoice overview and management
+- Payment status tracking
+- Credit note handling
+- PDF downloads and reporting
+
+### 👥 User Administration
 - Role-based access control
-- User authentication tracking
-- Pending user approval system
-- Last login tracking
+- User status management
+- Authentication tracking
+- Approval workflows
 
-## Tech Stack
+### 🔄 Integrations
+- **TeamLeader CRM**: Company and invoice synchronization
+- **Google Workspace**: License management and provisioning
+- **Email System**: Automated notifications and approvals
+
+## 🛠️ Technology
 
 ### Frontend
-- Angular 17 (Standalone Components)
-- TypeScript
-- SCSS for styling
-- Material Icons
-- RxJS for reactive programming
+- **Angular 17** with TypeScript
+- **Responsive Design** for all devices
+- **Material Design** components
+- **Progressive Web App** capabilities
 
 ### Backend
-- Spring Boot
-- Java
-- MongoDB
-- RESTful API architecture
+- **Spring Boot** with Java 17
+- **MongoDB** database
+- **RESTful API** architecture
+- **JWT Authentication** with Auth0
 
-## Getting Started
+### Deployment
+- **Local Development** with hot reload
+- **Production Deployment** via separate [mycloudmen-deploy](https://github.com/MennoOfficial/mycloudmen-deploy) repository
+- **Multi-environment** configuration support
+
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js (v16 or higher)
-- Java JDK 17 or higher
+- Node.js v18+
+- Java JDK 17+
 - MongoDB
-- Angular CLI
 - Maven
 
-### Frontend Setup
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
+### Development Setup
 
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
+**Frontend:**
+```bash
+cd frontend
+npm install
+ng serve
+```
 
-3. Start the development server:
-   ```bash
-   ng serve
-   ```
+**Backend:**
+```bash
+cd backend
+mvn clean install
+mvn spring-boot:run
+```
 
-4. Access the application at `http://localhost:4200`
+Access the application at `http://localhost:4200`
 
-### Backend Setup
-1. Navigate to the backend directory:
-   ```bash
-   cd backend
-   ```
+**For Production Deployment:**
+See the [mycloudmen-deploy](https://github.com/MennoOfficial/mycloudmen-deploy) repository which contains:
+- Docker Compose configuration
+- Traefik reverse proxy with SSL
+- WireMock for service mocking
+- Production environment setup
 
-2. Build the project:
-   ```bash
-   mvn clean install
-   ```
+## ⚙️ Configuration
 
-3. Run the application:
-   ```bash
-   mvn spring-boot:run
-   ```
+### Frontend Environment
+```typescript
+export const environment = {
+  apiUrl: 'http://localhost:8080/api',
+  auth0Domain: 'your-domain.auth0.com',
+  auth0ClientId: 'your-client-id'
+};
+```
 
-4. The API will be available at `http://localhost:8080`
+### Backend Properties
+```properties
+spring.data.mongodb.uri=mongodb://localhost:27017/mycloudmen
+auth0.domain=your-domain.auth0.com
+teamleader.client-id=your-teamleader-id
+google.workspace.service-account-key=path/to/key.json
+```
 
-## API Endpoints
+## 📚 API Overview
 
-### Company Management
-- `GET /api/teamleader/companies` - List all companies
-- `GET /api/teamleader/companies/{id}` - Get company details
-- `PUT /api/teamleader/companies/{id}/status` - Update company status
+### Core Endpoints
+- **Authentication**: `/api/auth/*`
+- **Companies**: `/api/teamleader/companies/*`
+- **Users**: `/api/users/*`
+- **Purchase Requests**: `/api/purchase-requests/*`
+- **Invoices**: `/api/teamleader/invoices/*`
 
-### User Management
-- `GET /api/users?domain={domain}` - Get users by domain
-- `GET /api/users/{id}/activity` - Get user activity logs
-- `PUT /api/users/{id}/role` - Update user role
-- `PUT /api/users/{id}/status` - Update user status
-- `POST /api/users/pending/{id}/approve` - Approve pending user
-- `POST /api/users/pending/{id}/reject` - Reject pending user
+## 🔒 Security
 
-## Features in Detail
+- **Role-based access control** with three user levels
+- **JWT token authentication** via Auth0
+- **Data isolation** between companies
+- **Complete audit trail** of all actions
+- **Secure API integration** with third-party services
 
-### Company Detail View
-- Displays company information including name, email, and status
-- Shows list of company users with their roles and status
-- Provides sorting functionality for user list
-- Includes status toggle functionality
+## 📱 User Experience
 
-### User Management
-- View and manage user roles
-- Toggle user status
-- View user authentication history
-- Handle pending user requests
-- Sort users by various criteria
+- **Responsive design** works on desktop, tablet, and mobile
+- **Intuitive navigation** with role-based menus
+- **Real-time updates** and notifications
+- **Fast loading** with optimized performance
 
-### Authentication Logs
-- View user login history
-- Track successful and failed login attempts
-- Display IP addresses and timestamps
-- Show last login information
+## 📦 Deployment
+
+### Local Development
+This repository is for local development. Run the frontend and backend separately:
+
+```bash
+# Frontend (Terminal 1)
+cd frontend && ng serve
+
+# Backend (Terminal 2) 
+cd backend && mvn spring-boot:run
+```
+
+### Production Deployment
+Production deployment is handled via the separate [mycloudmen-deploy](https://github.com/MennoOfficial/mycloudmen-deploy) repository which includes:
+- Docker containerization
+- Traefik reverse proxy with automatic HTTPS
+- SSL certificate management
+- Service orchestration
+
+```bash
+# Production deployment
+git clone https://github.com/MennoOfficial/mycloudmen-deploy.git
+cd mycloudmen-deploy
+# Follow setup instructions in that repository
+```
+
+## 🧪 Testing
+
+```bash
+# Frontend tests
+ng test
+
+# Backend tests
+mvn test
+
+# Integration tests
+mvn verify
+```
+
+**Built by Menno Plochaet**

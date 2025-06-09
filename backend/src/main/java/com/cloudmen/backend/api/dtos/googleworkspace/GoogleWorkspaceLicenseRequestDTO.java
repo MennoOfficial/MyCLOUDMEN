@@ -22,7 +22,15 @@ public class GoogleWorkspaceLicenseRequestDTO {
     private Integer count;
 
     /**
+     * The SKU ID of the license type being requested (e.g., "1010020020",
+     * "1010020028").
+     */
+    @NotNull(message = "SKU ID is required")
+    private String skuId;
+
+    /**
      * The type of license (e.g., Business Standard, Business Plus, Enterprise).
+     * This is kept for backward compatibility and display purposes.
      */
     @NotNull(message = "License type is required")
     private String licenseType;

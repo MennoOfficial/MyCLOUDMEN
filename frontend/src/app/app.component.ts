@@ -4,11 +4,12 @@ import { SessionTimeoutModalComponent } from './shared/components/session-timeou
 import { StatusCheckerService } from './core/services/status-checker.service';
 import { AuthService } from './core/auth/auth.service';
 import { Subscription } from 'rxjs';
+import { CommonModule } from '@angular/common';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, SessionTimeoutModalComponent],
+  imports: [RouterOutlet, SessionTimeoutModalComponent, CommonModule],
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
 })
@@ -30,6 +31,20 @@ export class AppComponent implements OnInit, OnDestroy {
         this.statusCheckerService.stopPeriodicStatusCheck();
       }
     });
+    
+    // Check for approval data in session storage
+    const approvalData = sessionStorage.getItem('pendingApproval');
+      if (approvalData) {
+      // Approval data found
+      } else {
+      // No approval data found
+    }
+
+    // Add global debug function for approval status checking
+    (window as any).checkApprovalStatus = () => {
+      const data = sessionStorage.getItem('pendingApproval');
+      return data ? JSON.parse(data) : null;
+    };
   }
   
   ngOnDestroy(): void {

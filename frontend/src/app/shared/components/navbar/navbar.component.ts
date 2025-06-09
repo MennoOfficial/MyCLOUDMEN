@@ -5,11 +5,13 @@ import { AuthService } from '../../../core/auth/auth.service';
 import { User } from '../../../core/models/auth.model';
 import { BehaviorSubject, Subject, takeUntil, Observable, map } from 'rxjs';
 import { EnvironmentService } from '../../../core/services/environment.service';
+import { LoadingSpinnerComponent } from '../loading-spinner/loading-spinner.component';
+import { ApiService } from '../../../core/services/api.service';
 
 @Component({
   selector: 'app-navbar',
   standalone: true,
-  imports: [CommonModule, RouterModule],
+  imports: [CommonModule, RouterModule, LoadingSpinnerComponent],
   templateUrl: './navbar.component.html',
   styleUrls: ['./navbar.component.scss']
 })
@@ -30,6 +32,10 @@ export class NavbarComponent implements OnInit, OnDestroy {
   showLogoutModal = false;
   profileImageLoading = true;
   isUserLoading = true;
+
+  // Company information
+  userCompany: string | null = null;
+  isLoadingCompany = false;
 
   // Create observable streams
   user$: Observable<User | null>;
@@ -54,7 +60,8 @@ export class NavbarComponent implements OnInit, OnDestroy {
   
   constructor(
     private authService: AuthService,
-    private environmentService: EnvironmentService
+    private environmentService: EnvironmentService,
+    private apiService: ApiService
   ) {
     // Initialize user$ stream
     this.user$ = this.authService.user$.pipe(
@@ -73,8 +80,16 @@ export class NavbarComponent implements OnInit, OnDestroy {
           } else {
             this.profileImageLoading = false;
           }
+          
+          // Get company information for non-system admins
+          if (user.email && userRole !== 'SYSTEM_ADMIN') {
+            this.fetchUserCompany(user.email);
+          } else {
+            this.userCompany = null;
+          }
         } else {
           this.profileImageLoading = false;
+          this.userCompany = null;
         }
         return user;
       })
@@ -245,5 +260,73 @@ export class NavbarComponent implements OnInit, OnDestroy {
   getProxyImageUrl(originalUrl: string): string {
     const encodedUrl = encodeURIComponent(originalUrl);
     return `${this.environmentService.apiUrl}/proxy/image?url=${encodedUrl}`;
+  }
+
+  fetchUserCompany(email: string): void {
+    this.isLoadingCompany = true;
+    const domain = email.split('@')[1];
+    
+    console.log('Fetching company for domain:', domain);
+    
+    // Use the correct endpoint from TeamleaderCompanyController to get full company details
+    this.apiService.get<any>(`teamleader/companies/domain/${domain}`).subscribe({
+      next: (response: any) => {
+        console.log('Company API response:', response);
+        this.isLoadingCompany = false;
+        // Check if we got a valid company response
+        if (response && !response.error && response.name) {
+          console.log('Found company name:', response.name);
+          this.userCompany = response.name;
+        } else {
+          console.log('No company found, trying search endpoint...');
+          // Try alternative: search by domain
+          this.searchCompanyByDomain(domain);
+        }
+      },
+      error: (error: any) => {
+        console.error('Error fetching company by domain:', error);
+        console.log('Trying search endpoint as fallback...');
+        // Try alternative endpoint
+        this.searchCompanyByDomain(domain);
+      }
+    });
+  }
+
+  private searchCompanyByDomain(domain: string): void {
+    // Try searching companies and filter by domain
+    this.apiService.get<any>('teamleader/companies').subscribe({
+      next: (response: any) => {
+        console.log('Companies search response:', response);
+        this.isLoadingCompany = false;
+        
+        if (response && response.companies && Array.isArray(response.companies)) {
+          // Look for company with matching domain
+          const company = response.companies.find((comp: any) => 
+            comp.email && comp.email.includes(domain)
+          );
+          
+          if (company && company.name) {
+            console.log('Found company via search:', company.name);
+            this.userCompany = company.name;
+          } else {
+            console.log('No matching company found, using formatted domain');
+            this.setFallbackCompanyName(domain);
+          }
+        } else {
+          this.setFallbackCompanyName(domain);
+        }
+      },
+      error: (error: any) => {
+        console.error('Error searching companies:', error);
+        this.isLoadingCompany = false;
+        this.setFallbackCompanyName(domain);
+      }
+    });
+  }
+
+  private setFallbackCompanyName(domain: string): void {
+    // Fallback: format domain nicely
+    this.userCompany = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
+    console.log('Using fallback company name:', this.userCompany);
   }
 }
