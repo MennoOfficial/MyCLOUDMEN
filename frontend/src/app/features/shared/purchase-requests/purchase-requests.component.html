@@ -545,7 +545,7 @@
             <div class="credits-info">
               <div class="info-item">
                 <span class="material-icons">info</span>
-                <span>€1.00 per credit · One credit per document</span>
+                <span>€1.00 per credit</span>
               </div>
             </div>
 
@@ -688,10 +688,13 @@
         [totalItems]="activityTotalItems"
         [currentPage]="activityCurrentPage - 1"
         [pageSize]="activityPageSize"
+        [sortColumn]="activitySortColumn"
+        [sortDirection]="activitySortDirection"
         emptyIcon="search_off"
         emptyTitle="No matching requests"
         emptyMessage="Try adjusting your search term or filters to find what you're looking for"
         (pageChange)="onActivityPageChange($event)"
+        (sort)="onSort($event)"
       ></app-data-table>
 
       <!-- Empty State -->

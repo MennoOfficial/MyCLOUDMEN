@@ -197,7 +197,6 @@ public class GoogleWorkspaceService {
         List<GoogleWorkspaceSubscriptionDTO> customerSubscriptions = subscriptions.getSubscriptions();
         logger.info("Checking for license type: {} among {} subscriptions", licenseType, customerSubscriptions.size());
 
-        // Log available subscriptions for debugging
         customerSubscriptions
                 .forEach(sub -> logger.info("Available subscription: ID={}, Name={}, Status={}, Licenses={}",
                         sub.getSkuId(), sub.getSkuName(), sub.getStatus(), sub.getTotalLicenses()));

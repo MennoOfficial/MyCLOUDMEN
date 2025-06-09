@@ -753,6 +753,21 @@
   padding: var(--space-lg);
   margin-bottom: var(--space-lg);
   
+  // Fix double border issue - make data table seamlessly integrate
+  ::ng-deep app-data-table .table-container {
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    margin-bottom: 0;
+    
+    .table {
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      border: 1px solid var(--silver-lining);
+    }
+  }
+  
   .section-header {
     margin-bottom: var(--space-lg);
     

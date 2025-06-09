@@ -32,22 +32,19 @@ export class AppComponent implements OnInit, OnDestroy {
       }
     });
     
-    // Debug: Add a global function to check approval status
-    (window as any).checkApprovalStatus = () => {
-      const approvalData = localStorage.getItem('pending_approval_request') || 
-                          sessionStorage.getItem('pending_approval_request');
-      
+    // Check for approval data in session storage
+    const approvalData = sessionStorage.getItem('pendingApproval');
       if (approvalData) {
-        console.log('✅ Approval data found:', JSON.parse(approvalData));
+      // Approval data found
       } else {
-        console.log('❌ No approval data found');
-      }
-      
-      console.log('Current URL:', window.location.href);
-      console.log('Session storage auth_target_url:', sessionStorage.getItem('auth_target_url'));
+      // No approval data found
+    }
+
+    // Add global debug function for approval status checking
+    (window as any).checkApprovalStatus = () => {
+      const data = sessionStorage.getItem('pendingApproval');
+      return data ? JSON.parse(data) : null;
     };
-    
-    console.log('🔍 Global debug function added: checkApprovalStatus()');
   }
   
   ngOnDestroy(): void {

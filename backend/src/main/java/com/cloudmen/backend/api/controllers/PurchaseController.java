@@ -66,15 +66,15 @@ public class PurchaseController {
     }
 
     /**
-     * Endpoint to accept a purchase request.
-     * Simplified approach - just update status to APPROVED directly.
+     * Endpoint to handle purchase acceptance from email links.
+     * This endpoint is called when a user clicks the approval link in their email.
+     * It updates the status of the purchase request to APPROVED.
      * 
      * @param requestId The ID of the purchase request to accept
      * @return A success or error message
      */
     @GetMapping("/purchase/accept")
     public ResponseEntity<Map<String, Object>> acceptPurchase(@RequestParam String requestId) {
-        log.info("=== PURCHASE ACCEPTANCE START ===");
         log.info("Processing purchase acceptance for request ID: {}", requestId);
 
         try {
@@ -83,7 +83,6 @@ public class PurchaseController {
 
             if (requestOpt.isEmpty()) {
                 log.error("Request with ID {} not found in database", requestId);
-                // Return error response
                 Map<String, Object> errorResponse = new HashMap<>();
                 errorResponse.put("status", "error");
                 errorResponse.put("message", "Request not found");
@@ -95,8 +94,7 @@ public class PurchaseController {
             log.info("Found request - ID: {}, Current Status: {}, Type: {}, User: {}",
                     request.getId(), request.getStatus(), request.getType(), request.getUserEmail());
 
-            // **SIMPLIFIED APPROACH - DIRECT STATUS UPDATE**
-            // Set status to APPROVED regardless of type
+            // Update status to APPROVED
             String oldStatus = request.getStatus();
             request.setStatus("APPROVED");
             request.setProcessedDate(new Date());
@@ -105,24 +103,6 @@ public class PurchaseController {
 
             // Save the request using the service
             PurchaseRequest savedRequest = purchaseRequestService.savePurchaseRequest(request);
-
-            // **CRITICAL - Verify the save worked by fetching the request again**
-            Optional<PurchaseRequest> verificationOpt = purchaseRequestService.getPurchaseRequestById(requestId);
-            if (verificationOpt.isPresent()) {
-                PurchaseRequest verifiedRequest = verificationOpt.get();
-                log.info("VERIFICATION: Request ID {} now has status: '{}'", requestId, verifiedRequest.getStatus());
-
-                if (!"APPROVED".equals(verifiedRequest.getStatus())) {
-                    log.error("STATUS UPDATE FAILED! Expected 'APPROVED' but found '{}'", verifiedRequest.getStatus());
-                    Map<String, Object> errorResponse = new HashMap<>();
-                    errorResponse.put("status", "error");
-                    errorResponse.put("message", "Failed to update request status");
-                    errorResponse.put("requestId", requestId);
-                    return ResponseEntity.ok(errorResponse);
-                }
-            } else {
-                log.error("VERIFICATION FAILED - Could not re-fetch request after save");
-            }
 
             // Send confirmation email to the user
             try {
@@ -143,13 +123,10 @@ public class PurchaseController {
             response.put("newStatus", "APPROVED");
             response.put("message", "Request has been successfully approved");
 
-            log.info("=== PURCHASE ACCEPTANCE SUCCESS ===");
-            log.info("Request ID {} successfully approved. Response: {}", requestId, response);
-
+            log.info("Request ID {} successfully approved", requestId);
             return ResponseEntity.ok(response);
 
         } catch (Exception e) {
-            log.error("=== PURCHASE ACCEPTANCE ERROR ===");
             log.error("Error processing purchase acceptance for request ID {}: {}", requestId, e.getMessage(), e);
 
             // Return error response
@@ -355,9 +332,6 @@ public class PurchaseController {
             PurchaseRequest savedRequest = purchaseRequestService.savePurchaseRequest(request);
             log.info("Credits request status updated. New status: {}", savedRequest.getStatus());
 
-            // Verify that the status was properly saved by querying the database directly
-            purchaseRequestService.verifyStatusUpdate(requestId, "APPROVED");
-
             // Send confirmation email
             try {
                 emailService.sendConfirmationEmail(userEmail);
@@ -507,72 +481,5 @@ public class PurchaseController {
         // Simply delegate to the purchase status endpoint as the logic is the same
         log.info("Checking status for license request ID: {}", requestId);
         return getPurchaseStatus(requestId);
-    }
-
-    /**
-     * TEST ENDPOINT - Simple status update test for debugging
-     * This endpoint allows manual testing of the status update mechanism
-     * 
-     * @param requestId The ID of the purchase request to test
-     * @param status    The status to set (PENDING, APPROVED, REJECTED)
-     * @return ResponseEntity with the test result
-     */
-    @GetMapping("/purchase/test-status-update")
-    public ResponseEntity<Map<String, Object>> testStatusUpdate(
-            @RequestParam String requestId,
-            @RequestParam(defaultValue = "APPROVED") String status) {
-
-        log.info("=== TEST STATUS UPDATE ===");
-        log.info("Testing status update for request ID: {} to status: {}", requestId, status);
-
-        try {
-            // Get the request from the database
-            Optional<PurchaseRequest> requestOpt = purchaseRequestService.getPurchaseRequestById(requestId);
-
-            if (requestOpt.isEmpty()) {
-                Map<String, Object> response = new HashMap<>();
-                response.put("test", "FAILED");
-                response.put("error", "Request not found");
-                response.put("requestId", requestId);
-                return ResponseEntity.ok(response);
-            }
-
-            PurchaseRequest request = requestOpt.get();
-            String oldStatus = request.getStatus();
-
-            log.info("TEST: Found request - Current status: '{}', changing to: '{}'", oldStatus, status);
-
-            // Update status
-            request.setStatus(status);
-
-            // Save using service
-            PurchaseRequest savedRequest = purchaseRequestService.savePurchaseRequest(request);
-
-            // Immediate verification
-            Optional<PurchaseRequest> verifyOpt = purchaseRequestService.getPurchaseRequestById(requestId);
-            String finalStatus = verifyOpt.isPresent() ? verifyOpt.get().getStatus() : "NOT_FOUND";
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("test", "SUCCESS");
-            response.put("requestId", requestId);
-            response.put("oldStatus", oldStatus);
-            response.put("requestedStatus", status);
-            response.put("savedStatus", savedRequest.getStatus());
-            response.put("verifiedStatus", finalStatus);
-            response.put("statusUpdateWorked", status.equals(finalStatus));
-
-            log.info("TEST RESULT: {}", response);
-
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            log.error("TEST FAILED with exception: {}", e.getMessage(), e);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("test", "FAILED");
-            response.put("error", e.getMessage());
-            response.put("requestId", requestId);
-            return ResponseEntity.ok(response);
-        }
     }
 }

@@ -1,5 +1,7 @@
 package com.cloudmen.backend.config;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
@@ -21,6 +23,9 @@ import java.util.List;
 @Configuration
 @EnableMongoRepositories(basePackages = "com.cloudmen.backend.repositories")
 public class MongoConfig {
+
+    private static final Logger logger = LoggerFactory.getLogger(MongoConfig.class);
+
     // This bean customizes the MongoTemplate to remove the _class field from
     // documents
     @Bean
@@ -38,7 +43,7 @@ public class MongoConfig {
 
         // Get database name from the factory
         String databaseName = mongoDbFactory.getMongoDatabase().getName();
-        System.out.println("Using database: " + databaseName);
+        logger.info("Using MongoDB database: {}", databaseName);
 
         return new MongoTemplate(mongoDbFactory, converter);
     }

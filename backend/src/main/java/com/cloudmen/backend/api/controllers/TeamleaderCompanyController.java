@@ -4,7 +4,6 @@ import com.cloudmen.backend.api.dtos.companies.CompanyDetailDTO;
 import com.cloudmen.backend.api.dtos.companies.CompanyListDTO;
 import com.cloudmen.backend.domain.enums.CompanyStatusType;
 import com.cloudmen.backend.domain.models.TeamleaderCompany;
-import com.cloudmen.backend.repositories.TeamleaderCompanyRepository;
 import com.cloudmen.backend.services.TeamleaderCompanyService;
 import com.cloudmen.backend.services.TeamleaderOAuthService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,7 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * Controller for exposing Teamleader company data
@@ -33,17 +31,14 @@ public class TeamleaderCompanyController {
     private final TeamleaderCompanyService companyService;
     private final TeamleaderOAuthService oAuthService;
     private final ObjectMapper objectMapper;
-    private final TeamleaderCompanyRepository companyRepository;
 
     public TeamleaderCompanyController(
             TeamleaderCompanyService companyService,
             TeamleaderOAuthService oAuthService,
-            ObjectMapper objectMapper,
-            TeamleaderCompanyRepository companyRepository) {
+            ObjectMapper objectMapper) {
         this.companyService = companyService;
         this.oAuthService = oAuthService;
         this.objectMapper = objectMapper;
-        this.companyRepository = companyRepository;
 
         // Log the base path that this controller is mapped to
         logger.info("TeamleaderCompanyController initialized with base path: /api/teamleader/companies");
@@ -188,10 +183,10 @@ public class TeamleaderCompanyController {
         logger.info("Searching companies with query: {}", query);
 
         try {
-            Iterable<TeamleaderCompany> companies = companyService.searchCompaniesByName(query);
+            List<TeamleaderCompany> companies = companyService.searchCompaniesByName(query);
 
             // Convert entities to DTOs
-            List<CompanyListDTO> companyDtos = StreamSupport.stream(companies.spliterator(), false)
+            List<CompanyListDTO> companyDtos = companies.stream()
                     .map(CompanyListDTO::fromEntity)
                     .collect(Collectors.toList());
 
@@ -227,10 +222,10 @@ public class TeamleaderCompanyController {
     }
 
     /**
-     * Update the status of a company
+     * Update a company's status
      * 
-     * @param id           The Teamleader company ID
-     * @param statusUpdate Status update data containing new status
+     * @param id           The company ID (MongoDB _id or teamleaderId)
+     * @param statusUpdate Map containing the new status
      * @return Updated company details
      */
     @PutMapping("/{id}/status")
@@ -239,12 +234,6 @@ public class TeamleaderCompanyController {
             @RequestBody Map<String, String> statusUpdate) {
 
         logger.info("Received request to update status for company ID: {}", id);
-        logger.info("Full request body: {}", statusUpdate);
-
-        // First check if this API endpoint is actually being called
-        logger.info("====== STATUS UPDATE API CALL RECEIVED ======");
-        logger.info("ID from path: {}", id);
-        logger.info("Request body: {}", statusUpdate);
 
         String newStatusStr = statusUpdate.get("status");
         if (newStatusStr == null) {
@@ -274,60 +263,17 @@ public class TeamleaderCompanyController {
         logger.info("Processing status change to: {}", newStatus);
 
         try {
-            // Try first by MongoDB ID to match what frontend sends
-            logger.info("Attempting to look up company by id (could be either MongoDB _id or teamleaderId)");
-            TeamleaderCompany company = null;
+            Optional<TeamleaderCompany> updatedCompany = companyService.updateCompanyStatus(id, newStatus);
 
-            // First try MongoDB ID (which is what we send in the DTO)
-            try {
-                Optional<TeamleaderCompany> companyById = companyRepository.findById(id);
-                if (companyById.isPresent()) {
-                    company = companyById.get();
-                    logger.info("Found company by MongoDB _id: {}, name: {}", id, company.getName());
-                } else {
-                    logger.info("Company not found by MongoDB _id, trying teamleaderId");
-                }
-            } catch (Exception e) {
-                logger.warn("Error looking up by MongoDB ID (probably not a valid ObjectId): {}", e.getMessage());
-            }
-
-            // If not found by MongoDB ID, try teamleaderId
-            if (company == null) {
-                company = companyService.getCompanyByTeamleaderId(id);
-            }
-
-            if (company == null) {
-                logger.warn("Company not found with ID: {}", id);
+            if (updatedCompany.isPresent()) {
+                CompanyDetailDTO companyDTO = CompanyDetailDTO.fromEntity(updatedCompany.get());
+                return ResponseEntity.ok(companyDTO);
+            } else {
                 Map<String, Object> response = new HashMap<>();
                 response.put("error", true);
                 response.put("message", "Company not found with ID: " + id);
                 return ResponseEntity.notFound().build();
             }
-
-            logger.info("Found company: {}, current status: {}", company.getName(),
-                    company.getStatus() != null ? company.getStatus() : "undefined");
-
-            // Update the company's status directly in the entity
-            company.setStatus(newStatus);
-
-            // Also maintain status in customFields for backward compatibility
-            Map<String, Object> customFields = company.getCustomFields();
-            if (customFields == null) {
-                logger.info("Creating new customFields map for company");
-                customFields = new HashMap<>();
-                company.setCustomFields(customFields);
-            }
-            customFields.put("status", newStatus.name());
-            logger.info("Updated status to: {}", newStatus);
-
-            // Save the updated company
-            company = companyService.saveCompany(company);
-            logger.info("Company saved successfully");
-
-            // Return the updated company
-            CompanyDetailDTO updatedCompany = CompanyDetailDTO.fromEntity(company);
-            logger.info("Returning updated company with status: {}", updatedCompany.getStatus());
-            return ResponseEntity.ok(updatedCompany);
         } catch (Exception e) {
             logger.error("Error updating company status", e);
             Map<String, Object> response = new HashMap<>();
@@ -363,13 +309,7 @@ public class TeamleaderCompanyController {
         }
 
         try {
-            List<TeamleaderCompany> companies = companyRepository.findAll();
-
-            // Filter companies by status
-            List<TeamleaderCompany> filteredCompanies = companies.stream()
-                    .filter(company -> company.getStatus() == statusType)
-                    .collect(Collectors.toList());
-
+            List<TeamleaderCompany> filteredCompanies = companyService.getCompaniesByStatus(statusType);
             List<CompanyListDTO> companyDtos = CompanyListDTO.fromEntities(filteredCompanies);
 
             Map<String, Object> response = new HashMap<>();
@@ -398,58 +338,7 @@ public class TeamleaderCompanyController {
         logger.info("Finding company by domain: {}", domain);
 
         try {
-            // Search all companies
-            List<TeamleaderCompany> allCompanies = companyService.getAllCompanies();
-
-            // Find first company where any of the emails contains the domain
-            Optional<TeamleaderCompany> companyWithDomain = allCompanies.stream()
-                    .filter(company -> {
-                        // Check all contact info for email type
-                        boolean emailMatch = false;
-                        if (company.getContactInfo() != null) {
-                            emailMatch = company.getContactInfo().stream()
-                                    .filter(contact -> "email".equalsIgnoreCase(contact.getType()))
-                                    .anyMatch(contact -> contact.getValue() != null &&
-                                            contact.getValue().contains("@" + domain));
-                        }
-
-                        // Check if we already found a match with email contacts
-                        if (emailMatch) {
-                            return true;
-                        }
-
-                        // Check website domain
-                        if (company.getWebsite() != null &&
-                                company.getWebsite().contains(domain)) {
-                            return true;
-                        }
-
-                        // Check custom emails if they exist
-                        if (company.getCustomFields() != null &&
-                                company.getCustomFields().containsKey("contacts")) {
-                            // Parse contacts as JSON array if possible
-                            try {
-                                JsonNode contacts = objectMapper.readTree(
-                                        company.getCustomFields().get("contacts").toString());
-
-                                if (contacts.isArray()) {
-                                    for (JsonNode contact : contacts) {
-                                        if (contact.has("email") &&
-                                                contact.get("email").asText().contains("@" + domain)) {
-                                            return true;
-                                        }
-                                    }
-                                }
-                            } catch (Exception e) {
-                                // Silently handle parsing errors
-                                logger.debug("Error parsing contacts for company {}: {}",
-                                        company.getName(), e.getMessage());
-                            }
-                        }
-
-                        return false;
-                    })
-                    .findFirst();
+            Optional<TeamleaderCompany> companyWithDomain = companyService.findCompanyByDomain(domain);
 
             if (companyWithDomain.isPresent()) {
                 return ResponseEntity.ok(CompanyDetailDTO.fromEntity(companyWithDomain.get()));

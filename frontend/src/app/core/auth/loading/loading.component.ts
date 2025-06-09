@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 import { AuthService, RedirectResult } from '../auth.service';
+import { User } from '../../models/auth.model';
 import { filter, take, timeout } from 'rxjs/operators';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 
@@ -15,7 +16,10 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
 export class LoadingComponent implements OnInit {
   loadingMessage = 'Authenticating...';
   loadingDuration = 0;
-  maxWaitTime = 10000; // 10 seconds max wait time
+  maxWaitTime = 20000; // 20 seconds max wait time (increased for retry mechanism)
+  loadingState: string = 'authenticating';
+  errorMessage: string = '';
+  hasNavigated: boolean = false;
   
   constructor(
     private authService: AuthService,
@@ -28,10 +32,16 @@ export class LoadingComponent implements OnInit {
     const timer = setInterval(() => {
       this.loadingDuration = Date.now() - startTime;
       
-      // Update message after 3 seconds
-      if (this.loadingDuration > 3000 && this.loadingDuration <= 7000) {
-        this.loadingMessage = 'Retrieving user profile...';
-      } else if (this.loadingDuration > 7000) {
+      // Update message based on duration - match with retry timing
+      if (this.loadingDuration <= 2000) {
+        this.loadingMessage = 'Authenticating...';
+      } else if (this.loadingDuration <= 5000) {
+        this.loadingMessage = 'Setting up your account...';
+      } else if (this.loadingDuration <= 10000) {
+        this.loadingMessage = 'Configuring your permissions...';
+      } else if (this.loadingDuration <= 15000) {
+        this.loadingMessage = 'Almost ready...';
+      } else {
         this.loadingMessage = 'This is taking longer than expected...';
       }
       
@@ -52,36 +62,57 @@ export class LoadingComponent implements OnInit {
       timeout(this.maxWaitTime)
     ).subscribe({
       next: (user) => {
-      clearInterval(timer);
-        console.log(`[Loading] Authentication completed for: ${user.email}`);
+        clearInterval(timer);
         
-        // Check if we're still on the loading page - if not, don't redirect
-        const currentUrl = this.router.url;
-        if (currentUrl !== '/auth/loading') {
-          console.log(`[Loading] Already navigated away from loading page to: ${currentUrl}`);
-          return;
-        }
-        
-        // AuthService will handle all navigation including approvals
-        // So we just check for manual target URLs here
-        
-        // Check if there's a stored target URL
-        const targetUrl = sessionStorage.getItem('auth_target_url');
-        if (targetUrl) {
-          console.log(`[Loading] Redirecting to stored target URL: ${targetUrl}`);
-          sessionStorage.removeItem('auth_target_url');
-          this.router.navigateByUrl(targetUrl, { replaceUrl: true });
-          return;
+        if (user) {
+          this.loadingState = 'almost-ready';
+          
+          // Short delay before navigation to let user see the final state
+          setTimeout(() => {
+            this.navigateAfterAuth(user);
+          }, 1000);
         }
       },
       error: (error) => {
         clearInterval(timer);
-        console.error('[Loading] Authentication timeout or error:', error);
         this.router.navigate(['/auth/error'], {
           queryParams: { error: 'authentication_timeout' },
           replaceUrl: true
         });
       }
     });
+
+    // Handle auth errors
+    this.authService.authError$.subscribe(error => {
+      if (error) {
+        this.loadingState = 'error';
+        this.errorMessage = error;
+      }
+    });
+
+    // Set up timeout for loading
+    setTimeout(() => {
+      if (this.loadingState === 'authenticating' || this.loadingState === 'setting-up' || 
+          this.loadingState === 'configuring' || this.loadingState === 'almost-ready') {
+        this.loadingState = 'error';
+        this.errorMessage = 'Authentication is taking longer than expected. Please try refreshing the page.';
+      }
+    }, this.maxWaitTime);
+  }
+
+  private navigateAfterAuth(user: User): void {
+    if (this.hasNavigated) {
+      return;
+    }
+
+    this.hasNavigated = true;
+    
+    const currentUrl = this.router.url;
+    if (currentUrl !== '/auth/loading') {
+      return;
+    }
+
+    // Let the auth service handle post-authentication navigation
+    this.authService['handlePostAuthNavigation'](user);
   }
 } 

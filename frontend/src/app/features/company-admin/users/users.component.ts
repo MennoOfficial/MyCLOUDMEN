@@ -90,8 +90,7 @@ export class UsersComponent implements OnInit {
       type: 'select',
       options: [
         { value: 'Active', label: 'Active' },
-        { value: 'Inactive', label: 'Inactive' },
-        { value: 'Rejected', label: 'Rejected' }
+        { value: 'Inactive', label: 'Inactive' }
       ]
     },
     {
@@ -551,56 +550,15 @@ export class UsersComponent implements OnInit {
     }
     
     // Call the API to approve the pending user
-    console.log(`[DEBUG] Approving user ${userId} using endpoint: users/pending/${userId}/approve`);
-    
-    this.apiService.post(`users/pending/${userId}/approve`, {})
-      .subscribe({
-        next: (response) => {
-          console.log(`[DEBUG] User approval successful:`, response);
-          // Display success message using toast
-          this.showToastNotification('User has been approved successfully', 'success');
-          
-          // Add a small delay to ensure backend has processed the approval
-          setTimeout(() => {
-            // Refresh both lists to ensure data consistency
-          this.fetchCompanyUsers();
-            this.fetchPendingUsers();
-          }, 500);
-          
-          // Reset state
-          this.updatingUser = false;
-        },
-        error: (err) => {
-          console.error(`[ERROR] Failed to approve user ${userId}:`, err);
-          console.error(`[ERROR] API endpoint used: users/pending/${userId}/approve`);
-          console.error(`[ERROR] Error details:`, {
-            status: err.status,
-            statusText: err.statusText,
-            message: err.message,
-            error: err.error
-          });
-          
-          // Show error toast
-          this.showToastNotification(`Failed to approve user: ${err.error?.message || err.message || 'Unknown error'}`, 'error');
-          
-          // Revert the optimistic update if the API call fails
-          if (this.selectedUser) {
-            // Add back to pending users
-            if (this.pendingUsers) {
-              this.pendingUsers.push(pendingUser);
-              this.pendingCount = this.pendingUsers.length;
-              this.hasPendingUsers = true;
-            }
-            
-            // Remove from company users
-            this.companyUsers = this.companyUsers.filter(u => u.id !== userId);
-            this.filteredUsers = [...this.companyUsers];
-          }
-          
-          // Reset state
-          this.updatingUser = false;
-        }
-      });
+    this.apiService.post(`users/pending/${userId}/approve`, {}).subscribe({
+      next: (response) => {
+        this.showToastNotification('User approved successfully', 'success');
+        this.fetchPendingUsers();
+      },
+      error: (error) => {
+        this.showToastNotification('Error approving user: ' + (error.error?.message || error.message), 'error');
+      }
+    });
   }
   
   processRejection(): void {
@@ -627,49 +585,15 @@ export class UsersComponent implements OnInit {
     }
     
     // Call the API to reject the pending user
-    console.log(`[DEBUG] Rejecting user ${userId} using endpoint: users/pending/${userId}/reject`);
-    
-    this.apiService.post(`users/pending/${userId}/reject`, {})
-      .subscribe({
-        next: (response: any) => {
-          console.log(`[DEBUG] User rejection successful:`, response);
-          this.showToastNotification('User has been rejected successfully', 'success');
-          
-          // Add a small delay to ensure backend has processed the rejection
-          setTimeout(() => {
-            // Refresh both pending users and company users lists 
-            // since the rejected user now appears in the company users list
-            this.fetchPendingUsers();
-            this.fetchCompanyUsers();
-          }, 500);
-          
-          // Reset state
-          this.updatingUser = false;
-        },
-        error: (err) => {
-          console.error(`[ERROR] Failed to reject user ${userId}:`, err);
-          console.error(`[ERROR] API endpoint used: users/pending/${userId}/reject`);
-          console.error(`[ERROR] Error details:`, {
-            status: err.status,
-            statusText: err.statusText,
-            message: err.message,
-            error: err.error
-          });
-          
-          // Show error toast
-          this.showToastNotification(`Failed to reject user: ${err.error?.message || err.message || 'Unknown error'}`, 'error');
-          
-          // Revert the optimistic update if the API call fails
-          if (this.pendingUsers) {
-            this.pendingUsers.push(pendingUser);
-            this.pendingCount = this.pendingUsers.length;
-            this.hasPendingUsers = true;
-          }
-          
-          // Reset state
-          this.updatingUser = false;
-        }
-      });
+    this.apiService.post(`users/pending/${userId}/reject`, {}).subscribe({
+      next: (response: any) => {
+        this.showToastNotification('User rejected successfully', 'success');
+        this.fetchPendingUsers();
+      },
+      error: (error) => {
+        this.showToastNotification('Error rejecting user: ' + (error.error?.message || error.message), 'error');
+      }
+    });
   }
 
   /**
@@ -993,13 +917,12 @@ export class UsersComponent implements OnInit {
           this.fetchCompanyUsers();
           
           this.updatingUser = false;
-      },
-      error: (err) => {
-          console.error('Error accepting rejected user:', err);
+        },
+        error: (err) => {
           this.showToastNotification(`Failed to accept user: ${err.error?.message || err.message || 'Unknown error'}`, 'error');
           this.updatingUser = false;
-      }
-    });
+        }
+      });
   }
 
   // Method to check if the current user can modify another user

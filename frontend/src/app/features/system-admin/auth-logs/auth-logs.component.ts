@@ -207,20 +207,15 @@ export class AuthLogsComponent implements OnInit, OnDestroy {
             this.loading = false;
           },
           error: (err) => {
-            console.error('Error loading logs:', err);
-            this.error = `Failed to load authentication logs: ${err.status} ${err.statusText}`;
-            if (err.error && err.error.message) {
-              this.error += ` - ${err.error.message}`;
-            }
             this.loading = false;
+            this.error = 'Failed to load authentication logs. Please try again.';
           }
         });
         this.subscriptions.push(httpSub);
       },
       error: (err) => {
-        console.error('Error getting token:', err);
-        this.error = 'Failed to get authentication token. Please try logging out and back in.';
         this.loading = false;
+        this.error = 'Failed to get authentication token. Please try logging out and back in.';
       }
     });
     this.subscriptions.push(tokenSub);
@@ -382,15 +377,11 @@ export class AuthLogsComponent implements OnInit, OnDestroy {
    * @param text The text to copy
    */
   copyToClipboard(text: string): void {
-    navigator.clipboard.writeText(text).then(
-      () => {
-        this.showToastNotification('Copied to clipboard');
-      },
-      (err) => {
-        console.error('Could not copy text: ', err);
-        this.showToastNotification('Failed to copy text');
-      }
-    );
+    navigator.clipboard.writeText(text).then(() => {
+      // Successfully copied
+    }).catch(err => {
+      // Copy failed
+    });
   }
   
   /**

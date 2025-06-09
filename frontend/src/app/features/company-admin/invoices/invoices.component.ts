@@ -85,10 +85,10 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   
   // Add logger property to avoid 'this.log is undefined' errors
   private log = {
-    debug: (msg: string) => console.debug(msg),
-    info: (msg: string) => console.info(msg),
-    warn: (msg: string) => console.warn(msg),
-    error: (msg: string) => console.error(msg)
+    debug: (msg: string) => {},
+    info: (msg: string) => {},
+    warn: (msg: string) => {},
+    error: (msg: string) => {}
   };
 
   // Add missing properties used in the displayInvoiceDetails method
@@ -171,7 +171,6 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     this.apiService.get<any>(`teamleader/companies`)
       .pipe(
         catchError(error => {
-          console.error('Error fetching companies:', error);
           this.generateTestData();
           return of(null);
         })
@@ -265,7 +264,6 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         this.generateTestCreditNotes();
       }
     } catch (error) {
-      console.error('Error loading invoices:', error);
       this.errorMessage = 'Failed to load invoices. Please try again later.';
       
       // Always generate test data for now to ensure UI works

@@ -1,4 +1,4 @@
-// Account Pending Component Styles - Blue Theme
+// Account Pending Component Styles - Aqua Spring Theme
 // Using variables from styles.scss
 
 html, body {
@@ -34,7 +34,7 @@ html, body {
   text-align: center;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
   animation: fadeInUp 0.6s ease-out;
-  border: 3px solid var(--ocean-blue); // Blue border for pending approval
+  border: 3px solid var(--aqua-spring); // Aqua spring border for pending approval
   position: relative;
   overflow: hidden;
   
@@ -58,7 +58,7 @@ html, body {
     left: 0;
     right: 0;
     height: 80px;
-    background-color: var(--ocean-blue); // Blue header
+    background-color: var(--aqua-spring); // Aqua spring header
     border-radius: 21px 21px 0 0;
     z-index: 1;
     
@@ -77,7 +77,7 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: var(--ocean-blue); // Blue header
+    background-color: var(--aqua-spring); // Aqua spring header
     border-radius: 21px 21px 0 0;
     margin-bottom: 0;
     
@@ -128,12 +128,12 @@ html, body {
   width: 70px;
   height: 70px;
   margin: 0 auto 16px;
-  background-color: #e3f2fd; // Light blue background
+  background-color: rgba(84, 191, 174, 0.1); // Light aqua spring background
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid var(--ocean-blue);
+  border: 3px solid var(--aqua-spring);
   
   // Slow pulse animation for pending state
   animation: slowPulse 3s infinite;
@@ -144,13 +144,13 @@ html, body {
     margin-top: -35px;
     margin-bottom: 12px;
     background-color: white;
-    border: 6px solid var(--ocean-blue);
-    box-shadow: 0 4px 16px rgba(33, 150, 243, 0.3);
+    border: 6px solid var(--aqua-spring);
+    box-shadow: 0 4px 16px rgba(84, 191, 174, 0.3);
   }
   
   i {
     font-size: 32px;
-    color: var(--ocean-blue);
+    color: var(--aqua-spring);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -169,11 +169,11 @@ html, body {
 @keyframes slowPulse {
   0%, 100% { 
     transform: scale(1); 
-    box-shadow: 0 0 0 0 rgba(33, 150, 243, 0.4); 
+    box-shadow: 0 0 0 0 rgba(84, 191, 174, 0.4); 
   }
   50% { 
     transform: scale(1.02); 
-    box-shadow: 0 0 0 8px rgba(33, 150, 243, 0); 
+    box-shadow: 0 0 0 8px rgba(84, 191, 174, 0); 
   }
 }
 
@@ -189,7 +189,7 @@ html, body {
 }
 
 h1 {
-  color: var(--ocean-blue);
+  color: var(--aqua-spring);
   font-size: 24px;
   font-weight: 700;
   margin-bottom: var(--space-md);
@@ -214,7 +214,7 @@ h1 {
   }
   
   .action-message {
-    color: var(--ocean-blue);
+    color: var(--aqua-spring);
     font-weight: 500;
     font-size: 15px;
     margin-top: 12px;
@@ -268,13 +268,13 @@ h1 {
 }
 
 .btn-primary {
-  background-color: var(--ocean-blue);
+  background-color: var(--aqua-spring);
   color: white;
-  border-color: var(--ocean-blue);
+  border-color: var(--aqua-spring);
   
   &:hover {
-    background-color: #1976d2;
-    border-color: #1976d2;
+    background-color: #47a79a; // Darker aqua spring for hover
+    border-color: #47a79a;
   }
 }
 

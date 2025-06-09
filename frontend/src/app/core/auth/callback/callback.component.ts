@@ -21,16 +21,6 @@ export class CallbackComponent implements OnInit {
   ) {}
   
   ngOnInit(): void {
-    // Process the authentication callback with improved profile loading
-    this.processAuthCallback();
-  }
-
-  private processAuthCallback(): void {
-    // First handle the callback
     this.authService.handleAuthCallback();
-    
-    // Let the AuthService handle all post-authentication navigation
-    // The callback component should NOT interfere with navigation
-    console.log('[Callback] Auth callback processed, AuthService will handle navigation');
   }
 }

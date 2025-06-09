@@ -159,7 +159,6 @@ export class CompanyDetailComponent implements OnInit {
           this.fetchPendingUsers();
         },
         error: (err) => {
-          console.error(`Error fetching company details for ID ${companyId}:`, err);
           this.error = true;
           this.errorMessage = 'Failed to load company details. Please try again.';
           this.loading = false;
@@ -183,23 +182,22 @@ export class CompanyDetailComponent implements OnInit {
           this.companyUsers = users
             .filter(user => user.status !== 'PENDING') // Filter out pending users
             .map(user => ({
-              id: user.id,
-              name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
-              email: user.email,
-              // Handle roles from the API response
-              role: user.roles && user.roles.length > 0 ? user.roles[0] : 'COMPANY_USER',
+            id: user.id,
+            name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+            email: user.email,
+            // Handle roles from the API response
+            role: user.roles && user.roles.length > 0 ? user.roles[0] : 'COMPANY_USER',
               // Convert status to friendly display format - EXACTLY like users component
-              status: user.status === 'ACTIVATED' ? 'Active' : 
-                     user.status === 'DEACTIVATED' ? 'Inactive' : 
+            status: user.status === 'ACTIVATED' ? 'Active' : 
+                   user.status === 'DEACTIVATED' ? 'Inactive' : 
                      user.status === 'REJECTED' ? 'Rejected' :
-                     user.status,
+                   user.status,
               lastLogin: user.lastLogin || undefined, // Use undefined instead of null for proper display
               picture: user.picture || '' // Add picture field for avatars in modals
-            }));
+          }));
           this.loadingUsers = false;
         },
         error: (err) => {
-          console.error(`Error fetching users for domain ${domain}:`, err);
           this.loadingUsers = false;
           this.companyUsers = []; // Set empty array on error
         }
@@ -239,7 +237,6 @@ export class CompanyDetailComponent implements OnInit {
           this.hasPendingUsers = this.pendingCount > 0;
         },
         error: (err) => {
-          console.error(`Error fetching pending users:`, err);
           this.pendingUsers = [];
           this.pendingCount = 0;
           this.hasPendingUsers = false;
@@ -551,16 +548,13 @@ export class CompanyDetailComponent implements OnInit {
 
   // Add this new method to test the status endpoint
   testStatusEndpoint(): void {
-    if (!this.company || !this.company.id) return;
-    
-    const testUrl = `teamleader/companies/${this.company.id}/status/test`;
-    
-    this.apiService.get<any>(testUrl)
+    this.apiService.get('purchase/status')
       .subscribe({
         next: (response) => {
+          this.showToastNotification('Status endpoint is working', 'success');
         },
         error: (err) => {
-          console.error('Status endpoint test failed:', err);
+          this.showToastNotification('Status endpoint failed', 'error');
         }
       });
   }
@@ -605,22 +599,23 @@ export class CompanyDetailComponent implements OnInit {
    * @param user The user to fetch last login for
    */
   private fetchLastLoginTime(user: CompanyUser): void {
-    // The API returns a LocalDateTime which is serialized as a string, or null if no login found
-    this.apiService.get<string | null>(`auth-logs/user/${user.id}/last-login`).subscribe({
-      next: (lastLoginTime) => {
-        if (lastLoginTime && this.selectedUser) {
-          this.selectedUser.lastLogin = lastLoginTime;
-        } else if (this.selectedUser) {
-          // If no login found by ID, try by email as fallback
+    this.apiService.get<any>(`users/${user.id}/last-login`)
+      .subscribe({
+        next: (response) => {
+          if (response && response.lastLogin) {
+            // Update the user object with the fetched last login time
+            const userIndex = this.companyUsers.findIndex(u => u.id === user.id);
+            if (userIndex >= 0) {
+              this.companyUsers[userIndex].lastLogin = response.lastLogin;
+            }
+          } else {
+            // If no last login found by ID, try using email as fallback
           this.fetchLastLoginByEmail(user.email);
         }
       },
       error: (err) => {
-        console.warn(`No last login found for user ID ${user.id}, trying email fallback:`, err);
-        // On error, try by email as fallback
-        if (this.selectedUser) {
+          // If getting last login by ID fails, try email as fallback
           this.fetchLastLoginByEmail(user.email);
-        }
       }
     });
   }
@@ -630,24 +625,19 @@ export class CompanyDetailComponent implements OnInit {
    * @param email The user's email
    */
   private fetchLastLoginByEmail(email: string): void {
-    // Encode the email for URL safety
-    const encodedEmail = encodeURIComponent(email);
-    
-    this.apiService.get<string | null>(`auth-logs/email/${encodedEmail}/last-login`).subscribe({
-      next: (lastLoginTime) => {
-        if (lastLoginTime && this.selectedUser) {
-          this.selectedUser.lastLogin = lastLoginTime;
-        } else if (this.selectedUser) {
-          // No last login found, set to undefined to show "Never logged in"
-          this.selectedUser.lastLogin = undefined;
+    this.apiService.get<any>(`users/email/${encodeURIComponent(email)}/last-login`)
+      .subscribe({
+        next: (response) => {
+          if (response && response.lastLogin) {
+            // Update the user object with the fetched last login time
+            const userIndex = this.companyUsers.findIndex(u => u.email === email);
+            if (userIndex >= 0) {
+              this.companyUsers[userIndex].lastLogin = response.lastLogin;
+            }
         }
       },
       error: (err) => {
-        console.warn(`No last login found for email ${email}:`, err);
-        // Set to undefined to show "Never logged in"
-        if (this.selectedUser) {
-          this.selectedUser.lastLogin = undefined;
-        }
+          // Silently handle the error - some users might not have login records
       }
     });
   }
@@ -666,41 +656,18 @@ export class CompanyDetailComponent implements OnInit {
   updateUserRole(newRole: string): void {
     if (!this.selectedUser) return;
     
-    // System admins can change anyone's role - no restrictions
     this.updatingUser = true;
         
-    // Call the API directly
+    // Call the API to update the user role
     this.apiService.put(`users/${this.selectedUser.id}/role`, { role: newRole })
       .subscribe({
         next: (response) => {
-          
           this.updateRoleLocally(newRole);
+          this.showToastNotification('User role updated successfully', 'success');
           this.updatingUser = false;
         },
         error: (err) => {
-          console.error(`Error updating user role:`, err);
-          console.error('Status code:', err.status);
-          console.error('Error details:', err.error);
-          
-          // Provide more specific error message based on HTTP status
-          let errorMessage = 'Failed to update user role. ';
-          
-          if (err.status === 403) {
-            errorMessage += 'You do not have permission to change this user\'s role.';
-          } else if (err.status === 400) {
-            errorMessage += 'Invalid role value or request format.';
-          } else if (err.status === 404) {
-            errorMessage += 'User not found.';
-          } else if (err.status === 0) {
-            errorMessage += 'Cannot connect to the server. Please check your connection.';
-          } else {
-            errorMessage += `Server returned error: ${err.status}`;
-          }
-          
-          alert(errorMessage);
-          
-          // Update UI optimistically anyway
-          this.updateRoleLocally(newRole);
+          this.showToastNotification('Failed to update user role', 'error');
           this.updatingUser = false;
         }
       });
@@ -734,39 +701,16 @@ export class CompanyDetailComponent implements OnInit {
     // Convert friendly status name to backend format
     const backendStatus = newStatus === 'Active' ? 'ACTIVATED' : 'DEACTIVATED';
     
-    
-    // Call the API directly without checking if the user exists first
+    // Call the API to update the user status
     this.apiService.put(`users/${this.selectedUser.id}/status`, { status: backendStatus })
       .subscribe({
         next: (response) => {
-          
           this.updateStatusLocally(newStatus);
+          this.showToastNotification('User status updated successfully', 'success');
           this.updatingUser = false;
         },
         error: (err) => {
-          console.error(`Error updating user status:`, err);
-          console.error('Status code:', err.status);
-          console.error('Error details:', err.error);
-          
-          // Provide more specific error message based on HTTP status
-          let errorMessage = 'Failed to update user status. ';
-          
-          if (err.status === 403) {
-            errorMessage += 'You do not have permission to change this user\'s status.';
-          } else if (err.status === 400) {
-            errorMessage += 'Invalid status value or request format.';
-          } else if (err.status === 404) {
-            errorMessage += 'User not found.';
-          } else if (err.status === 0) {
-            errorMessage += 'Cannot connect to the server. Please check your connection.';
-          } else {
-            errorMessage += `Server returned error: ${err.status}`;
-          }
-          
-          alert(errorMessage);
-          
-          // Update UI optimistically anyway
-          this.updateStatusLocally(newStatus);
+          this.showToastNotification('Failed to update user status', 'error');
           this.updatingUser = false;
         }
       });
@@ -805,8 +749,11 @@ export class CompanyDetailComponent implements OnInit {
    */
   copyToClipboard(text: string): void {
     navigator.clipboard.writeText(text)
+      .then(() => {
+        // Clipboard write successful - could add a toast notification here
+      })
       .catch(err => {
-        console.error('Failed to copy text: ', err);
+        // Silent failure for copy operations
       });
   }
 
@@ -823,30 +770,22 @@ export class CompanyDetailComponent implements OnInit {
   }
 
   async handleApproveUser(userId: string): Promise<void> {
-    if (!userId) return;
-    
     try {
       await this.apiService.post(`users/pending/${userId}/approve`, {}).toPromise();
       this.showToastNotification('User approved successfully', 'success');
-      this.fetchPendingUsers();
-    } catch (err) {
-      console.error('Error approving user:', err);
-      console.error('API endpoint used:', `users/pending/${userId}/approve`);
-      this.showToastNotification('Failed to approve user. Please try again.', 'error');
+      this.fetchPendingUsers(); // Refresh the pending users list
+    } catch (err: any) {
+      this.showToastNotification('Failed to approve user', 'error');
     }
   }
 
   async handleRejectUser(userId: string): Promise<void> {
-    if (!userId) return;
-    
     try {
       await this.apiService.post(`users/pending/${userId}/reject`, {}).toPromise();
       this.showToastNotification('User rejected successfully', 'success');
-      this.fetchPendingUsers();
-    } catch (err) {
-      console.error('Error rejecting user:', err);
-      console.error('API endpoint used:', `users/pending/${userId}/reject`);
-      this.showToastNotification('Failed to reject user. Please try again.', 'error');
+      this.fetchPendingUsers(); // Refresh the pending users list
+    } catch (err: any) {
+      this.showToastNotification('Failed to reject user', 'error');
     }
   }
 
@@ -973,8 +912,8 @@ export class CompanyDetailComponent implements OnInit {
   // Method to hide user action confirmation
   hideUserActionConfirm(): void {
     this.showUserActionConfirmPopup = false;
-    this.selectedPendingUser = null;
-    this.pendingUserId = '';
+      this.selectedPendingUser = null;
+      this.pendingUserId = '';
     
     // Enable scrolling
     this.enableBodyScroll();
@@ -1040,7 +979,6 @@ export class CompanyDetailComponent implements OnInit {
           // Close the popup and reset all states
           this.showRejectedUserPopup = false;
           this.showAcceptConfirmation = false;
-          this.enableBodyScroll();
           setTimeout(() => {
             this.selectedRejectedUser = null;
           }, 200);
@@ -1051,7 +989,6 @@ export class CompanyDetailComponent implements OnInit {
           this.updatingUser = false;
         },
         error: (err) => {
-          console.error('Error accepting rejected user:', err);
           this.showToastNotification(`Failed to accept user: ${err.error?.message || err.message || 'Unknown error'}`, 'error');
           this.updatingUser = false;
         }

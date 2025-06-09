@@ -540,8 +540,6 @@ public class UserController {
                     userDTO.getAuth0Id(),
                     newUser.getRoles() != null && !newUser.getRoles().isEmpty() ? newUser.getRoles() : "none",
                     newUser.getStatus());
-
-            // Log special situations for debugging
             if (newUser.getStatus() == StatusType.ACTIVATED) {
                 if (newUser.getRoles() != null && newUser.getRoles().contains(RoleType.SYSTEM_ADMIN)) {
                     logger.info("User {} was automatically activated as SYSTEM_ADMIN", email);

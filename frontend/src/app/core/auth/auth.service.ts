@@ -69,7 +69,6 @@ export class AuthService {
     // Expose auth service globally for debugging (development only)
     if (typeof window !== 'undefined' && !this.environmentService.isProduction) {
       (window as any).authService = this;
-      console.log('[Auth] 🛠️ Auth service exposed globally as window.authService for debugging');
     }
   }
   
@@ -82,9 +81,6 @@ export class AuthService {
     
     // Log if we found approval data
     const pendingApproval = this.getPendingApprovalRequest();
-    if (pendingApproval) {
-      console.log(`[Auth] 🎯 INITIALIZATION: Approval request detected and preserved:`, pendingApproval);
-    }
     
     // First try to restore from session if possible
     this.restoreUserFromSession();
@@ -103,12 +99,9 @@ export class AuthService {
     this.auth0.isAuthenticated$.pipe(
       distinctUntilChanged()
     ).subscribe(isAuthenticated => {
-      console.log(`[Auth] Authentication state changed: ${isAuthenticated}`);
-      
       if (isAuthenticated) {
         // Prevent multiple simultaneous authentication attempts
         if (this.authenticationInProgress) {
-          console.log('[Auth] Authentication already in progress, skipping');
           return;
         }
         
@@ -127,7 +120,6 @@ export class AuthService {
    */
   private async handleAuthentication(): Promise<void> {
     if (this.authenticationInProgress) {
-      console.log('[Auth] Authentication already in progress, waiting for completion');
       await this.authenticationPromise;
       return;
     }
@@ -149,27 +141,21 @@ export class AuthService {
         if (!auth0User?.sub) {
           throw new Error('No auth0 user ID found');
         }
-
-        console.log(`[Auth] Processing Auth0 user: ${auth0User.email}`);
         
         // Check if this is from a callback (genuine new login) or from refresh
         const currentPath = this.router.url;
         this.isGenuineNewLogin = currentPath.includes('/auth/callback') || currentPath.includes('/auth/loading');
         
-        console.log(`[Auth] Current path: ${currentPath}, Genuine new login: ${this.isGenuineNewLogin}`);
-        
         // Fetch user profile
         const user = await this.fetchUserProfileAsync(auth0User);
         
         if (user) {
-          console.log(`[Auth] User authentication completed: ${user.email}`);
           this.processUserProfile(user);
           resolve(user);
         } else {
           throw new Error('Failed to fetch user profile');
         }
       } catch (error) {
-        console.error('[Auth] Authentication error:', error);
         this.handleAuthError('Authentication failed', error);
         resolve(null);
       } finally {
@@ -197,14 +183,12 @@ export class AuthService {
           user.roles = ['COMPANY_USER'];
         }
       
-      console.log(`[Auth] Restored user from session: ${user.email}`);
         this.userSubject.next(user);
         
       // DON'T check status on session restore - let them stay where they are
       // Only do critical status checks, not convenience redirects
       this.checkCriticalStatusOnly(user);
     } catch (error) {
-      console.error('[Auth] Failed to restore user from session:', error);
         sessionStorage.removeItem('user_profile');
     }
   }
@@ -217,13 +201,11 @@ export class AuthService {
     try {
       // 1. Critical user status issues
       if (user.status === 'PENDING') {
-        console.log('[Auth] User is PENDING, redirecting to pending account page');
         this.router.navigate(['/pending-account'], { replaceUrl: true });
         return;
       }
       
       if (user.status === 'DEACTIVATED') {
-        console.log('[Auth] User is DEACTIVATED, redirecting to account deactivated page');
         this.router.navigate(['/account-deactivated'], { 
           queryParams: { status: user.status },
           replaceUrl: true 
@@ -235,7 +217,6 @@ export class AuthService {
       if (user.email) {
         const companyStatus = await this.checkCompanyStatus(user);
         if (companyStatus) {
-          console.log(`[Auth] Redirecting based on critical company status to: ${companyStatus.path}`);
           this.router.navigate([companyStatus.path], {
             queryParams: companyStatus.queryParams,
             replaceUrl: companyStatus.replaceUrl ?? true
@@ -245,9 +226,7 @@ export class AuthService {
       }
 
       // No critical issues - let user stay where they are
-      console.log('[Auth] No critical issues found on session restore, user can stay on current page');
     } catch (error) {
-      console.error('[Auth] Error checking critical status on session restore:', error);
     }
   }
   
@@ -256,8 +235,6 @@ export class AuthService {
    */
   private async fetchUserProfileAsync(auth0User: any): Promise<User | null> {
     const auth0Id = encodeURIComponent(auth0User.sub);
-    
-    console.log(`[Auth] Fetching user profile for: ${auth0User.email}, ID: ${auth0Id}`);
     
     try {
       return await firstValueFrom(
@@ -274,7 +251,6 @@ export class AuthService {
                   if (i >= 3) {
                     return throwError(() => error);
                   }
-                  console.log(`[Auth] Retrying API call after error, attempt ${i + 1}`);
                   return timer((i + 1) * 500);
                 })
               )
@@ -282,26 +258,22 @@ export class AuthService {
             catchError(error => {
               // If user not found, register them
               if (error.status === 404) {
-                console.log('[Auth] User not found (404), registering new user');
                 return this.registerNewUser(auth0User).pipe(
-                  tap(() => console.log('[Auth] Registration API call completed')),
+                  tap(() => {}),
                   catchError(regError => {
-                    console.error('[Auth] Registration failed with error:', regError);
                     if (regError.error) {
-                      console.error('[Auth] Registration error details:', regError.error);
+                      return throwError(() => new Error('Failed to register: ' + (regError.message || regError.statusText || 'Unknown error')));
                     }
-                    return throwError(() => new Error('Failed to register: ' + (regError.message || regError.statusText || 'Unknown error')));
+                    return throwError(() => error);
                   })
                 );
               }
-              console.error('[Auth] Error fetching user profile:', error);
               return throwError(() => error);
             }),
             timeout(10000)
           )
       );
     } catch (error) {
-      console.error('[Auth] Final error in fetchUserProfileAsync:', error);
       throw error;
     }
   }
@@ -310,8 +282,6 @@ export class AuthService {
    * Register a new user in the backend
    */
   private registerNewUser(auth0User: any): Observable<User> {
-    console.log(`[Auth] Starting registration for: ${auth0User.email}, Auth0 ID: ${auth0User.sub}`);
-    
     // Extract domain for potential company matching
     const email = auth0User.email;
     const domain = this.getEmailDomain(email);
@@ -319,7 +289,6 @@ export class AuthService {
     // Ensure auth0Id is properly set
     const auth0Id = auth0User.sub;
     if (!auth0Id) {
-      console.error('[Auth] Missing auth0Id during registration!');
       return throwError(() => new Error('Missing auth0Id'));
     }
     
@@ -336,17 +305,14 @@ export class AuthService {
       primaryDomain: domain
     };
     
-    console.log('[Auth] Sending registration data:', JSON.stringify(userData));
-    
     return this.http.post<User>(
       `${this.environmentService.apiUrl}/users/register`, 
       userData
     ).pipe(
-      tap(user => console.log(`[Auth] User registered successfully:`, user)),
+      tap(user => {}),
       catchError(error => {
-        console.error('[Auth] Registration HTTP error:', error);
         if (error.error) {
-          console.error('[Auth] Server error response:', error.error);
+          return throwError(() => error);
         }
         return throwError(() => error);
       })
@@ -367,9 +333,14 @@ export class AuthService {
       user.roles = [];
     }
     
+    // For newly registered users with no roles, implement retry mechanism
+    if (user.roles.length === 0 && this.isGenuineNewLogin) {
+      this.handleNewUserWithRetries(user);
+      return;
+    }
+    
     // Do not automatically add roles - respect what comes from the backend
     // Only log the user status for debugging
-    console.log(`[Auth] User profile processed: ${user.email}, Status: ${user.status}, Roles: ${user.roles.join(', ') || 'none'}`);
     
     // Update state and storage
     this.userSubject.next(user);
@@ -377,15 +348,73 @@ export class AuthService {
     
     // Only log authentication if this is a genuine new login (not session restore/refresh)
     if (this.isGenuineNewLogin) {
-      console.log(`[Auth] Genuine new login detected, logging authentication to backend`);
     this.logAuthentication(user);
       this.isGenuineNewLogin = false; // Reset flag after use
     } else {
-      console.log(`[Auth] Session restore or refresh detected, skipping authentication logging`);
     }
     
     // Handle post-authentication navigation
     this.handlePostAuthNavigation(user);
+  }
+  
+  /**
+   * Handle new user with retry mechanism to wait for role assignment
+   */
+  private async handleNewUserWithRetries(user: User): Promise<void> {
+    const maxRetries = 4;
+    const retryDelays = [2000, 3000, 4000, 6000]; // 2s, 3s, 4s, 6s = total 15 seconds
+    
+    // Update state immediately so user doesn't see empty state
+    this.userSubject.next(user);
+    this.saveUserToSession(user);
+    
+    // Log authentication for new login
+    this.logAuthentication(user);
+    this.isGenuineNewLogin = false;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      const delay = retryDelays[attempt];
+      
+      // Wait for the specified delay
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      try {
+        // Refresh user profile
+        const auth0User = await firstValueFrom(
+          this.auth0.user$.pipe(
+            filter(user => !!user),
+            take(1),
+            timeout(5000)
+          )
+        );
+        
+        if (auth0User?.sub) {
+          const refreshedUser = await this.fetchUserProfileAsync(auth0User);
+          
+          if (refreshedUser && refreshedUser.roles && refreshedUser.roles.length > 0) {
+            // Update state with refreshed user
+            this.userSubject.next(refreshedUser);
+            this.saveUserToSession(refreshedUser);
+            
+            // Handle navigation with the updated user
+            this.handlePostAuthNavigation(refreshedUser);
+            return;
+          } else {
+            // If user status is explicitly set to PENDING, stop retrying
+            if (refreshedUser?.status === 'PENDING') {
+              this.userSubject.next(refreshedUser);
+              this.saveUserToSession(refreshedUser);
+              this.router.navigate(['/pending-account'], { replaceUrl: true });
+              return;
+            }
+          }
+        }
+      } catch (error) {
+      }
+    }
+    
+    // All retries exhausted
+    this.router.navigate(['/pending-account'], { replaceUrl: true });
   }
   
   /**
@@ -407,21 +436,14 @@ export class AuthService {
         companyName: user.companyName
       };
       
-      console.log(`[Auth] Logging authentication for user: ${user.email}`);
-      
       this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication`, authData)
         .subscribe({
           next: () => {
-            console.log(`[Auth] Successfully logged authentication for: ${user.email}`);
           },
           error: (error) => {
-            console.error('[Auth] Failed to log authentication:', error);
-            // Don't throw error - authentication logging failure shouldn't break the auth flow
           }
         });
     } catch (error) {
-      console.error('[Auth] Error preparing authentication log data:', error);
-      // Don't throw error - authentication logging failure shouldn't break the auth flow
     }
   }
   
@@ -429,19 +451,12 @@ export class AuthService {
    * Handle navigation after successful authentication
    */
   private handlePostAuthNavigation(user: User): void {
-    console.log(`[Auth] Post-auth navigation for user: ${user.email}`);
-    console.log(`[Auth] Current URL: ${this.router.url}`);
-    
     // **FIRST PRIORITY: Check for pending approval requests - ALWAYS**
     const pendingApproval = this.getPendingApprovalRequest();
-    console.log(`[Auth] Checking for pending approval...`);
     
     if (pendingApproval) {
-      console.log(`[Auth] 🎯 PRIORITY: Found pending approval request:`, pendingApproval);
-      
       // Navigate to approval page with parameters
       const approvalUrl = `${pendingApproval.originalPath}?requestId=${pendingApproval.requestId}&email=${pendingApproval.email}`;
-      console.log(`[Auth] 🚀 REDIRECTING to approval URL: ${approvalUrl}`);
       
       // DON'T clear the pending request yet - let the approval page handle it
       // This ensures if there are redirect issues, we still have the data
@@ -449,10 +464,7 @@ export class AuthService {
       this.router.navigateByUrl(approvalUrl, { replaceUrl: true });
       return;
     } else {
-      console.log(`[Auth] ❌ No pending approval found in post-auth navigation`);
     }
-    
-    console.log(`[Auth] No pending approval found, continuing with normal navigation`);
     
     // **Don't redirect if we're already on an approval URL**
     const currentUrl = this.router.url;
@@ -460,51 +472,35 @@ export class AuthService {
     const isOnApprovalUrl = approvalUrls.some(url => currentUrl.startsWith(url));
     
     if (isOnApprovalUrl) {
-      console.log(`[Auth] User is already on approval URL: ${currentUrl}, not redirecting`);
       return;
     }
     
     // Check if there's a stored target URL from the auth guard
     const targetUrl = sessionStorage.getItem('auth_target_url');
-    console.log(`[Auth] Stored target URL: ${targetUrl}`);
     
     // **Only handle navigation if we're on the loading page OR root page**
     if (currentUrl !== '/auth/loading' && currentUrl !== '/' && currentUrl !== '') {
-      console.log(`[Auth] Not on loading or root page (${currentUrl}), skipping post-auth navigation`);
       return;
     }
     
     if (targetUrl) {
-      console.log(`[Auth] Found stored target URL after authentication: ${targetUrl}`);
       sessionStorage.removeItem('auth_target_url');
       
       // Don't redirect to auth-related or status pages
       if (!this.isExcludedPath(targetUrl)) {
-        console.log(`[Auth] Redirecting to stored target URL: ${targetUrl}`);
         this.router.navigateByUrl(targetUrl, { replaceUrl: true });
         return;
-      } else {
-        console.log(`[Auth] Target URL ${targetUrl} is excluded from redirects`);
       }
     }
     
     // Check for critical status issues first
-    this.checkCriticalStatusOnly(user).then(() => {
-      // If no critical issues, check if we need role-based navigation
-      const currentPath = this.router.url;
-      if (currentPath === '/' || currentPath === '' || currentPath === '/auth/loading') {
-        console.log('[Auth] User is on landing page after auth, providing role-based redirect');
-        const roleRedirect = this.getRoleBasedRedirect(user.roles);
-        this.router.navigate([roleRedirect.path], { replaceUrl: true });
-      }
-    });
+    this.checkCriticalStatusOnly(user);
   }
   
   /**
    * Handle authentication errors
    */
   private handleAuthError(message: string, error: any): void {
-    console.error(`[Auth] ${message}:`, error);
     this.authErrorSubject.next(message);
     this.authLoadingSubject.next(false);
     
@@ -524,21 +520,14 @@ export class AuthService {
         reason: `${reason}: ${error?.message || 'Unknown error'}`
       };
       
-      console.log(`[Auth] Logging authentication failure: ${reason}`);
-      
       this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication-failure`, failureData)
         .subscribe({
           next: () => {
-            console.log(`[Auth] Successfully logged authentication failure`);
           },
           error: (logError) => {
-            console.error('[Auth] Failed to log authentication failure:', logError);
-            // Don't throw error - logging failure shouldn't break anything
           }
         });
     } catch (error) {
-      console.error('[Auth] Error preparing authentication failure log data:', error);
-      // Don't throw error - logging failure shouldn't break anything
     }
   }
   
@@ -565,13 +554,11 @@ export class AuthService {
     // Skip checks for specific paths
     const currentPath = this.router.url;
     if (this.isExcludedPath(currentPath)) {
-      console.log(`[Auth] Current path ${currentPath} is excluded from status checks`);
       return;
     }
 
     // Add debounce mechanism to prevent multiple redirects
     if (this.isRedirectInProgress) {
-      console.log('[Auth] Redirect already in progress, skipping additional checks');
       return;
     }
 
@@ -582,24 +569,19 @@ export class AuthService {
       this.isRedirectInProgress = false;
       
       if (!redirectResult) {
-        console.log('[Auth] No critical issues found, user stays on current page');
         return;
       }
       
       // If already on the correct page, don't redirect
       if (currentPath === redirectResult.path) {
-        console.log(`[Auth] User already on correct status page: ${redirectResult.path}`);
         return;
       }
       
-      console.log(`[Auth] Redirecting user due to critical issue: ${redirectResult.path}`);
       this.router.navigate([redirectResult.path], {
         queryParams: redirectResult.queryParams,
         replaceUrl: redirectResult.replaceUrl ?? true
       });
     }).catch(error => {
-      console.error('[Auth] Error during critical status check:', error);
-      this.isRedirectInProgress = false;
     });
   }
 
@@ -609,17 +591,13 @@ export class AuthService {
   private async checkCriticalUserIssues(user: User): Promise<RedirectResult | null> {
     if (!user) return null;
     
-    console.log(`[Auth] Checking for critical issues for user: ${user.email}, Status: ${user.status}`);
-    
     try {
       // 1. Critical user status issues
       if (user.status === 'PENDING') {
-        console.log('[Auth] User is PENDING, redirecting to pending account page');
         return { path: '/pending-account', replaceUrl: true };
       }
       
       if (user.status === 'DEACTIVATED') {
-        console.log('[Auth] User is DEACTIVATED, redirecting to account deactivated page');
         return { 
           path: '/account-deactivated', 
           queryParams: { status: user.status },
@@ -631,16 +609,13 @@ export class AuthService {
       if (user.email) {
         const companyStatus = await this.checkCompanyStatus(user);
         if (companyStatus) {
-          console.log(`[Auth] Redirecting based on company status to: ${companyStatus.path}`);
           return companyStatus;
         }
       }
 
       // No critical issues found
-      console.log('[Auth] No critical issues found');
       return null;
     } catch (error) {
-      console.error('[Auth] Error checking critical user issues:', error);
       return null;
     }
   }
@@ -667,15 +642,12 @@ export class AuthService {
   private async determineUserRedirect(user: User): Promise<RedirectResult | null> {
     if (!user) return null;
     
-    console.log(`[Auth] Checking redirect for user: ${user.email}, Status: ${user.status}`);
-    
     // **CHECK FOR APPROVAL URLS FIRST - Don't redirect away from these**
     const currentUrl = this.router.url;
     const approvalUrls = ['/approve-license', '/confirm-purchase', '/purchase/accept', '/accept-purchase'];
     const isOnApprovalUrl = approvalUrls.some(url => currentUrl.startsWith(url));
     
     if (isOnApprovalUrl) {
-      console.log(`[Auth] User is on approval URL: ${currentUrl}, staying on current page`);
       return null; // Don't redirect, stay on current page
     }
     
@@ -684,19 +656,16 @@ export class AuthService {
       if (user.email) {
         const companyStatus = await this.checkCompanyStatus(user);
         if (companyStatus) {
-          console.log(`[Auth] Redirecting based on company status to: ${companyStatus.path}`);
           return companyStatus;
         }
       }
       
       // 2. Check user status SECOND - Only if we don't have a company status redirect
       if (user.status === 'PENDING') {
-        console.log('[Auth] User is PENDING, redirecting to pending account page');
         return { path: '/pending-account', replaceUrl: true };
       }
       
       if (user.status === 'DEACTIVATED') {
-        console.log('[Auth] User is DEACTIVATED, redirecting to account deactivated page');
         return { 
           path: '/account-deactivated', 
           queryParams: { status: user.status },
@@ -707,7 +676,6 @@ export class AuthService {
       // 3. Role-based default redirects
       return this.getRoleBasedRedirect(user.roles);
     } catch (error) {
-      console.error('[Auth] Error determining redirect path:', error);
       return null;
     }
   }
@@ -728,7 +696,6 @@ export class AuthService {
     const checkThreshold = 30000; // 30 seconds
     
     if (currentTime - lastCheckTime < checkThreshold) {
-      console.log(`[Auth] Skipping company status check for ${domain} - checked recently`);
       // Return the cached redirect if available
       const cachedRedirectKey = `company_redirect_${domain}`;
       const cachedRedirect = sessionStorage.getItem(cachedRedirectKey);
@@ -737,7 +704,6 @@ export class AuthService {
           return JSON.parse(cachedRedirect);
         } catch (e) {
           // If parsing fails, continue with the check
-          console.error('[Auth] Error parsing cached redirect:', e);
         }
       }
     }
@@ -745,12 +711,9 @@ export class AuthService {
     // Update the last check timestamp
     sessionStorage.setItem(lastCheckKey, currentTime.toString());
     
-    console.log(`[Auth] Checking company status for domain: ${domain}`);
-    
     try {
       // First check if user has already been identified as part of an unregistered company
       if (user.companyStatus === 'NOT_FOUND' || user.companyInfo?.status === 'NOT_FOUND') {
-        console.log(`[Auth] User already identified as having no registered company`);
         const redirect = {
           path: '/company-not-registered',
           queryParams: { domain },
@@ -763,7 +726,6 @@ export class AuthService {
       // Next check if user has an inactive company
       if (this.hasInactiveCompany(user)) {
         const companyStatus = user.company?.status || user.companyStatus || 'DEACTIVATED';
-        console.log(`[Auth] User company is inactive with status: ${companyStatus}`);
         
         // Route to different components based on status
         const redirectPath = companyStatus === 'SUSPENDED' ? '/company-suspended' : '/company-inactive';
@@ -784,12 +746,10 @@ export class AuthService {
       const companyInfo = await this.fetchCompanyByDomain(domain);
       
       if (!companyInfo) {
-        console.log(`[Auth] Could not determine company status for domain: ${domain}`);
         return null;
       }
       
       if (companyInfo.status === 'NOT_FOUND') {
-        console.log(`[Auth] No company found for domain: ${domain}`);
         const redirect = {
           path: '/company-not-registered',
           queryParams: { domain },
@@ -800,8 +760,6 @@ export class AuthService {
       }
       
       if (this.INACTIVE_STATUSES.includes(companyInfo.status)) {
-        console.log(`[Auth] Company is inactive with status: ${companyInfo.status}`);
-        
         // Route to different components based on status
         const redirectPath = companyInfo.status === 'SUSPENDED' ? '/company-suspended' : '/company-inactive';
         
@@ -820,7 +778,6 @@ export class AuthService {
       // Company is active, clear any cached redirect
       sessionStorage.removeItem(`company_redirect_${domain}`);
     } catch (error) {
-      console.error('[Auth] Error checking company status:', error);
     }
     
     return null;
@@ -849,9 +806,22 @@ export class AuthService {
   }
   
   /**
+   * Public method to get role-based redirect
+   */
+  public getRoleBasedRedirectPath(roles: UserRole[] = []): string {
+    const redirect = this.getRoleBasedRedirect(roles);
+    return redirect.path;
+  }
+  
+  /**
    * Get default redirect based on user role
    */
   private getRoleBasedRedirect(roles: UserRole[] = []): RedirectResult {
+    // If user has no roles, redirect to pending account page
+    if (!roles || roles.length === 0) {
+      return { path: '/pending-account', replaceUrl: true };
+    }
+    
     // Provide role-based defaults
     if (roles.includes('SYSTEM_ADMIN')) {
       return { path: '/companies' };
@@ -878,12 +848,9 @@ export class AuthService {
   private async fetchCompanyByDomain(domain: string): Promise<CompanyStatusResult | null> {
     if (!domain) return null;
     
-    console.log(`[Auth] Fetching company info for domain: ${domain}`);
-    
     // Check cache first
     const cachedResult = this.companyStatusCache.get(domain);
     if (cachedResult) {
-      console.log(`[Auth] Using cached company info for domain: ${domain}`);
       return cachedResult;
     }
     
@@ -903,7 +870,6 @@ export class AuthService {
       );
       
       if (!response) {
-        console.log(`[Auth] No response from company endpoints`);
         const result = { status: 'NOT_FOUND', name: '', domain };
         this.cacheCompanyStatus(domain, result);
         return result;
@@ -915,7 +881,6 @@ export class AuthService {
         : response?.companies || response?.content || [];
       
       if (!companies || companies.length === 0) {
-        console.log(`[Auth] No companies found in the response`);
         const result = { status: 'NOT_FOUND', name: '', domain };
         this.cacheCompanyStatus(domain, result);
         return result;
@@ -929,7 +894,6 @@ export class AuthService {
                       (company.customFields && company.customFields.status) || 
                       'ACTIVE';
         
-        console.log(`[Auth] Found company for domain ${domain} with status: ${status}`);
         const result = {
           status: status,
           name: company.name || ''
@@ -939,12 +903,10 @@ export class AuthService {
         return result;
       }
       
-      console.log(`[Auth] No matching company found for domain: ${domain}`);
       const notFoundResult = { status: 'NOT_FOUND', name: '', domain };
       this.cacheCompanyStatus(domain, notFoundResult);
       return notFoundResult;
     } catch (error) {
-      console.error('[Auth] Error fetching company by domain:', error);
       // If there's an error, don't assume company is not found, just return null
       return null;
     }
@@ -1020,7 +982,6 @@ export class AuthService {
     // Set expiration for cache entry
     setTimeout(() => {
       this.companyStatusCache.delete(domain);
-      console.log(`[Auth] Expired cache for domain: ${domain}`);
     }, this.cacheTTL);
   }
   
@@ -1032,7 +993,6 @@ export class AuthService {
   handleAuthCallback(): void {
     if (!this.auth0) return;
     
-    console.log('[Auth] Handling auth callback');
     this.authLoadingSubject.next(true);
     
     // Navigate to loading page immediately
@@ -1045,56 +1005,39 @@ export class AuthService {
     // Process the callback
     this.auth0.handleRedirectCallback().subscribe({
       next: result => {
-        console.log('[Auth] Auth0 callback processed successfully');
-        console.log(`[Auth] Callback result appState:`, result.appState);
         if (result.appState?.target) {
-          console.log(`[Auth] Storing target URL from appState: ${result.appState.target}`);
           sessionStorage.setItem('auth_target_url', result.appState.target);
-        } else {
-          console.log('[Auth] No target URL found in appState');
         }
         // Auth0 will trigger the isAuthenticated$ observable, which will handle profile loading
       },
       error: error => {
-        console.error('[Auth] Error handling auth callback:', error);
-        
         // If there's a state error, this is often due to browser cache or multiple logins
         if (error.message?.includes('state')) {
-          console.log('[Auth] Detected state error, trying to recover by checking authentication state');
-          
-          // Only continue if user is already authenticated
           this.auth0.isAuthenticated$.pipe(
             take(1),
             timeout(5000)
           ).subscribe({
             next: isAuthenticated => {
               if (isAuthenticated) {
-                console.log('[Auth] User is authenticated despite state error, proceeding with profile fetch');
-                
-                // Get user profile directly
                 this.auth0.user$.pipe(
                   filter(user => !!user),
                   take(1),
                   timeout(5000)
                 ).subscribe({
                   next: auth0User => {
-                    console.log('[Auth] Retrieved user profile after state error:', auth0User?.email);
                     this.handleAuthentication();
                   },
                   error: profileError => {
-                    console.error('[Auth] Failed to get user profile after state error:', profileError);
                     this.authLoadingSubject.next(false);
                     this.handleInvalidStateError();
                   }
                 });
               } else {
-                console.log('[Auth] User is not authenticated after state error, redirecting to login');
                 this.authLoadingSubject.next(false);
                 this.handleInvalidStateError();
               }
             },
             error: timeoutError => {
-              console.error('[Auth] Timeout checking authentication state after state error:', timeoutError);
               this.authLoadingSubject.next(false);
               this.handleInvalidStateError();
             }
@@ -1120,8 +1063,6 @@ export class AuthService {
    * Handle invalid state error by clearing session and redirecting
    */
   private handleInvalidStateError(): void {
-    console.log('[Auth] Handling invalid state error - clearing session and redirecting');
-    
     // Get the target URL BEFORE clearing everything
     const targetUrl = sessionStorage.getItem('auth_target_url');
     
@@ -1141,13 +1082,11 @@ export class AuthService {
         });
       }
     } catch (error) {
-      console.error('[Auth] Error clearing Auth0 cache:', error);
     }
     
     // Restore target URL if it existed
     if (targetUrl) {
       sessionStorage.setItem('auth_target_url', targetUrl);
-      console.log(`[Auth] Preserved target URL during state error recovery: ${targetUrl}`);
     }
     
     // Store error but don't display yet
@@ -1157,9 +1096,7 @@ export class AuthService {
       recoverable: true
     }));
     
-    // Don't redirect to login - let the current flow continue
     // The user is already authenticated despite the state error
-    console.log('[Auth] State error handled, continuing with current authentication');
   }
   
   /**
@@ -1168,8 +1105,6 @@ export class AuthService {
   login(): void {
     if (!this.auth0) return;
     
-    console.log('[Auth] Starting login process');
-    sessionStorage.removeItem('auth_error');
     this.authLoadingSubject.next(true);
     
     // Mark this as a genuine new login attempt
@@ -1177,7 +1112,6 @@ export class AuthService {
     
     // Store the complete current URL including query parameters
     const currentUrl = window.location.pathname + window.location.search;
-    console.log(`[Auth] Storing current URL for post-auth redirect: ${currentUrl}`);
     
     this.auth0.loginWithRedirect({
       appState: { target: currentUrl }
@@ -1190,7 +1124,6 @@ export class AuthService {
   logout(): void {
     if (!this.auth0) return;
     
-    console.log('[Auth] Logging out');
     this.clearUserState();
     
     this.auth0.logout({
@@ -1252,7 +1185,6 @@ export class AuthService {
    * Force refresh user profile
    */
   refreshUserProfile(): void {
-    console.log('[Auth] Refreshing user profile');
     sessionStorage.removeItem('user_profile');
     
     // Use the new authentication flow instead of the old method
@@ -1270,7 +1202,6 @@ export class AuthService {
       take(1),
       switchMap(user => {
         if (!user) {
-          console.log('[Auth] No authenticated user, blocking navigation');
           return of(false);
         }
         
@@ -1285,18 +1216,15 @@ export class AuthService {
           map(redirectResult => {
             if (!redirectResult) {
               // No critical issues - allow navigation
-              console.log(`[Auth] No critical issues for URL ${url}, allowing navigation`);
               return true;
             }
             
             // If the URL matches the critical redirect target, allow it
             if (url === redirectResult.path) {
-              console.log(`[Auth] User is on critical status page ${url}, allowing`);
               return true;
             }
             
             // Critical issue found - redirect to appropriate status page
-            console.log(`[Auth] Critical issue found, redirecting from ${url} to ${redirectResult.path}`);
             this.router.navigate([redirectResult.path], {
               queryParams: redirectResult.queryParams,
               replaceUrl: redirectResult.replaceUrl ?? true
@@ -1334,7 +1262,6 @@ export class AuthService {
           timestamp: Date.now()
         };
         
-        console.log(`[Auth] Detected approval request:`, approvalData);
         localStorage.setItem(this.APPROVAL_STORAGE_KEY, JSON.stringify(approvalData));
         
         // Store in session storage as backup
@@ -1360,7 +1287,6 @@ export class AuthService {
         // Check if the approval request is not too old (1 hour max)
         const maxAge = 60 * 60 * 1000; // 1 hour
         if (Date.now() - approvalData.timestamp > maxAge) {
-          console.log('[Auth] Approval request expired, clearing');
           this.clearPendingApprovalRequest();
           return null;
         }
@@ -1368,7 +1294,6 @@ export class AuthService {
         return approvalData;
       }
     } catch (error) {
-      console.error('[Auth] Error reading pending approval request:', error);
       this.clearPendingApprovalRequest();
     }
     
@@ -1387,7 +1312,6 @@ export class AuthService {
    * Clear pending approval request (should only be called by approval components after successful processing)
    */
   public clearProcessedApprovalRequest(): void {
-    console.log('[Auth] 🧹 Clearing processed approval request');
     this.clearPendingApprovalRequest();
   }
 
@@ -1403,7 +1327,6 @@ export class AuthService {
    * Useful when company status changes and immediate update is needed
    */
   public clearCompanyStatusCache(): void {
-    console.log('[Auth] Clearing company status cache');
     this.companyStatusCache.clear();
     
     // Also refresh the user profile to get latest data
@@ -1414,7 +1337,6 @@ export class AuthService {
    * Clear cache for a specific domain
    */
   public clearDomainCache(domain: string): void {
-    console.log(`[Auth] Clearing cache for domain: ${domain}`);
     this.companyStatusCache.delete(domain);
   }
 
@@ -1424,13 +1346,11 @@ export class AuthService {
   public async forceCheckCompanyStatus(): Promise<void> {
     const currentUser = this.getCurrentUser();
     if (!currentUser || !currentUser.email) {
-      console.log('[Auth] No current user or email, cannot check company status');
       return;
     }
     
     const domain = this.getEmailDomain(currentUser.email);
     if (!domain) {
-      console.log('[Auth] Cannot extract domain from user email');
       return;
     }
     
@@ -1440,13 +1360,10 @@ export class AuthService {
     // Check company status
     const companyStatus = await this.checkCompanyStatus(currentUser);
     if (companyStatus) {
-      console.log(`[Auth] Force check found company status issue, redirecting to: ${companyStatus.path}`);
       this.router.navigate([companyStatus.path], {
         queryParams: companyStatus.queryParams,
         replaceUrl: companyStatus.replaceUrl ?? true
       });
-    } else {
-      console.log('[Auth] Force check: Company status is active, no redirection needed');
     }
   }
 
@@ -1456,8 +1373,6 @@ export class AuthService {
    */
   public testStatusChange(newStatus: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED'): void {
     if (typeof window !== 'undefined') {
-      console.log(`[Auth] 🧪 DEBUG: Testing status change to ${newStatus}`);
-      
       // Clear all caches first
       this.clearCompanyStatusCache();
       

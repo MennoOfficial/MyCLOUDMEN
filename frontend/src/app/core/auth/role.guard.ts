@@ -9,38 +9,48 @@ export const roleGuard: CanActivateFn = (route, state) => {
   const router = inject(Router);
   const requiredRoles = route.data['requiredRoles'] as UserRole[];
   
+  // Check if user has required roles
   if (!requiredRoles || requiredRoles.length === 0) {
-    console.error('[RoleGuard] No required roles specified for route:', state.url);
+    // No specific roles required for this route
+    return true;
+  }
+
+  // Get current user
+  const user = authService.getCurrentUser();
+  
+  if (!user) {
+    // No authenticated user - redirect to login
+    router.navigate(['/auth/loading']);
     return false;
   }
+
+  // Check if user has no roles assigned
+  if (!user.roles || user.roles.length === 0) {
+    // User has no roles - redirect to pending account page
+    router.navigate(['/pending-account'], { replaceUrl: true });
+    return false;
+  }
+
+  // Check if user has any of the required roles
+  const hasRequiredRole = requiredRoles.some(role => user.roles.includes(role as UserRole));
   
-  return authService.user$.pipe(
-    // Don't proceed until we have user data or definitely know there is none
-    filter(user => user !== undefined),
-    take(1),
-    map(user => {
-      if (!user) {
-        console.log('[RoleGuard] No authenticated user found, redirecting to login');
-        authService.login();
-        return false;
-      }
-      
-      const hasRequiredRole = requiredRoles.some(role => 
-        user.roles.includes(role)
-      );
-      
-      if (!hasRequiredRole) {
-        console.log(`[RoleGuard] User doesn't have required roles (${requiredRoles.join(', ')}), redirecting`);
-        redirectBasedOnUserRole(user.roles, router);
-        return false;
-      }
-      
-      return true;
-    })
-  );
+  if (!hasRequiredRole) {
+    // User doesn't have required roles - redirect to appropriate page
+    const redirectPath = authService.getRoleBasedRedirectPath(user.roles);
+    router.navigate([redirectPath], { replaceUrl: true });
+    return false;
+  }
+
+  return true;
 };
 
 function redirectBasedOnUserRole(roles: UserRole[], router: Router): void {
+  // If user has no roles, redirect to pending account page
+  if (!roles || roles.length === 0) {
+    router.navigate(['/pending-account'], { replaceUrl: true });
+    return;
+  }
+  
   if (roles.includes('SYSTEM_ADMIN')) {
     router.navigate(['/companies']);
   } else if (roles.includes('COMPANY_ADMIN')) {

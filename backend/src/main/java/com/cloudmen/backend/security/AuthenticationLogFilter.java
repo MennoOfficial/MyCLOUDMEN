@@ -93,7 +93,6 @@ public class AuthenticationLogFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         String method = request.getMethod();
 
-        // Log the request path for debugging
         logger.info("Checking request: " + method + " " + path);
 
         // Skip auth-logs endpoints to avoid double logging

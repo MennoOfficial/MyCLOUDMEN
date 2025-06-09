@@ -197,72 +197,37 @@ export class CompaniesComponent implements OnInit {
   fetchCompanies(): void {
     this.loading = true;
     this.error = false;
-    this.authRequired = false;
     
-    // Build query parameters
-    const sortBy = this.sortColumn || 'name';
-    const direction = this.sortDirection;
-    
-    // Use the API service to fetch companies from the backend
-    this.apiService.get<CompanyListResponse>(`teamleader/companies?page=${this.pageIndex}&size=${this.pageSize}&sortBy=${sortBy}&direction=${direction}`)
+    this.apiService.get<any>('teamleader/companies')
       .subscribe({
         next: (response) => {
-          // Filter out the admin's own domain from the companies list
-          this.companies = response.companies.filter(company => {
-            if (!this.adminDomain || !company.email) return true;
-            const companyDomain = company.email.split('@')[1];
-            return companyDomain !== this.adminDomain;
-          });
-          
-          this.totalCompanies = this.companies.length; // Update total after filtering
-          this.applyFilters();
+          this.companies = response.companies || [];
+          this.totalCompanies = this.companies.length;
+          this.applyFilters(); // Apply filters to populate filteredCompanies
           this.loading = false;
         },
         error: (err) => {
           this.error = true;
           this.loading = false;
-          
-          // Check if the error is due to auth requirements
-          if (err.error && err.error.authUrl) {
-            this.authRequired = true;
-            this.authUrl = err.error.authUrl;
-          } else {
-            console.error('Error fetching companies:', err);
-          }
         }
       });
   }
 
   navigateToCompanyDetails(company: CompanyListItem): void {
-    console.log('Navigating to company details:', company);
-    console.log('Available IDs - teamleaderId:', company.teamleaderId, 'id:', company.id);
-    
-    // Use teamleaderId if available, otherwise fall back to id
+    // Determine which ID to use for navigation
     const companyId = company.teamleaderId || company.id;
     
-    if (!companyId) {
-      console.error('No valid company ID found for navigation');
-      this.showToastMessage(`Error: No valid ID found for ${company.name}`);
-      return;
+    if (companyId) {
+      this.router.navigate(['/system-admin/companies', companyId])
+        .then(success => {
+          // Navigation completed
+        })
+        .catch(error => {
+          // Navigation failed
+        });
+    } else {
+      // No valid ID found
     }
-    
-    console.log('Using company ID for navigation:', companyId);
-    
-    // Navigate to the company details page with the company ID
-    this.router.navigate(['/system-admin/companies', companyId]).then(
-      (navigated: boolean) => {
-        if (navigated) {
-          console.log('Navigation successful');
-          this.showToastMessage(`Opening ${company.name} details`);
-        } else {
-          console.error('Navigation failed');
-          this.showToastMessage(`Navigation to ${company.name} details failed`);
-        }
-      }
-    ).catch(error => {
-      console.error('Navigation error:', error);
-      this.showToastMessage(`Error navigating to ${company.name} details`);
-    });
   }
 
   searchCompanies(): void {
@@ -297,6 +262,17 @@ export class CompaniesComponent implements OnInit {
 
   applyFilters(): void {
     let filtered = this.companies;
+    
+    // Filter out admin domain companies
+    if (this.adminDomain) {
+      filtered = filtered.filter(company => {
+        if (company.email) {
+          const companyDomain = company.email.split('@')[1];
+          return companyDomain !== this.adminDomain;
+        }
+        return true;
+      });
+    }
     
     // Apply search filter
     if (this.searchQuery && this.searchQuery.trim()) {
@@ -362,7 +338,6 @@ export class CompaniesComponent implements OnInit {
     navigator.clipboard.writeText(text).then(() => {
       this.showToastMessage(`${type} copied to clipboard`);
     }).catch(err => {
-      console.error('Failed to copy text: ', err);
       this.showToastMessage(`Failed to copy ${type.toLowerCase()}`);
     });
   }
@@ -383,11 +358,15 @@ export class CompaniesComponent implements OnInit {
           const emailParts = user.email.split('@');
           if (emailParts.length === 2) {
             this.adminDomain = emailParts[1];
+            // Re-apply filters now that we have the admin domain
+            if (this.companies.length > 0) {
+              this.applyFilters();
+            }
           }
         }
       },
       error: (err) => {
-        console.error('Failed to get admin user profile:', err);
+        // Error getting admin user profile
       }
     });
   }

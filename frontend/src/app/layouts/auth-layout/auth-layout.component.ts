@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
 import { RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { NavigationStart, NavigationEnd, Router } from '@angular/router';
@@ -17,7 +17,10 @@ export class AuthLayoutComponent implements OnInit {
   private minLoadingTime = 2000; // Minimum time to show loading animation (ms)
   private loadingStartTime = 0;
 
-  constructor(private router: Router) {}
+  constructor(
+    private router: Router,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   ngOnInit(): void {
     // Only show loading animation for auth routes, not main layout routes
@@ -28,6 +31,10 @@ export class AuthLayoutComponent implements OnInit {
       if (event.url.startsWith('/auth/')) {
         this.loading = true;
         this.loadingStartTime = Date.now();
+        // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
+        setTimeout(() => {
+          this.cdr.detectChanges();
+        });
       }
     });
 
@@ -43,10 +50,14 @@ export class AuthLayoutComponent implements OnInit {
         // Ensure loading animation shows for at least minLoadingTime
         setTimeout(() => {
           this.loading = false;
+          this.cdr.detectChanges();
         }, remainingTime);
       } else {
         // Immediately hide loading for non-auth routes
-        this.loading = false;
+        setTimeout(() => {
+          this.loading = false;
+          this.cdr.detectChanges();
+        });
       }
     });
   }

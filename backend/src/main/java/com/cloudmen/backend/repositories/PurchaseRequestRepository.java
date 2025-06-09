@@ -44,14 +44,4 @@ public interface PurchaseRequestRepository extends MongoRepository<PurchaseReque
      * @return List of the 10 most recent purchase requests
      */
     List<PurchaseRequest> findTop10ByOrderByRequestDateDesc();
-
-    /**
-     * Find a purchase request by ID and status.
-     * This is useful for verifying that a status update was applied correctly.
-     * 
-     * @param id     The request ID
-     * @param status The status to check for
-     * @return The matching purchase request, or null if none found
-     */
-    PurchaseRequest findByIdAndStatus(String id, String status);
 }

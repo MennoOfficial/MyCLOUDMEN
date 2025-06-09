@@ -1,8 +1,8 @@
 import { Injectable } from '@angular/core';
 import { HttpRequest, HttpHandler, HttpEvent, HttpInterceptor, HttpErrorResponse } from '@angular/common/http';
-import { Observable, from, throwError, timer } from 'rxjs';
+import { Observable, from, throwError, timer, switchMap, map, of, take } from 'rxjs';
 import { AuthService } from './auth.service';
-import { catchError, mergeMap, retryWhen, take, tap, concatMap, finalize, switchMap } from 'rxjs/operators';
+import { catchError, mergeMap, retryWhen, tap, concatMap, finalize } from 'rxjs/operators';
 import { EnvironmentService } from '../services/environment.service';
 import { Router } from '@angular/router';
 
@@ -35,7 +35,7 @@ export class AuthInterceptor implements HttpInterceptor {
           catchError((error: HttpErrorResponse) => this.handleRequestError(error, req, next)),
           // Log completion
           finalize(() => {
-            console.log(`[Auth Interceptor] Request to ${req.url} completed`);
+            // Request completed - log success if needed
           })
         );
       })
@@ -54,8 +54,6 @@ export class AuthInterceptor implements HttpInterceptor {
    * Add standard headers and auth token to request
    */
   private addHeadersToRequest(req: HttpRequest<any>, token: string): HttpRequest<any> {
-    console.log(`[Auth Interceptor] Processing request: ${req.url}`);
-    
     // Add standard API headers
     let headers = req.headers
       .set('Content-Type', 'application/json')
@@ -86,7 +84,6 @@ export class AuthInterceptor implements HttpInterceptor {
               
               if (retryAttempt <= 2 && error instanceof HttpErrorResponse && 
                   this.RETRYABLE_STATUS.includes(error.status)) {
-                console.log(`[Auth Interceptor] Retry attempt ${retryAttempt} for ${req.url}`);
                 return timer(retryAttempt * 1000); // Increasing delay: 1s, 2s
               }
               
@@ -101,10 +98,7 @@ export class AuthInterceptor implements HttpInterceptor {
    * Handle HTTP request errors
    */
   private handleRequestError(error: HttpErrorResponse, req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
-    console.error(`[Auth Interceptor] Error in API request to ${req.url}:`, error);
-    
     if (error.status === 401) {
-      console.log('[Auth Interceptor] 401 Unauthorized error - handling authentication');
       return this.handle401Error(req, next);
     }
     
@@ -114,11 +108,9 @@ export class AuthInterceptor implements HttpInterceptor {
   /**
    * Handle 401 Unauthorized errors by refreshing token or redirecting to login
    */
-  private handle401Error(request: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
+  private handle401Error(req: HttpRequest<any>, next: HttpHandler): Observable<HttpEvent<any>> {
     if (!this.isRefreshing) {
       this.isRefreshing = true;
-      
-      console.log('[Auth Interceptor] Handling 401 error, refreshing authentication');
       
       // Try refreshing the user profile
       this.authService.refreshUserProfile();
@@ -130,16 +122,14 @@ export class AuthInterceptor implements HttpInterceptor {
           
           // Check if we have a user after refresh
           if (!this.authService.getCurrentUser()) {
-            console.log('[Auth Interceptor] Still unauthorized after refresh, redirecting to login');
             this.authService.login();
             return throwError(() => new Error('Authentication failed'));
           }
           
           // Retry the request with a fresh token
-          console.log('[Auth Interceptor] Successfully refreshed, retrying request');
           return this.authService.getAccessToken().pipe(
             mergeMap(token => {
-              const authReq = this.addHeadersToRequest(request, token);
+              const authReq = this.addHeadersToRequest(req, token);
               return next.handle(authReq);
             })
           );
@@ -147,7 +137,6 @@ export class AuthInterceptor implements HttpInterceptor {
       );
     } else {
       // If already refreshing, wait for that to complete
-      console.log('[Auth Interceptor] Already refreshing, redirecting to login');
       this.authService.login();
       return throwError(() => new Error('Authentication refresh in progress'));
     }
