@@ -177,15 +177,4 @@ mvn test
 mvn verify
 ```
 
-## 📞 Support
-
-- **Documentation**: Internal Wiki
-- **Issues**: GitHub Issues
-
-## 📄 License
-
-Proprietary software owned by CloudMen. All rights reserved.
-
----
-
 **Built by Menno Plochaet**
