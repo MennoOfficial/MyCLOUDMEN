@@ -30,27 +30,13 @@
     </button>
   </div>
 
-  <!-- Search Only -->
-  <div class="search-section" [class.dimmed]="isDetailViewVisible">
-    <div class="search-container">
-      <div class="search-box">
-        <span class="material-icons search-icon">search</span>
-        <input
-          type="text"
-          placeholder="Search invoices..."
-          [(ngModel)]="searchText"
-          (input)="applyFilters()"
-          class="search-input"
-        />
-        <button
-          *ngIf="searchText"
-          class="clear-search-btn"
-          (click)="clearSearch()"
-        >
-          <span class="material-icons">close</span>
-        </button>
-      </div>
-    </div>
+  <!-- Standardized Search and Filters -->
+  <div [class.dimmed]="isDetailViewVisible">
+    <app-search-filter
+      [filterConfigs]="filterConfigs"
+      [searchPlaceholder]="'Search invoices...'"
+      (searchFilter)="onSearchFilter($event)"
+    ></app-search-filter>
   </div>
 
   <!-- Main Content Area -->

@@ -661,19 +661,6 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
     return this.sortDirection === 'asc' ? 'arrow_upward' : 'arrow_downward';
   }
 
-  // Add this new method to test the status endpoint
-  testStatusEndpoint(): void {
-    this.apiService.get('purchase/status')
-      .subscribe({
-        next: (response) => {
-          this.showToastNotification('Status endpoint is working', 'success');
-        },
-        error: (err) => {
-          this.showToastNotification('Status endpoint failed', 'error');
-        }
-      });
-  }
-
   // Method to show user detail popup
   showUserDetail(user: CompanyUser): void {
     // Check if user is rejected - show rejected user popup instead
@@ -839,7 +826,21 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
     this.apiService.put(`users/${this.selectedUserDetail.id}/status`, { status: backendStatus })
       .subscribe({
         next: (response) => {
-          this.updateStatusLocally(newStatus);
+          // Update status locally in the UI
+          if (this.selectedUserDetail) {
+            this.selectedUserDetail.status = newStatus;
+            
+            // Also update selectedUserForModal to sync the modal
+            if (this.selectedUserForModal) {
+              this.selectedUserForModal.status = newStatus;
+            }
+            
+            // Also update in the main users array for consistency
+            const userIndex = this.companyUsers.findIndex(u => u.id === this.selectedUserDetail?.id);
+            if (userIndex >= 0) {
+              this.companyUsers[userIndex].status = newStatus;
+            }
+          }
           this.showToastNotification('Success', 'User status updated successfully', 'success');
           this.updatingUser = false;
         },
@@ -848,25 +849,6 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
           this.updatingUser = false;
         }
       });
-  }
-
-  // Update status locally in the UI
-  private updateStatusLocally(newStatus: string): void {
-    if (!this.selectedUserDetail) return;
-    
-    // Update the selected user's status
-    this.selectedUserDetail.status = newStatus;
-    
-    // Also update selectedUserForModal to sync the modal
-    if (this.selectedUserForModal) {
-      this.selectedUserForModal.status = newStatus;
-    }
-    
-    // Also update in the main users array for consistency
-    const userIndex = this.companyUsers.findIndex(u => u.id === this.selectedUserDetail?.id);
-    if (userIndex >= 0) {
-      this.companyUsers[userIndex].status = newStatus;
-    }
   }
 
   // Format the timestamp for better display

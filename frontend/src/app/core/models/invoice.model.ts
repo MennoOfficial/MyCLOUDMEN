@@ -4,7 +4,9 @@
 export interface Invoice {
   id: string;
   invoiceNumber: string;  // Mapped from id
+  invoiceDate: string | Date; // Mapped from date
   dueDate: string | Date; // Mapped from dueOn
+  paymentDate?: string | Date; // Payment date for paid invoices
   totalAmount: number;    // Mapped from total
   paymentReference: string;
   currency: string;

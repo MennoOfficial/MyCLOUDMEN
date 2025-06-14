@@ -301,8 +301,27 @@ export class AuthLogsComponent implements OnInit, OnDestroy {
   }
 
   formatDate(dateString: string): string {
-    const date = new Date(dateString);
-    return date.toLocaleString();
+    if (!dateString) return 'Unknown';
+    
+    try {
+      // Simply parse the date and let the browser handle timezone conversion
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      
+      // Use the user's local timezone for display with 24-hour format
+      return new Intl.DateTimeFormat('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false, // Changed to 24-hour format
+        timeZoneName: 'short'
+      }).format(date);
+    } catch (error) {
+      return 'Invalid date';
+    }
   }
 
   getStatusClass(successful: boolean): string {

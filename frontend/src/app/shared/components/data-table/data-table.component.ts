@@ -393,6 +393,9 @@ export class DataTableComponent implements OnInit {
     if (lowerValue.includes('paid') || lowerValue.includes('success') || lowerValue.includes('approved')) {
       return 'badge-success';
     }
+    if (lowerValue.includes('outstanding')) {
+      return 'badge-info'; // Blue for outstanding invoices
+    }
     
     // Handle specific company status values - Check inactive first to prevent substring matching
     if (stringValue === 'INACTIVE' || lowerValue === 'inactive') {
@@ -477,12 +480,35 @@ export class DataTableComponent implements OnInit {
 
   formatDate(date: string | Date): string {
     if (!date) return '-';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    
+    try {
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return 'Invalid date';
+      
+      // For table display, show full date and time if it's recent (within 7 days)
+      const now = new Date();
+      const diffDays = Math.abs((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 7) {
+        // Show full date and time for recent entries using 24-hour format
+        return d.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false // Changed to 24-hour format
+        });
+      } else {
+        // Show just date for older entries
+        return d.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      }
+    } catch (error) {
+      return 'Invalid date';
+    }
   }
 
   formatCurrency(amount: number): string {

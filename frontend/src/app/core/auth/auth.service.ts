@@ -1,7 +1,7 @@
 import { Injectable, Inject, Optional } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, of, throwError, timer, from, firstValueFrom, Subject, forkJoin } from 'rxjs';
-import { catchError, concatMap, map, retryWhen, switchMap, take, tap, timeout, filter, finalize, shareReplay, distinctUntilChanged } from 'rxjs/operators';
+import { catchError, concatMap, map, retryWhen, switchMap, take, tap, timeout, filter, finalize, distinctUntilChanged } from 'rxjs/operators';
 import { AuthService as Auth0Service } from '@auth0/auth0-angular';
 import { Router } from '@angular/router';
 import { EnvironmentService } from '../services/environment.service';
@@ -436,11 +436,13 @@ export class AuthService {
         companyName: user.companyName
       };
       
-      this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication`, authData)
+      this.http.post(`${this.environmentService.apiUrl}/api/auth0/log-authentication`, authData)
         .subscribe({
           next: () => {
+            console.log('Authentication logged successfully');
           },
           error: (error) => {
+            console.error('Failed to log authentication:', error);
           }
         });
     } catch (error) {
@@ -520,11 +522,13 @@ export class AuthService {
         reason: `${reason}: ${error?.message || 'Unknown error'}`
       };
       
-      this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication-failure`, failureData)
+      this.http.post(`${this.environmentService.apiUrl}/api/auth0/log-authentication-failure`, failureData)
         .subscribe({
           next: () => {
+            console.log('Authentication failure logged successfully');
           },
           error: (logError) => {
+            console.error('Failed to log authentication failure:', logError);
           }
         });
     } catch (error) {
@@ -1244,6 +1248,11 @@ export class AuthService {
     const currentUrl = window.location.href;
     const url = new URL(currentUrl);
     
+    // Don't store approval data if we're on the requests page (user completed approval)
+    if (url.pathname === '/requests') {
+      return;
+    }
+    
     // Check if this is an approval URL
     const isApprovalPath = url.pathname.includes('/approve-license') || 
                           url.pathname.includes('/confirm-purchase') || 
@@ -1263,8 +1272,6 @@ export class AuthService {
         };
         
         localStorage.setItem(this.APPROVAL_STORAGE_KEY, JSON.stringify(approvalData));
-        
-        // Store in session storage as backup
         sessionStorage.setItem(this.APPROVAL_STORAGE_KEY, JSON.stringify(approvalData));
       }
     }
@@ -1312,7 +1319,8 @@ export class AuthService {
    * Clear pending approval request (should only be called by approval components after successful processing)
    */
   public clearProcessedApprovalRequest(): void {
-    this.clearPendingApprovalRequest();
+    localStorage.removeItem(this.APPROVAL_STORAGE_KEY);
+    sessionStorage.removeItem(this.APPROVAL_STORAGE_KEY);
   }
 
   /**
@@ -1367,31 +1375,5 @@ export class AuthService {
     }
   }
 
-  /**
-   * Debug method to manually test status changes (for development only)
-   * Usage in browser console: window.authService.testStatusChange('SUSPENDED')
-   */
-  public testStatusChange(newStatus: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED'): void {
-    if (typeof window !== 'undefined') {
-      // Clear all caches first
-      this.clearCompanyStatusCache();
-      
-      // Simulate the status change by temporarily modifying the user object
-      const currentUser = this.getCurrentUser();
-      if (currentUser) {
-        // Create a test company status
-        if (currentUser.company) {
-          currentUser.company.status = newStatus;
-        } else {
-          currentUser.company = { name: 'Test Company', status: newStatus };
-        }
-        
-        // Update the user subject to trigger status checks
-        this.userSubject.next(currentUser);
-        
-        // Force a status check
-        this.forceCheckCompanyStatus();
-      }
-    }
-  }
+
 }

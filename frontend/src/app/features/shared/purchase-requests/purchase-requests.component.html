@@ -323,8 +323,8 @@
             <div class="license-header">
               <h3 class="plan-name">Business Starter</h3>
               <div class="plan-price">
-                <span class="currency">$</span>
-                <span class="amount">7</span>
+                <span class="currency">€</span>
+                <span class="amount">6</span>
                 <span class="period">/month</span>
               </div>
               <div class="plan-commitment">1-year commitment per user</div>
@@ -387,8 +387,8 @@
             <div class="license-header">
               <h3 class="plan-name">Business Standard</h3>
               <div class="plan-price">
-                <span class="currency">$</span>
-                <span class="amount">14</span>
+                <span class="currency">€</span>
+                <span class="amount">12</span>
                 <span class="period">/month</span>
               </div>
               <div class="plan-commitment">1-year commitment per user</div>
@@ -450,8 +450,8 @@
             <div class="license-header">
               <h3 class="plan-name">Business Plus</h3>
               <div class="plan-price">
-                <span class="currency">$</span>
-                <span class="amount">22</span>
+                <span class="currency">€</span>
+                <span class="amount">18</span>
                 <span class="period">/month</span>
               </div>
               <div class="plan-commitment">1-year commitment per user</div>
@@ -684,7 +684,7 @@
         [rowClickable]="false"
         [showPagination]="true"
         [totalItems]="activityTotalItems"
-        [currentPage]="activityCurrentPage - 1"
+        [currentPage]="activityCurrentPage"
         [pageSize]="activityPageSize"
         [sortColumn]="activitySortColumn"
         [sortDirection]="activitySortDirection"
@@ -783,11 +783,11 @@
             </div>
             <div class="breakdown-item total">
               <span class="item-label">Monthly Total</span>
-              <span class="item-value">${{ calculateLicenseCost() }}</span>
+              <span class="item-value">€{{ calculateLicenseCost() }}</span>
             </div>
             <div class="breakdown-item yearly">
               <span class="item-label">Annual Total</span>
-              <span class="item-value">${{ calculateLicenseCost() * 12 }}</span>
+              <span class="item-value">€{{ calculateLicenseCost() * 12 }}</span>
             </div>
           </div>
         </div>

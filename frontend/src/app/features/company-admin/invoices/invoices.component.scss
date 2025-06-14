@@ -362,6 +362,11 @@
     color: var(--amber);
   }
   
+  &.outstanding {
+    background: var(--ocean-blue-soft);
+    color: var(--ocean-blue);
+  }
+  
   /* Mobile adjustments */
   @media (max-width: 768px) {
     font-size: 0.7rem;
@@ -745,74 +750,7 @@
   }
 }
 
-/* Search Section */
-.search-section {
-  margin-bottom: var(--space-lg);
-  
-  &.dimmed {
-    opacity: 0.5;
-    pointer-events: none;
-  }
-}
-
-.search-container {
-  max-width: 400px;
-}
-
-.search-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.search-icon {
-  position: absolute;
-  left: var(--space-md);
-  color: var(--slate);
-  font-size: 20px;
-  z-index: 1;
-}
-
-.search-input {
-  width: 100%;
-  padding: var(--space-md) var(--space-xl) var(--space-md) 48px;
-  border: 2px solid var(--silver-lining);
-  border-radius: var(--radius-md);
-  font-size: 0.875rem;
-  background: white;
-  transition: all var(--transition-fast);
-  
-  &:focus {
-    outline: none;
-    border-color: var(--aqua-spring);
-    box-shadow: 0 0 0 3px rgba(69, 190, 176, 0.1);
-  }
-  
-  &::placeholder {
-    color: var(--slate);
-  }
-}
-
-.clear-search-btn {
-  position: absolute;
-  right: var(--space-sm);
-  background: none;
-  border: none;
-  color: var(--slate);
-  cursor: pointer;
-  padding: var(--space-xs);
-  border-radius: var(--radius-sm);
-  transition: all var(--transition-fast);
-  
-  &:hover {
-    background: var(--silver-lining);
-    color: var(--deep-ocean);
-  }
-  
-  .material-icons {
-    font-size: 18px;
-  }
-}
+/* Standardized search and filters handled by SearchFilterComponent */
 
 /* Page Header */
 .page-header {
@@ -1119,15 +1057,15 @@
       flex-shrink: 0;
       
       &.overdue {
-        background-color: #e53935;
+        background-color: var(--fire-red);
       }
       
       &.outstanding {
-        background-color: #f57c00;
+        background-color: var(--ocean-blue);
       }
       
       &.paid {
-        background-color: #43a047;
+        background-color: var(--aqua-spring);
       }
     }
     
@@ -1206,29 +1144,29 @@
   }
   
   &.outstanding {
-    background-color: #FFF4E5;
-    color: #FF9800;
+    background-color: var(--ocean-blue-soft);
+    color: var(--ocean-blue);
     
     .status-indicator {
-      background-color: #FF9800;
+      background-color: var(--ocean-blue);
     }
   }
   
   &.paid {
-    background-color: #E8F5E9;
-    color: #4CAF50;
+    background-color: var(--aqua-spring-soft);
+    color: var(--aqua-spring);
     
     .status-indicator {
-      background-color: #4CAF50;
+      background-color: var(--aqua-spring);
     }
   }
   
   &.overdue {
-    background-color: #FFEBEE;
-    color: #F44336;
+    background-color: var(--fire-red-soft);
+    color: var(--fire-red);
     
     .status-indicator {
-      background-color: #F44336;
+      background-color: var(--fire-red);
     }
   }
 }
@@ -1256,29 +1194,29 @@
   }
   
   &.overdue {
-    background-color: rgba(244, 67, 54, 0.15);
-    color: #e53935;
+    background-color: var(--fire-red-soft);
+    color: var(--fire-red);
     
     .status-indicator {
-      background-color: #e53935;
+      background-color: var(--fire-red);
     }
   }
   
   &.outstanding {
-    background-color: rgba(255, 152, 0, 0.15);
-    color: #f57c00;
+    background-color: var(--ocean-blue-soft);
+    color: var(--ocean-blue);
     
     .status-indicator {
-      background-color: #f57c00;
+      background-color: var(--ocean-blue);
     }
   }
   
   &.paid {
-    background-color: rgba(76, 175, 80, 0.15);
-    color: #43a047;
+    background-color: var(--aqua-spring-soft);
+    color: var(--aqua-spring);
     
     .status-indicator {
-      background-color: #43a047;
+      background-color: var(--aqua-spring);
     }
   }
 }

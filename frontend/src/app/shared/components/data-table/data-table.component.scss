@@ -434,43 +434,43 @@
   }
   
   &.badge-success {
-    background: rgba(34, 197, 94, 0.1);
-    color: #16a34a;
+    background: var(--aqua-spring-soft);
+    color: var(--aqua-spring);
   }
   
   &.badge-danger {
-    background: rgba(239, 68, 68, 0.1);
-    color: #dc2626;
+    background: var(--fire-red-soft);
+    color: var(--fire-red);
   }
   
   &.badge-warning {
-    background: rgba(245, 158, 11, 0.1);
-    color: #d97706;
+    background: var(--amber-soft);
+    color: var(--amber);
   }
   
   &.badge-info {
-    background: rgba(59, 130, 246, 0.1);
-    color: #2563eb;
+    background: var(--ocean-blue-soft);
+    color: var(--ocean-blue);
   }
   
   &.badge-neutral {
-    background: rgba(97, 97, 97, 0.1);
-    color: #616161;
+    background: var(--deep-ocean-soft);
+    color: var(--deep-ocean);
   }
   
   &.badge-secondary {
-    background: rgba(107, 114, 128, 0.1);
-    color: #6b7280;
+    background: var(--silver-lining);
+    color: var(--slate);
   }
   
   &.badge-admin {
-    background: rgba(155, 89, 182, 0.1); // Purple for all admin roles  
-    color: #9b59b6;
+    background: var(--purple-rain-soft);
+    color: var(--purple-rain);
   }
   
   &.badge-user {
-    background: rgba(6, 182, 212, 0.1); // Teal for user roles
-    color: #0891b2;
+    background: var(--teamleader-blue-soft);
+    color: var(--teamleader-blue);
   }
 }
 
@@ -478,22 +478,22 @@
 .badge {
   /* Purchase Request statuses */
   &.badge-PENDING {
-    background: rgba(245, 158, 11, 0.1);
-    color: #d97706;
+    background: var(--amber-soft);
+    color: var(--amber);
   }
   
   &.badge-AWAITING_CONFIRMATION {
-    background: rgba(59, 130, 246, 0.1);
-    color: #2563eb;
+    background: var(--ocean-blue-soft);
+    color: var(--ocean-blue);
   }
   
   &.badge-APPROVED {
-    background: rgba(34, 197, 94, 0.1);
-    color: #16a34a;
+    background: var(--aqua-spring-soft);
+    color: var(--aqua-spring);
   }
   
   &.badge-REJECTED {
-    background: rgba(245, 158, 11, 0.1); // Orange for rejected
-    color: #d97706;
+    background: var(--sunset-orange-soft);
+    color: var(--sunset-orange);
   }
 } 

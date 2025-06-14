@@ -147,6 +147,9 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   private maxAttempts = 20; // Maximum polling attempts
   private currentAttempt = 0;
   
+  // Flag to prevent re-execution of mode actions
+  private modeActionsExecuted = false;
+  
   // Original component state
   isLoading = true;
   loadingError = false;
@@ -175,14 +178,8 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   notificationMessage = '';
   notificationType = 'success';
 
-  // New properties for enhanced UI
+  // UI properties
   showAllRequests = false;
-  hasMoreRequests = false;
-  private readonly RECENT_DAYS_LIMIT = 30;
-  private readonly PAGE_SIZE = 10;
-  private currentPage = 0;
-  private lastFetchTime = 0;
-  private readonly FETCH_COOLDOWN = 5000; // 5 seconds cooldown between fetches
 
   // Standardized component configurations - REMOVED REFRESH BUTTON
   headerActions: PageAction[] = [
@@ -284,6 +281,10 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     this.route.data.subscribe(data => {
       if (data['mode']) {
         this.mode = data['mode'];
+      } else {
+        // Reset to normal mode when no mode is specified in route data
+        this.mode = 'normal';
+        this.modeActionsExecuted = false;
       }
     });
     
@@ -301,6 +302,11 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         const type = params['type'] === 'purchase' ? 'Purchase' : 'License';
         this.showToast(`${type} request completed successfully!`, 'success');
         this.fetchPendingRequests();
+        
+        // Clear query parameters to prevent reprocessing on refresh
+        setTimeout(() => {
+          this.router.navigate(['/requests'], { replaceUrl: true });
+        }, 1000);
       }
     });
       }
@@ -320,15 +326,33 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       this.statusCheckInterval.unsubscribe();
     }
     
+    // Reset mode actions flag
+    this.modeActionsExecuted = false;
+    
     // Ensure body scroll is restored
     this.restoreBodyScroll();
   }
   
   private handleModeActions() {
+    // Prevent re-execution of mode actions for non-normal modes
+    if (this.mode !== 'normal' && this.modeActionsExecuted) {
+      return;
+    }
+    
+    // Mark as executed for non-normal modes
+    if (this.mode !== 'normal') {
+      this.modeActionsExecuted = true;
+    }
+    
     switch (this.mode) {
       case 'accept-purchase':
         if (!this.requestId) {
           this.showError('Missing request ID for purchase acceptance');
+          return;
+        }
+        
+        // Additional safety check - don't execute if already processed
+        if (this.success || this.error) {
           return;
         }
         
@@ -346,6 +370,12 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.showError('Missing request ID for confirmation');
           return;
         }
+        
+        // Additional safety check - don't execute if already processed
+        if (this.success || this.error) {
+          return;
+        }
+        
         this.confirmPurchase(this.requestId);
         break;
         
@@ -354,7 +384,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.showError('Missing request ID for license approval');
           return;
         }
-          this.approveLicense(this.requestId);
+        
+        // Additional safety check - don't execute if already processed
+        if (this.success || this.error) {
+          return;
+        }
+        
+        this.approveLicense(this.requestId);
         break;
         
       case 'purchase-success':
@@ -419,10 +455,11 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           this.showToast('Purchase approved successfully!', 'success');
           this.fetchPendingRequests();
           
+          // Clear the approval data from localStorage to prevent re-processing
+          this.authService.clearProcessedApprovalRequest();
+          
           setTimeout(() => {
-            this.router.navigate(['/requests'], {
-              queryParams: { status: 'success', type: 'purchase' }
-            });
+            this.router.navigate(['/requests']);
           }, 2000);
         } else {
           this.error = true;
@@ -439,11 +476,12 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         this.showToast('Purchase approved successfully!', 'success');
         this.fetchPendingRequests();
         
-      setTimeout(() => {
-        this.router.navigate(['/requests'], {
-            queryParams: { status: 'success', type: 'purchase' }
-          });
-      }, 2000);
+        // Clear the approval data from localStorage to prevent re-processing
+        this.authService.clearProcessedApprovalRequest();
+        
+        setTimeout(() => {
+          this.router.navigate(['/requests']);
+        }, 2000);
       }
     });
   }
@@ -494,16 +532,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     this.message = 'License request approved successfully!';
     this.showToast('License approved successfully!', 'success');
     this.fetchPendingRequests();
-            
-            setTimeout(() => {
-              this.router.navigate(['/requests'], {
-        queryParams: {
-                status: 'success',
-                  requestId: this.requestId,
-                type: this.requestType
-                }
-            });
-          }, 2000);
+    
+    // Clear the approval data from localStorage to prevent re-processing
+    this.authService.clearProcessedApprovalRequest();
+    
+    setTimeout(() => {
+      this.router.navigate(['/requests']);
+    }, 2000);
   }
   
   private handleLicenseError(errorMessage: string): void {
@@ -604,15 +639,12 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           // Force refresh the purchase requests list
           this.fetchPendingRequests();
           
+          // Clear the approval data from localStorage to prevent re-processing
+          this.authService.clearProcessedApprovalRequest();
+          
           // Navigate back to the main requests page after showing success message
           setTimeout(() => {
-            this.router.navigate(['/requests'], {
-                queryParams: {
-                status: 'success',
-                  requestId: this.requestId,
-                type: this.requestType
-                }
-            });
+            this.router.navigate(['/requests']);
           }, 3000);
           
         } else if (currentStatus === 'REJECTED') {
@@ -676,15 +708,12 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
           // Force refresh the purchase requests list
           this.fetchPendingRequests();
           
+          // Clear the approval data from localStorage to prevent re-processing
+          this.authService.clearProcessedApprovalRequest();
+          
           // Navigate back to the main requests page after a delay
           setTimeout(() => {
-            this.router.navigate(['/requests'], {
-              queryParams: {
-                status: 'success',
-                requestId: this.requestId,
-                type: request.type === 'licenses' ? 'license' : 'purchase'
-              }
-            });
+            this.router.navigate(['/requests']);
           }, 2000);
         }
       }
@@ -934,17 +963,6 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies/domain/${emailDomain}`)
           .pipe(
             catchError(error => {
-              // Add debugging: try to fetch all companies to see what's available
-              this.http.get<any>(`${this.environmentService.apiUrl}/teamleader/companies`)
-                .subscribe({
-                  next: (allCompanies) => {
-                    // Debug info available but not logged
-                  },
-                  error: (debugError) => {
-                    // Debug error handling without logging
-                  }
-                });
-              
               return of(null);
             })
           )
@@ -965,7 +983,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
                 ...currentUser,
                 // Use the found company name
                 company: companyInfo.name,
-                companyData: companyInfo, // Store full company data for debugging
+                companyData: companyInfo,
                 // Add domain from email
                 domain: emailDomain || 'example.com',
                 // Use extracted or fallback customer IDs
@@ -1032,91 +1050,35 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
 
   /**
    * Get customer ID mapping based on email domain
-   * This is a fallback when company data doesn't contain customer IDs
    */
   private getDomainCustomerMapping(emailDomain: string | null): any {
-    // Default fallback customer IDs
-    const defaultMapping = {
+    return {
       signatureSatori: '535354',
       googleWorkspace: '363466'
     };
-    
-    // Add domain-specific mappings here if you have them
-    const domainMappings: { [key: string]: any } = {
-      'cloudmen.net': {
-        signatureSatori: '535354',
-        googleWorkspace: '363466'
-      },
-      // Add more domain mappings as needed
-      // 'example.com': {
-      //   signatureSatori: 'customer_id_for_example',
-      //   googleWorkspace: 'workspace_id_for_example'
-      // }
-    };
-    
-    if (emailDomain && domainMappings[emailDomain.toLowerCase()]) {
-      return domainMappings[emailDomain.toLowerCase()];
-    }
-    
-    return defaultMapping;
   }
 
   /**
    * Setup user info with fallback data when company lookup fails
    */
   private setupUserInfoWithFallback(currentUser: any, emailDomain: string | null, companyInfo: any): void {
-    // Use domain-based customer IDs as fallback
     const customerIds = this.getDomainCustomerMapping(emailDomain);
-    
-    // For gmail.com users, show a more helpful message
-    let companyDisplayName = 'MyCLOUDMEN';
-    let isGmailUser = emailDomain?.toLowerCase() === 'gmail.com';
-    
-    if (isGmailUser) {
-      companyDisplayName = 'Your Organization';
-    } else if (emailDomain) {
-      // Try to create a reasonable company name from domain
-      const derivedName = this.getCompanyNameFromDomain(emailDomain);
-      if (derivedName && derivedName !== emailDomain) {
-        companyDisplayName = derivedName;
-      }
-    }
     
     this.userInfo = {
       ...currentUser,
-      // Use the appropriate fallback company name
-      company: companyDisplayName,
-      // Add domain from email
+      company: 'MyCLOUDMEN',
       domain: emailDomain || 'example.com',
-      displayDomain: isGmailUser ? 'your-domain.com' : (emailDomain || 'your-domain.com'),
-      isPublicEmail: isGmailUser,
-      // Use fallback customer IDs
       customerId: customerIds.signatureSatori,
-      googleWorkspaceCustomerId: customerIds.googleWorkspace,
-      // Mark as fallback for debugging and UI hints
-      _fallback: true,
-      _reason: companyInfo ? 'invalid_company_data' : 'no_domain_or_lookup_failed',
-      _isGmailUser: isGmailUser
+      googleWorkspaceCustomerId: customerIds.googleWorkspace
     };
     
-    // After getting user info, fetch licenses, credits, and SKUs
     this.fetchGoogleWorkspaceLicenses();
     this.fetchSignatureSatoriCredits();
     this.fetchAvailableSkus();
     this.fetchPendingRequests();
   }
 
-  /**
-   * Generate a reasonable company name from domain
-   */
-  private getCompanyNameFromDomain(domain: string | null): string | null {
-    if (!domain) return null;
-    
-    // Convert domain to a reasonable company name
-    // Remove common TLDs and convert to title case
-    const baseName = domain.replace(/\.(com|net|org|io|co|uk|de|fr|nl|be)$/i, '');
-    return baseName.charAt(0).toUpperCase() + baseName.slice(1);
-  }
+
 
   /**
    * Helper function to extract domain from email
@@ -1127,43 +1089,16 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
 
   fetchGoogleWorkspaceLicenses(): void {
-    // Use the customer ID from the user info
     const customerId = this.userInfo.googleWorkspaceCustomerId;
     this.customerId = customerId;
     
-    // Fetch Google Workspace licenses using the correct endpoint
     this.http.get<GoogleWorkspaceSubscriptionListResponseDTO>(
       `${this.environmentService.apiUrl}/google-workspace/customers/${customerId}/licenses`
     )
       .pipe(
         catchError(error => {
           this.showToast('Failed to load license information', 'error');
-          // Fallback to mock data
-          return of({ 
-            subscriptions: [
-              {
-                skuId: '1010020020',
-                skuName: 'Google Workspace Business Starter',
-                totalLicenses: 5,
-                planType: 'ANNUAL',
-                status: 'ACTIVE'
-              },
-              {
-                skuId: '1010020028',
-                skuName: 'Google Workspace Business Standard',
-                totalLicenses: 10,
-                planType: 'ANNUAL',
-                status: 'ACTIVE'
-              },
-              {
-                skuId: '1010020025',
-                skuName: 'Google Workspace Business Plus',
-                totalLicenses: 3,
-                planType: 'FLEXIBLE',
-                status: 'ACTIVE'
-              }
-            ] 
-          });
+          return of({ subscriptions: [] });
         }),
         finalize(() => {
           this.isLoading = false;
@@ -1185,13 +1120,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       .pipe(
         catchError(error => {
           this.showToast('Failed to load credit information', 'error');
-          return of({
-            customerId: satoriCustomerId,
-            creditBalance: 150,
-            domains: [this.userInfo.domain],
-            ownerEmail: this.userInfo.email,
-            creditDiscountPercent: 0.1
-          });
+          return of({ customerId: satoriCustomerId, creditBalance: 0, domains: [], ownerEmail: '', creditDiscountPercent: 0 });
         })
       )
       .subscribe(response => {
@@ -1230,33 +1159,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     .pipe(
       catchError(error => {
         this.showToast('Failed to load purchase requests', 'error');
-        
-        // Fallback to mock data on error
-        return of({
-          items: [
-            {
-              id: 'req-123',
-              type: 'licenses',
-              licenseType: 'Business Standard',
-              quantity: 5,
-              domain: this.userInfo?.domain || 'example.com',
-              userEmail: userEmail,
-              requestDate: new Date().toISOString(),
-              status: 'AWAITING_CONFIRMATION'
-            },
-            {
-              id: 'req-124',
-              type: 'credits',
-              quantity: 500,
-              userEmail: userEmail,
-              requestDate: new Date(Date.now() - 86400000).toISOString(), // Yesterday
-              status: 'APPROVED'
-            }
-          ],
-          currentPage: 0,
-          totalItems: 2,
-          totalPages: 1
-        } as PaginatedResponse<PurchaseRequestResponse>);
+        return of({ items: [], currentPage: 0, totalItems: 0, totalPages: 0 } as PaginatedResponse<PurchaseRequestResponse>);
       }),
       finalize(() => {
         this.isLoading = false;
@@ -1269,7 +1172,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         type: this.formatRequestTypeFromResponse(item),
         quantity: item.quantity || 0,
         cost: item.cost || this.calculateCost(item),
-        requestDate: this.formatDateForDisplay(item.requestDate),
+        requestDate: item.requestDate, // Keep original date/time from backend
         status: item.status
       }));
       
@@ -1337,13 +1240,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     // Return the price based on license type
     switch (licenseType) {
       case 'Business Starter':
-        return '$7 USD';
+        return '€6';
       case 'Business Standard':
-        return '$14 USD';
+        return '€12';
       case 'Business Plus':
-        return '$22 USD';
+        return '€18';
       default:
-        return '$0 USD';
+        return '€0';
     }
   }
   
@@ -1351,11 +1254,11 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     // Return the numeric price for calculations
     switch (licenseType) {
       case 'Business Starter':
-        return 7;
+        return 6;
       case 'Business Standard':
-        return 14;
+        return 12;
       case 'Business Plus':
-        return 22;
+        return 18;
       default:
         return 0;
     }
@@ -1600,16 +1503,14 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Manually refresh purchase requests with cooldown to prevent spam
+   * Manually refresh purchase requests
    */
   refreshPurchaseRequests(): void {
-    const now = Date.now();
-    if (now - this.lastFetchTime < this.FETCH_COOLDOWN) {
-      this.showToast('Please wait before refreshing again', 'error');
-      return;
-    }
+    // Clear all caches to force refresh
+    this.clearActivityCache();
+    this._lastRequestsHash = '';
+    this._displayedRequests = [];
     
-    this.lastFetchTime = now;
     this.showToast('Refreshing purchase requests...', 'success');
     this.fetchPendingRequests();
   }
@@ -1629,7 +1530,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     
     // Update cache using optimized static methods
     this._lastRequestsHash = currentHash;
-    this._displayedRequests = this.pendingRequests.slice(0, this.showAllRequests ? undefined : this.RECENT_DAYS_LIMIT).map(request => ({
+    this._displayedRequests = this.pendingRequests.slice(0, this.showAllRequests ? undefined : 30).map(request => ({
       id: request.id,
       service: {
         picture: this.getServiceLogo(request.type),
@@ -1792,10 +1693,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
    * Load more requests
    */
   loadMoreRequests(): void {
-    this.currentPage++;
-    // Update hasMoreRequests based on whether there are more items
-    const totalDisplayed = (this.currentPage + 1) * this.PAGE_SIZE;
-    this.hasMoreRequests = totalDisplayed < this.pendingRequests.length;
+    this.showAllRequests = true;
   }
 
   /**
@@ -2122,45 +2020,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
       .pipe(
         catchError(error => {
           this.showToast('Failed to load license types', 'error');
-          // Return fallback SKU data
-          return of({
-            kind: 'reseller#skus',
-            skus: [
-              {
-                skuId: '1010020020',
-                skuName: 'Google Workspace Business Starter',
-                description: 'Google Workspace Business Starter plan with 30GB storage',
-                plans: ['ANNUAL', 'FLEXIBLE', 'TRIAL'],
-                price: {
-                  basePrice: 6.0,
-                  currency: 'USD',
-                  interval: 'MONTHLY'
-                }
-              },
-              {
-                skuId: '1010020028',
-                skuName: 'Google Workspace Business Standard',
-                description: 'Google Workspace Business Standard plan with 2TB storage',
-                plans: ['ANNUAL', 'FLEXIBLE', 'TRIAL'],
-                price: {
-                  basePrice: 12.0,
-                  currency: 'USD',
-                  interval: 'MONTHLY'
-                }
-              },
-              {
-                skuId: '1010020025',
-                skuName: 'Google Workspace Business Plus',
-                description: 'Google Workspace Business Plus plan with 5TB storage',
-                plans: ['ANNUAL', 'FLEXIBLE', 'TRIAL'],
-                price: {
-                  basePrice: 18.0,
-                  currency: 'USD',
-                  interval: 'MONTHLY'
-                }
-              }
-            ]
-          });
+          return of({ kind: 'reseller#skus', skus: [] });
         })
       )
       .subscribe(response => {
