@@ -92,42 +92,6 @@ public class TeamleaderInvoiceController {
     }
 
     /**
-     * Mock endpoint that returns test data for frontend development - disabled in
-     * production
-     * 
-     * @return 404 Not Found response to force frontend to use real API
-     */
-    @GetMapping("/mock/invoices")
-    public ResponseEntity<List<TeamleaderInvoiceListDTO>> getMockInvoices() {
-        log.info("Mock endpoints are disabled in production");
-        return ResponseEntity.notFound().build();
-    }
-
-    /**
-     * Mock endpoint that returns test data for a single invoice - disabled in
-     * production
-     * 
-     * @param invoiceId The invoice ID
-     * @return 404 Not Found response to force frontend to use real API
-     */
-    @GetMapping("/mock/invoices/{invoiceId}")
-    public ResponseEntity<TeamleaderInvoiceDetailDTO> getMockInvoice(@PathVariable String invoiceId) {
-        log.info("Mock endpoints are disabled in production");
-        return ResponseEntity.notFound().build();
-    }
-
-    /**
-     * Endpoint for testing empty unpaid invoice responses - disabled in production
-     * 
-     * @return 404 Not Found response to force frontend to use real API
-     */
-    @GetMapping("/mock/invoices/empty/unpaid")
-    public ResponseEntity<List<TeamleaderInvoiceListDTO>> getMockEmptyUnpaidInvoices() {
-        log.info("Mock endpoints are disabled in production");
-        return ResponseEntity.notFound().build();
-    }
-
-    /**
      * Download an invoice in a specific format (PDF by default)
      * 
      * @param companyId The TeamLeader ID of the company
@@ -136,7 +100,8 @@ public class TeamleaderInvoiceController {
      * @param redirect  Whether to redirect to the file directly (default: false)
      * @return Download URL information or redirect to the file
      */
-    @GetMapping("/company/{companyId}/invoice/{invoiceId}/download")
+    @GetMapping({ "/company/{companyId}/invoice/{invoiceId}/download",
+            "/company/{companyId}/invoices/{invoiceId}/download" })
     public Object downloadInvoice(
             @PathVariable String companyId,
             @PathVariable String invoiceId,
@@ -189,7 +154,7 @@ public class TeamleaderInvoiceController {
      * @param invoiceId The invoice ID to download
      * @return Redirect to PDF download or 404 if not found
      */
-    @GetMapping("/company/{companyId}/invoice/{invoiceId}/pdf")
+    @GetMapping({ "/company/{companyId}/invoice/{invoiceId}/pdf", "/company/{companyId}/invoices/{invoiceId}/pdf" })
     public Object downloadInvoicePdf(
             @PathVariable String companyId,
             @PathVariable String invoiceId) {

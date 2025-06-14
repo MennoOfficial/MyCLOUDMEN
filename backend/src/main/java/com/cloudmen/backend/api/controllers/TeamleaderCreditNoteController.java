@@ -1,16 +1,14 @@
 package com.cloudmen.backend.api.controllers;
 
 import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteListDTO;
-import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteDetailDTO;
-import com.cloudmen.backend.api.dtos.teamleader.TeamleaderInvoiceDetailDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteDownloadDTO;
 import com.cloudmen.backend.services.TeamleaderCreditNoteService;
-import com.cloudmen.backend.services.TeamleaderInvoiceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.view.RedirectView;
 
 import java.util.List;
 import java.util.Optional;
@@ -26,7 +24,6 @@ import java.util.Optional;
 public class TeamleaderCreditNoteController {
 
     private final TeamleaderCreditNoteService creditNoteService;
-    private final TeamleaderInvoiceService invoiceService;
 
     /**
      * Get credit notes for a specific invoice of a company
@@ -91,59 +88,89 @@ public class TeamleaderCreditNoteController {
     }
 
     /**
-     * Download a credit note for a specific company
+     * Download a credit note in a specific format (PDF by default)
      * 
      * @param customerId   The TeamLeader ID of the company
-     * @param creditNoteId The credit note ID
-     * @param format       The format (pdf or ubl, defaults to pdf)
-     * @param redirect     Whether to redirect or return file directly
-     * @return Credit note file as byte array
+     * @param creditNoteId The credit note ID to download
+     * @param format       The format to download (default: pdf)
+     * @param redirect     Whether to redirect to the file directly (default: false)
+     * @return Download URL information or redirect to the file
      */
     @GetMapping("/company/{customerId}/credit-note/{creditNoteId}/download")
-    public ResponseEntity<byte[]> downloadCreditNote(
+    public Object downloadCreditNote(
             @PathVariable String customerId,
             @PathVariable String creditNoteId,
-            @RequestParam(defaultValue = "pdf") String format,
-            @RequestParam(defaultValue = "false") boolean redirect) {
+            @RequestParam(required = false, defaultValue = "pdf") String format,
+            @RequestParam(required = false, defaultValue = "false") boolean redirect) {
 
-        log.info("Request received to download credit note: {} for company: {} in format: {}",
-                creditNoteId, customerId, format);
+        log.info("Request received to download credit note: {} for company: {} in format: {}, redirect: {}",
+                creditNoteId, customerId, format, redirect);
 
-        try {
-            // Validate inputs
-            if (creditNoteId == null || creditNoteId.trim().isEmpty()) {
-                log.warn("Empty credit note ID provided");
-                return ResponseEntity.badRequest().build();
-            }
-
-            byte[] creditNoteData = creditNoteService.downloadCreditNote(creditNoteId, format);
-
-            if (creditNoteData.length == 0) {
-                log.warn("No data received for credit note: {} - may not exist or access denied", creditNoteId);
-                return ResponseEntity.notFound().build();
-            }
-
-            // Determine content type and filename
-            String contentType = "pdf".equals(format) ? "application/pdf" : "application/xml";
-            String filename = String.format("credit-note-%s.%s", creditNoteId, format);
-
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.parseMediaType(contentType));
-
-            if (redirect) {
-                headers.setContentDispositionFormData("attachment", filename);
-            } else {
-                headers.setContentDispositionFormData("inline", filename);
-            }
-
-            log.info("Successfully returning credit note {} ({} bytes)", creditNoteId, creditNoteData.length);
-            return ResponseEntity.ok()
-                    .headers(headers)
-                    .body(creditNoteData);
-
-        } catch (Exception e) {
-            log.error("Error downloading credit note {}: {}", creditNoteId, e.getMessage(), e);
-            return ResponseEntity.internalServerError().build();
+        // Validate requested format
+        if (!isValidFormat(format)) {
+            log.warn("Invalid format requested for credit note download: {}", format);
+            return ResponseEntity.badRequest().build();
         }
+
+        // Download the credit note
+        Optional<TeamleaderCreditNoteDownloadDTO> downloadOpt = creditNoteService.downloadCreditNote(creditNoteId,
+                format);
+
+        if (downloadOpt.isEmpty()) {
+            log.error("Failed to download credit note with ID: {}", creditNoteId);
+            return ResponseEntity.notFound().build();
+        }
+
+        // Either redirect to the file or return the DTO based on the redirect parameter
+        if (redirect) {
+            // Redirect directly to the file URL
+            RedirectView redirectView = new RedirectView(downloadOpt.get().getLocation());
+            redirectView.setStatusCode(HttpStatus.FOUND);
+            return redirectView;
+        } else {
+            // Return the DTO with the location URL
+            return ResponseEntity.ok(downloadOpt.get());
+        }
+    }
+
+    /**
+     * Legacy endpoint that directly redirects to PDF download for backward
+     * compatibility
+     * 
+     * @param customerId   The TeamLeader ID of the company
+     * @param creditNoteId The credit note ID to download
+     * @return Redirect to PDF download or 404 if not found
+     */
+    @GetMapping("/company/{customerId}/credit-note/{creditNoteId}/pdf")
+    public Object downloadCreditNotePdf(
+            @PathVariable String customerId,
+            @PathVariable String creditNoteId) {
+
+        log.info("Request received to download credit note PDF: {} for company: {}", creditNoteId, customerId);
+
+        // Download the credit note
+        Optional<TeamleaderCreditNoteDownloadDTO> downloadOpt = creditNoteService.downloadCreditNote(creditNoteId,
+                "pdf");
+
+        if (downloadOpt.isEmpty()) {
+            log.error("Failed to download credit note with ID: {}", creditNoteId);
+            return ResponseEntity.notFound().build();
+        }
+
+        // Redirect directly to the file URL instead of returning the DTO
+        RedirectView redirectView = new RedirectView(downloadOpt.get().getLocation());
+        redirectView.setStatusCode(HttpStatus.FOUND);
+        return redirectView;
+    }
+
+    /**
+     * Validates if the requested format is supported
+     * 
+     * @param format Format to validate
+     * @return True if format is valid, false otherwise
+     */
+    private boolean isValidFormat(String format) {
+        return format != null && (format.equals("pdf") ||
+                format.equals("ubl/e-fff"));
     }
 }

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -273,15 +274,26 @@ public class TeamleaderInvoiceService {
         dto.setPaymentReference(getTextOrNull(node, "payment_reference"));
         dto.setPurchaseOrderNumber(getTextOrNull(node, "purchase_order_number"));
 
-        // Parse dates
+        // Parse dates - try multiple possible field names for invoice date
         if (node.has("date") && !node.get("date").isNull()) {
-            dto.setDate(LocalDate.parse(node.get("date").asText()));
+            String dateStr = node.get("date").asText();
+            dto.setDate(parseDateSafely(dateStr, "date"));
+        } else if (node.has("invoice_date") && !node.get("invoice_date").isNull()) {
+            String dateStr = node.get("invoice_date").asText();
+            dto.setDate(parseDateSafely(dateStr, "invoice_date"));
+        } else if (node.has("created_on") && !node.get("created_on").isNull()) {
+            String dateStr = node.get("created_on").asText();
+            dto.setDate(parseDateSafely(dateStr, "created_on"));
         }
+
         if (node.has("due_on") && !node.get("due_on").isNull()) {
-            dto.setDueOn(LocalDate.parse(node.get("due_on").asText()));
+            String dateStr = node.get("due_on").asText();
+            dto.setDueOn(parseDateSafely(dateStr, "due_on"));
         }
+
         if (node.has("paid_at") && !node.get("paid_at").isNull()) {
-            dto.setPaidAt(LocalDate.parse(node.get("paid_at").asText()));
+            String dateStr = node.get("paid_at").asText();
+            dto.setPaidAt(parseDateSafely(dateStr, "paid_at"));
         }
 
         // Parse boolean values
@@ -376,6 +388,34 @@ public class TeamleaderInvoiceService {
     }
 
     /**
+     * Helper method to safely parse date strings from TeamLeader API
+     * Handles both date-only (2025-06-09) and datetime (2025-06-09T00:00:00+02:00)
+     * formats
+     * 
+     * @param dateStr   Date string to parse
+     * @param fieldName Field name for logging purposes
+     * @return LocalDate or null if parsing fails
+     */
+    private LocalDate parseDateSafely(String dateStr, String fieldName) {
+        if (dateStr == null || dateStr.isEmpty()) {
+            return null;
+        }
+
+        try {
+            // If it contains 'T', it's a datetime format - extract just the date part
+            if (dateStr.contains("T")) {
+                return LocalDate.parse(dateStr.substring(0, 10));
+            } else {
+                // It's already a date-only format
+                return LocalDate.parse(dateStr);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse date field '{}' with value '{}': {}", fieldName, dateStr, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Download an invoice in the specified format
      * 
      * @param invoiceId Invoice ID in Teamleader format
@@ -401,14 +441,25 @@ public class TeamleaderInvoiceService {
             // Convert to JSON string
             String jsonBody = objectMapper.writeValueAsString(requestBody);
 
-            // Call the API directly
             JsonNode response = webClient.post()
                     .uri("/invoices.download")
                     .header("Authorization", "Bearer " + accessToken)
                     .header("Content-Type", "application/json")
                     .bodyValue(jsonBody)
                     .retrieve()
+                    .onStatus(
+                            status -> !status.is2xxSuccessful(),
+                            clientResponse -> {
+                                log.error("TeamLeader download API error - Status: {}",
+                                        clientResponse.statusCode().value());
+                                return clientResponse.bodyToMono(String.class)
+                                        .doOnNext(body -> log.error("Error response: {}", body))
+                                        .then(Mono.error(new RuntimeException(
+                                                String.format("TeamLeader API returned %d",
+                                                        clientResponse.statusCode().value()))));
+                            })
                     .bodyToMono(JsonNode.class)
+
                     .block();
 
             // Return empty if no valid response
@@ -430,6 +481,7 @@ public class TeamleaderInvoiceService {
             }
 
             return Optional.of(downloadDTO);
+
         } catch (Exception e) {
             log.error("Error downloading invoice with ID: {}", invoiceId, e);
             return Optional.empty();

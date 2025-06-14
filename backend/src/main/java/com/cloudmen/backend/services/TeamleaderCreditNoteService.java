@@ -1,6 +1,7 @@
 package com.cloudmen.backend.services;
 
 import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteListDTO;
+import com.cloudmen.backend.api.dtos.teamleader.TeamleaderCreditNoteDownloadDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,6 +11,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.time.ZonedDateTime;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -113,64 +117,82 @@ public class TeamleaderCreditNoteService {
 
     /**
      * Download a credit note from TeamLeader API
+     * Returns download URL information like the invoice download
      * 
      * @param creditNoteId The ID of the credit note to download
-     * @param format       The format for download (pdf, ubl)
-     * @return Byte array of the credit note file
+     * @param format       The format for download (pdf, ubl/e-fff)
+     * @return Optional containing download information if successful
      */
-    public byte[] downloadCreditNote(String creditNoteId, String format) {
-        if (creditNoteId == null || creditNoteId.isEmpty()) {
-            log.warn("Cannot download credit note: creditNoteId is null or empty");
-            return new byte[0];
-        }
-
-        // Default to PDF if format not specified or invalid
-        String downloadFormat = (format != null && ("pdf".equals(format) || "ubl".equals(format))) ? format : "pdf";
-
-        String requestBody = String.format(
-                "{\"id\":\"%s\",\"format\":\"%s\"}",
-                creditNoteId, downloadFormat);
-
-        log.info("Attempting to download credit note {} in {} format", creditNoteId, downloadFormat);
-        log.debug("Download request body: {}", requestBody);
-
-        String accessToken = getAccessToken();
-        if (accessToken == null) {
-            log.error("Cannot download credit note: {}", ERROR_NO_ACCESS_TOKEN);
-            return new byte[0];
-        }
+    public Optional<TeamleaderCreditNoteDownloadDTO> downloadCreditNote(String creditNoteId, String format) {
+        log.info("Downloading credit note ID: {} in format: {}", creditNoteId, format);
 
         try {
-            log.info("Making download request to TeamLeader API for credit note {}", creditNoteId);
+            String accessToken = getAccessToken();
+            if (accessToken == null || accessToken.isEmpty()) {
+                log.error("No valid access token available for TeamLeader API");
+                return Optional.empty();
+            }
 
-            byte[] response = webClient.post()
+            // Validate format - TeamLeader supports pdf and ubl/e-fff for credit notes
+            String downloadFormat = format;
+            if (!"pdf".equals(format) && !"ubl/e-fff".equals(format)) {
+                downloadFormat = "pdf"; // Default to PDF
+                log.info("Invalid format '{}' specified, defaulting to PDF", format);
+            }
+
+            // Create request as proper JSON using ObjectMapper
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("id", creditNoteId.trim()); // Ensure ID is trimmed
+            requestBody.put("format", downloadFormat);
+
+            // Convert to JSON string
+            String jsonBody = objectMapper.writeValueAsString(requestBody);
+
+            // Call the API directly
+            JsonNode response = webClient.post()
                     .uri(CREDIT_NOTES_DOWNLOAD_ENDPOINT)
                     .header(AUTH_HEADER, BEARER_PREFIX + accessToken)
                     .header(CONTENT_TYPE_HEADER, JSON_CONTENT_TYPE)
-                    .bodyValue(requestBody)
+                    .bodyValue(jsonBody)
                     .retrieve()
-                    .onStatus(status -> !status.is2xxSuccessful(), clientResponse -> {
-                        log.error("TeamLeader API returned error status: {} for credit note {}",
-                                clientResponse.statusCode(), creditNoteId);
-                        return clientResponse.bodyToMono(String.class)
-                                .doOnNext(body -> log.error("Error response body: {}", body))
-                                .then(Mono.error(new RuntimeException(
-                                        "Download failed with status: " + clientResponse.statusCode())));
-                    })
-                    .bodyToMono(byte[].class)
+                    .onStatus(
+                            status -> !status.is2xxSuccessful(),
+                            clientResponse -> {
+                                log.error("TeamLeader credit note download API error - Status: {}",
+                                        clientResponse.statusCode().value());
+                                return clientResponse.bodyToMono(String.class)
+                                        .doOnNext(body -> log.error("Error response: {}", body))
+                                        .then(Mono.error(new RuntimeException(
+                                                String.format("TeamLeader API returned %d",
+                                                        clientResponse.statusCode().value()))));
+                            })
+                    .bodyToMono(JsonNode.class)
                     .block();
 
-            if (response != null && response.length > 0) {
-                log.info("Successfully downloaded credit note {} ({} bytes)", creditNoteId, response.length);
-                return response;
-            } else {
-                log.warn("Empty response received for credit note download: {}", creditNoteId);
-                return new byte[0];
+            // Return empty if no valid response
+            if (response == null || !response.has("data")) {
+                log.error("Invalid or empty response from TeamLeader API for credit note download");
+                return Optional.empty();
             }
 
+            // Map and return the download information
+            JsonNode data = response.get("data");
+            TeamleaderCreditNoteDownloadDTO downloadDTO = new TeamleaderCreditNoteDownloadDTO();
+
+            if (data.has("location")) {
+                downloadDTO.setLocation(data.get("location").asText());
+            }
+
+            if (data.has("expires")) {
+                downloadDTO.setExpires(ZonedDateTime.parse(data.get("expires").asText()));
+            }
+
+            return Optional.of(downloadDTO);
+
         } catch (Exception e) {
-            log.error("Error downloading credit note {}: {}", creditNoteId, e.getMessage(), e);
-            return new byte[0];
+            log.error("Error downloading credit note with ID: {}", creditNoteId, e);
+            return Optional.empty();
         }
     }
 
