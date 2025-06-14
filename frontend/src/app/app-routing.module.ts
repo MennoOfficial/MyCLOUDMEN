@@ -5,9 +5,36 @@ import { AuthLayoutComponent } from './layouts/auth-layout/auth-layout.component
 import { authGuard } from './core/auth/auth.guard';
 import { roleGuard } from './core/auth/role.guard';
 import { StatusGuard } from './core/auth/status.guard';
+import { inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { AuthService } from './core/auth/auth.service';
 
 // Import the PurchaseRequestsComponent directly here
 import { PurchaseRequestsComponent } from './features/shared/purchase-requests/purchase-requests.component';
+
+// Role-based redirect resolver
+const roleBasedRedirect = () => {
+  const authService = inject(AuthService);
+  const router = inject(Router);
+  
+  const user = authService.getCurrentUser();
+  if (user && user.roles && user.roles.length > 0) {
+    const roles = user.roles;
+    
+    if (roles.includes('SYSTEM_ADMIN')) {
+      router.navigate(['/companies'], { replaceUrl: true });
+    } else if (roles.includes('COMPANY_ADMIN')) {
+      router.navigate(['/users'], { replaceUrl: true });
+    } else {
+      router.navigate(['/requests'], { replaceUrl: true });
+    }
+  } else {
+    // Fallback to requests if no roles found
+    router.navigate(['/requests'], { replaceUrl: true });
+  }
+  
+  return false; // Prevent default route activation
+};
 
 export const routes: Routes = [
   {
@@ -18,9 +45,8 @@ export const routes: Routes = [
       {
         path: '',
         pathMatch: 'full',
-        component: PurchaseRequestsComponent,  // Default to requests page for all users
-        canActivate: [roleGuard],
-        data: { requiredRoles: ['SYSTEM_ADMIN', 'COMPANY_ADMIN', 'COMPANY_USER'] }
+        canActivate: [roleBasedRedirect],
+        children: []
       },
       // System Admin routes
       {

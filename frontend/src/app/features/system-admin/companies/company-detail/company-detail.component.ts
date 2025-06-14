@@ -262,13 +262,11 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
 
   fetchPendingUsers(): void {
     if (!this.company || !this.company.email) {
-      console.log('No company or email for fetching pending users');
       return;
     }
     
     // Extract domain from company email for the API query
     const domain = this.company.email.split('@')[1];
-    console.log('Fetching pending users for domain:', domain);
 
     // Try multiple endpoints to find pending users
     const endpoints = [
@@ -283,30 +281,24 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
     this.apiService.get<any[]>(endpoints[0])
       .subscribe({
         next: (users) => {
-          console.log('Pending users API response (endpoint 1):', users);
           this.processPendingUsers(users);
         },
         error: (err) => {
-          console.log('Error with endpoint 1, trying endpoint 2:', err);
           // Try second endpoint
           this.apiService.get<any[]>(endpoints[1])
             .subscribe({
               next: (users) => {
-                console.log('Pending users API response (endpoint 2):', users);
                 const pendingUsers = users.filter(user => user.status === 'PENDING');
                 this.processPendingUsers(pendingUsers);
               },
               error: (err2) => {
-                console.log('Error with endpoint 2, trying endpoint 3:', err2);
                 // Try third endpoint
                 this.apiService.get<any[]>(endpoints[2])
                   .subscribe({
                     next: (users) => {
-                      console.log('Pending users API response (endpoint 3):', users);
                       this.processPendingUsers(users);
                     },
                     error: (err3) => {
-                      console.log('All endpoints failed:', err3);
                       this.processPendingUsers([]);
                     }
                   });
@@ -328,32 +320,19 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
     }));
     this.pendingCount = this.pendingUsers.length;
     this.hasPendingUsers = this.pendingUsers.length > 0;
-    console.log('Processed pending users:', {
-      count: this.pendingCount,
-      hasPending: this.hasPendingUsers,
-      users: this.pendingUsers
-    });
   }
 
   toggleNotificationPopup(event: MouseEvent): void {
     // Prevent this click from being captured by the document click handler
     event.stopPropagation();
-    console.log('Notification popup toggled. Current state:', this.showNotificationPopup);
-    console.log('Pending users data:', {
-      count: this.pendingCount,
-      hasPending: this.hasPendingUsers,
-      users: this.pendingUsers
-    });
     this.showNotificationPopup = !this.showNotificationPopup;
   }
 
   toggleStatus(): void {
-    console.log('toggleStatus called - before:', { showStatusModal: this.showStatusModal });
     this.showStatusModal = true;
     this.selectedStatus = null;
     this.newStatus = '';
     this.disableBodyScroll();
-    console.log('toggleStatus called - after:', { showStatusModal: this.showStatusModal });
   }
 
   selectStatus(status: string): void {
@@ -706,19 +685,38 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
     this.selectedUserDetail = user;
     
     // Convert to UserDetailData format
+    // Convert status from backend format (ACTIVATED/DEACTIVATED) to display format (Active/Inactive)
     this.selectedUserForModal = {
       id: user.id,
       firstName: user.name.split(' ')[0] || '',
       lastName: user.name.split(' ').slice(1).join(' ') || '',
       email: user.email,
       role: user.role,
-      status: user.status,
+      status: this.formatUserStatus(user.status), // Convert user status to display format
       picture: user.picture,
       lastLogin: user.lastLogin
     };
     
     this.showUserDetailPopup = true;
     this.disableBodyScroll();
+  }
+
+  // Format user status for display in modals and components
+  formatUserStatus(status: string): string {
+    if (!status) return 'Unknown';
+    
+    switch(status.toUpperCase()) {
+      case 'ACTIVATED':
+        return 'Active';
+      case 'DEACTIVATED':
+        return 'Inactive';
+      case 'REJECTED':
+        return 'Rejected';
+      case 'PENDING':
+        return 'Pending';
+      default:
+        return status;
+    }
   }
 
   // Method to handle user updates from the modal

@@ -259,10 +259,6 @@
         </div>
         <div class="card-content">
           <div class="info-grid">
-            <div class="info-item" *ngIf="company.teamleaderId">
-              <span class="info-label">Teamleader ID</span>
-              <div class="info-value">{{ company.teamleaderId }}</div>
-            </div>
             <div class="info-item" *ngIf="company.syncedAt">
               <span class="info-label">Last Synced</span>
               <div class="info-value">{{ formatDate(company.syncedAt) }}</div>

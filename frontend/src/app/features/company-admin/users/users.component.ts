@@ -830,13 +830,14 @@ export class UsersComponent implements OnInit {
     };
 
     // Convert to UserDetailData format for the new modal
+    // Convert status from backend format (ACTIVATED/DEACTIVATED) to display format (Active/Inactive)
     this.selectedUserForModal = {
       id: user.id,
       firstName: user.name.split(' ')[0] || '',
       lastName: user.name.split(' ').slice(1).join(' ') || '',
       email: user.email,
       role: user.role,
-      status: user.status,
+      status: this.formatStatus(user.status), // Convert status to display format
       picture: user.picture,
       lastLogin: user.lastLogin
     };

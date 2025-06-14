@@ -240,8 +240,12 @@ export class UserDetailModalComponent {
   ngOnChanges() {
     // Initialize pending values when user changes
     if (this.user) {
-      this.pendingStatus = this.user.status;
-      this.pendingRole = this.user.role;
+      this.pendingStatus = this.user.status || '';
+      this.pendingRole = this.user.role || '';
+    } else {
+      // Reset pending values when user is null
+      this.pendingStatus = '';
+      this.pendingRole = '';
     }
   }
 
@@ -277,8 +281,11 @@ export class UserDetailModalComponent {
 
   resetChanges() {
     if (this.user) {
-      this.pendingStatus = this.user.status;
-      this.pendingRole = this.user.role;
+      this.pendingStatus = this.user.status || '';
+      this.pendingRole = this.user.role || '';
+    } else {
+      this.pendingStatus = '';
+      this.pendingRole = '';
     }
   }
 

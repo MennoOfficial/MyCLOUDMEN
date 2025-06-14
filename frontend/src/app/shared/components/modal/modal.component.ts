@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
 export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
@@ -64,7 +64,7 @@ export type ModalVariant = 'default' | 'danger' | 'success' | 'warning' | 'info'
   `,
   styleUrls: ['./modal.component.scss']
 })
-export class ModalComponent implements OnInit, OnDestroy {
+export class ModalComponent implements OnInit, OnDestroy, OnChanges {
   @Input() isOpen = false;
   @Input() title = '';
   @Input() icon = '';
@@ -87,21 +87,53 @@ export class ModalComponent implements OnInit, OnDestroy {
   @Output() modalConfirm = new EventEmitter<void>();
 
   isClosing = false;
+  private originalBodyOverflow = '';
 
   ngOnInit() {
     if (this.closeOnEscape) {
       document.addEventListener('keydown', this.handleEscape);
     }
     
-    // Prevent body scroll when modal is open
+    // Store original overflow value and prevent scrolling if modal is open
     if (this.isOpen) {
-      document.body.style.overflow = 'hidden';
+      this.preventBodyScroll();
+    }
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    if (changes['isOpen']) {
+      if (changes['isOpen'].currentValue) {
+        // Modal is opening
+        this.preventBodyScroll();
+      } else {
+        // Modal is closing
+        this.restoreBodyScroll();
+      }
     }
   }
 
   ngOnDestroy() {
     document.removeEventListener('keydown', this.handleEscape);
-    document.body.style.overflow = '';
+    this.restoreBodyScroll();
+  }
+
+  private preventBodyScroll() {
+    // Store original overflow value
+    this.originalBodyOverflow = document.body.style.overflow;
+    
+    // Prevent scrolling on body
+    document.body.style.overflow = 'hidden';
+    
+    // Also add a class to body for additional CSS control if needed
+    document.body.classList.add('modal-open');
+  }
+
+  private restoreBodyScroll() {
+    // Restore original overflow value
+    document.body.style.overflow = this.originalBodyOverflow || '';
+    
+    // Remove modal-open class
+    document.body.classList.remove('modal-open');
   }
 
   private handleEscape = (event: KeyboardEvent) => {
@@ -122,7 +154,7 @@ export class ModalComponent implements OnInit, OnDestroy {
       this.isClosing = false;
       this.isOpen = false;
       this.modalClose.emit();
-      document.body.style.overflow = '';
+      this.restoreBodyScroll();
     }, 200);
   }
 

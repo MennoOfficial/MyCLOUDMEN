@@ -115,6 +115,24 @@
     line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  
+  /* Global modal scroll prevention */
+  &.modal-open {
+    overflow: hidden !important;
+    position: fixed;
+    width: 100%;
+    height: 100vh;
+
+    @media (max-width: 768px) {
+      /* Ensure mobile devices handle this properly */
+      overflow: hidden !important;
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+    }
+  }
   }
   
 /* Enhanced Button System */

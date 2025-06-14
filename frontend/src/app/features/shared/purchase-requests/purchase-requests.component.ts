@@ -315,11 +315,13 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
   
   ngOnDestroy(): void {
-    // Clean up subscription when component is destroyed
+    // Cleanup any subscriptions
     if (this.statusCheckInterval) {
       this.statusCheckInterval.unsubscribe();
-      this.statusCheckInterval = null;
     }
+    
+    // Ensure body scroll is restored
+    this.restoreBodyScroll();
   }
   
   private handleModeActions() {
@@ -1267,7 +1269,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         type: this.formatRequestTypeFromResponse(item),
         quantity: item.quantity || 0,
         cost: item.cost || this.calculateCost(item),
-        requestDate: new Date(item.requestDate).toISOString().split('T')[0],
+        requestDate: this.formatDateForDisplay(item.requestDate),
         status: item.status
       }));
       
@@ -1377,6 +1379,7 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     }
     
     this.showLicenseModal = true;
+    this.preventBodyScroll();
   }
   
   /**
@@ -1396,14 +1399,26 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     return '1010020028'; // Default to Business Standard
   }
   
-  openCreditsPurchaseModal(): void {
-    this.purchaseQuantity = 10; // Changed from 100 to 10
+  openCreditsModal(): void {
+    this.purchaseQuantity = 10;
     this.showCreditsModal = true;
+    this.preventBodyScroll();
   }
 
   closeModals(): void {
-    this.showCreditsModal = false;
     this.showLicenseModal = false;
+    this.showCreditsModal = false;
+    this.restoreBodyScroll();
+  }
+
+  private preventBodyScroll(): void {
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-open');
+  }
+
+  private restoreBodyScroll(): void {
+    document.body.style.overflow = '';
+    document.body.classList.remove('modal-open');
   }
 
   // Calculation functions
@@ -1698,6 +1713,20 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
         year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
       });
     }
+  }
+
+  /**
+   * Format date for display without timezone conversion issues
+   */
+  private formatDateForDisplay(dateString: string): string {
+    const date = new Date(dateString);
+    
+    // Use local date formatting to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    
+    return `${year}-${month}-${day}`;
   }
 
   /**

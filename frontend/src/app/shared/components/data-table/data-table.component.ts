@@ -398,8 +398,11 @@ export class DataTableComponent implements OnInit {
     if (stringValue === 'INACTIVE' || lowerValue === 'inactive') {
       return 'badge-danger'; // Red for inactive as requested
     }
-    if (stringValue === 'DEACTIVATED' || lowerValue === 'deactivated' || lowerValue.includes('error') || lowerValue.includes('failed') || lowerValue.includes('rejected')) {
-      return 'badge-warning'; // Orange for deactivated (left on good terms)
+    if (stringValue === 'DEACTIVATED' || lowerValue === 'deactivated') {
+      return 'badge-danger'; // Red for deactivated users (inactive status)
+    }
+    if (lowerValue.includes('error') || lowerValue.includes('failed') || lowerValue.includes('rejected')) {
+      return 'badge-warning'; // Orange for other error states
     }
     if (stringValue === 'ACTIVE' || stringValue === 'Active' || stringValue === 'ACTIVATED' || lowerValue === 'active' || lowerValue === 'activated') {
       return 'badge-success';
