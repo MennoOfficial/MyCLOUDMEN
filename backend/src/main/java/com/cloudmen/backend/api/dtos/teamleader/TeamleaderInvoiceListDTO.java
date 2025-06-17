@@ -37,6 +37,12 @@ public class TeamleaderInvoiceListDTO {
     private String paymentReference;
 
     /**
+     * Invoice date
+     */
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate invoiceDate;
+
+    /**
      * Due date for payment
      */
     @JsonFormat(pattern = "yyyy-MM-dd")

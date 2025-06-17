@@ -331,28 +331,36 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       const invoiceNumber = invoice.id || 'Unknown';
       
       // Extract due date
-      const dueDate = this.formatApiDate(invoice.dueOn);
-      
-      // Calculate invoice date (fallback logic)
-      let invoiceDate: Date | undefined = undefined;
-      if (dueDate && !isNaN(dueDate.getTime())) {
-        // Calculate 30 days before due date
-        const fallbackInvoiceDate = new Date(dueDate);
-        fallbackInvoiceDate.setDate(fallbackInvoiceDate.getDate() - 30);
-        
-        // Ensure invoice date is not in the future
-        const currentDate = new Date();
-        if (fallbackInvoiceDate > currentDate) {
-          invoiceDate = currentDate;
-        } else {
-          invoiceDate = fallbackInvoiceDate;
-        }
-        
-
+      let dueDate: Date;
+      if (typeof invoice.dueOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(invoice.dueOn)) {
+        dueDate = this.parseDateWithoutTimezone(invoice.dueOn);
       } else {
-        // If no valid due date, use current date
-        invoiceDate = new Date();
-
+        dueDate = this.formatApiDate(invoice.dueOn);
+      }
+      
+      // Extract invoice date from API if available
+      let invoiceDate: Date | undefined = undefined;
+      if ((invoice as any).invoiceDate) {
+        // Check if it's a date-only string and parse without timezone conversion
+        if (typeof (invoice as any).invoiceDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test((invoice as any).invoiceDate)) {
+          invoiceDate = this.parseDateWithoutTimezone((invoice as any).invoiceDate);
+        } else {
+          invoiceDate = this.formatApiDate((invoice as any).invoiceDate);
+        }
+      } else if ((invoice as any).date) {
+        // Check if it's a date-only string and parse without timezone conversion
+        if (typeof (invoice as any).date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test((invoice as any).date)) {
+          invoiceDate = this.parseDateWithoutTimezone((invoice as any).date);
+        } else {
+          invoiceDate = this.formatApiDate((invoice as any).date);
+        }
+      } else if ((invoice as any).createdAt) {
+        invoiceDate = this.formatApiDate((invoice as any).createdAt);
+      } else {
+        // The simplified API doesn't provide invoice creation date
+        // We'll need to fetch it from the detailed invoice API
+        // For now, set to undefined and it will be fetched when viewing details
+        invoiceDate = undefined;
       }
       
       // Extract payment date for paid invoices
@@ -537,13 +545,27 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     
 
     
-    this.isDetailViewVisible = true;
-    
-    // Note: We already have all the invoice data we need from the initial load
-    // The individual invoice details API endpoint doesn't exist in the backend
-    // so we'll use the data we already have
-    
-    // Load real credit notes for this invoice
+          this.isDetailViewVisible = true;
+      
+      // Try to fetch detailed invoice information to get the actual invoice date
+      const companyId = this.getApiCompanyId();
+      if (companyId) {
+        this.apiService.get(`teamleader/finance/company/${companyId}/invoices/${invoice.id}`)
+          .pipe(
+            catchError(error => {
+              console.warn('Could not fetch detailed invoice information:', error);
+              return of(null);
+            })
+          )
+          .subscribe(detailedResponse => {
+            if (detailedResponse && this.selectedInvoice) {
+              // Update the selected invoice with detailed information
+              this.selectedInvoice = this.mapApiResponseToInvoiceDetails(detailedResponse, invoice);
+            }
+          });
+      }
+      
+      // Load real credit notes for this invoice
     this.loadCreditNotesForInvoice(invoice.id);
     
     // Prevent body scroll on mobile when detail panel is open
@@ -612,7 +634,13 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       status: originalInvoice.status, // Preserve original status
       dueDate: originalInvoice.dueDate instanceof Date ? 
         originalInvoice.dueDate : new Date(originalInvoice.dueDate || new Date()),
-      invoiceDate: undefined, // Will be set from API response if available
+      invoiceDate: originalInvoice.invoiceDate instanceof Date ? 
+        originalInvoice.invoiceDate : 
+        (originalInvoice.invoiceDate ? 
+          (typeof originalInvoice.invoiceDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(originalInvoice.invoiceDate) ?
+            this.parseDateWithoutTimezone(originalInvoice.invoiceDate) : 
+            new Date(originalInvoice.invoiceDate)) : 
+          undefined), // Use original date if available, will be overridden by API response
       
       // Initialize amount object properly to avoid type errors
       amount: {
@@ -630,17 +658,38 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     // Override with API data if available
     if (response) {
       if (response.number) details.invoiceNumber = response.number;
-      if (response.dueOn) details.dueDate = new Date(response.dueOn);
+      if (response.dueOn) {
+        // Check if it's a date-only string and parse without timezone conversion
+        if (typeof response.dueOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(response.dueOn)) {
+          details.dueDate = this.parseDateWithoutTimezone(response.dueOn);
+        } else {
+          details.dueDate = new Date(response.dueOn);
+        }
+      }
       if (response.date) {
-        details.invoiceDate = new Date(response.date);
+        // Check if it's a date-only string and parse without timezone conversion
+        if (typeof response.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(response.date)) {
+          details.invoiceDate = this.parseDateWithoutTimezone(response.date);
+        } else {
+          details.invoiceDate = new Date(response.date);
+        }
       }
       if (response.paid_at) details.paymentDate = new Date(response.paid_at);
       if (response.status) {
         details.isPaid = response.status === 'paid' || response.status === 'matched';
-        // Update status text if we have API data
+        // Update status text if we have API data, but preserve original status if it's more accurate
         if (response.status === 'paid' || response.status === 'matched') {
           details.status = 'Paid';
-        } else if (response.status === 'overdue') {
+        } else if (response.status === 'overdue' || originalInvoice.isOverdue) {
+          details.status = 'Overdue';
+        } else {
+          details.status = 'Outstanding';
+        }
+      } else {
+        // If no API status, use original invoice status logic
+        if (originalInvoice.isPaid) {
+          details.status = 'Paid';
+        } else if (originalInvoice.isOverdue) {
           details.status = 'Overdue';
         } else {
           details.status = 'Outstanding';
@@ -672,40 +721,14 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       }
     }
     
-    // Calculate invoice date (fallback logic)
-    if (!details?.dueDate) {
-      if (details) {
-        details.invoiceDate = new Date();
-      }
-      return details;
-    }
-
-    const formattedDueDate = this.formatApiDate(details.dueDate instanceof Date ? details.dueDate.toISOString() : details.dueDate);
-    if (!formattedDueDate) {
-      if (details) {
-        details.invoiceDate = new Date();
-      }
-      return details;
-    }
-
-    const currentDate = new Date();
-    
-    // Calculate a reasonable invoice date (30 days before due date)
-    const calculatedInvoiceDate = new Date(formattedDueDate);
-    calculatedInvoiceDate.setDate(calculatedInvoiceDate.getDate() - 30);
-    
-    // If calculated date is in the future, use current date
-    if (calculatedInvoiceDate > currentDate) {
-      calculatedInvoiceDate.setTime(currentDate.getTime());
-    }
-    
-    // Use calculated date if no invoice date set
+    // If no invoice date was set from API response, try to get it from the detailed API
     if (details && !details.invoiceDate) {
-      details.invoiceDate = calculatedInvoiceDate;
-    }
-
-    // If we still don't have an invoice date, use current date
-    if (details && !details.invoiceDate) {
+      // The invoice date should have been set from response.date above
+      // If it's still not set, it means the API doesn't provide the actual invoice date
+      // In this case, we'll show a placeholder or try to fetch from detailed endpoint
+      console.warn(`No invoice date available for invoice ${details.id} from API`);
+      
+      // As a last resort, use current date to avoid showing wrong calculated dates
       details.invoiceDate = new Date();
     }
     
@@ -979,6 +1002,29 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     }
   }
 
+  // Parse date without timezone conversion for date-only strings (YYYY-MM-DD)
+  private parseDateWithoutTimezone(dateString: string): Date {
+    if (!dateString) {
+      return new Date();
+    }
+    
+    try {
+      // For date-only strings like "2025-04-09", parse as local date to avoid timezone conversion
+      const parts = dateString.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+        const day = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+      
+      // Fallback to regular parsing
+      return new Date(dateString);
+    } catch (e) {
+      return new Date();
+    }
+  }
+
   // Toggle the download options dropdown
   toggleDownloadOptions(event: Event): void {
     event.stopPropagation(); // Prevent the click from closing the detail panel
@@ -1019,9 +1065,28 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         // Filter credit notes for this specific invoice and process dates
         const invoiceCreditNotes = creditNotes.filter(note => note.relatedInvoiceId === invoiceId).map(note => {
           
-          // Ensure date is properly parsed as Date object
-          if (note.date && typeof note.date === 'string') {
-            note.date = new Date(note.date);
+          // Process date from API fields - use credit_note_date first, then created_at as fallback
+          let creditNoteDate: Date | undefined = undefined;
+          
+          if ((note as any).credit_note_date) {
+            creditNoteDate = this.parseDateWithoutTimezone((note as any).credit_note_date);
+          } else if ((note as any).created_at) {
+            creditNoteDate = new Date((note as any).created_at);
+          } else if (note.date) {
+            // Parse date without timezone conversion for date-only strings
+            if (typeof note.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(note.date)) {
+              creditNoteDate = this.parseDateWithoutTimezone(note.date);
+            } else {
+              creditNoteDate = typeof note.date === 'string' ? new Date(note.date) : note.date;
+            }
+          }
+          
+          // Set the processed date
+          if (creditNoteDate && !isNaN(creditNoteDate.getTime())) {
+            note.date = creditNoteDate;
+          } else {
+            console.warn('No valid date found for credit note:', note.id);
+            note.date = new Date(); // Fallback to current date
           }
           
           // Ensure totalAmount is set from alternative fields if needed

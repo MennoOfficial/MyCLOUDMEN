@@ -153,7 +153,7 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
         this.showStatusModal = false;
         this.selectedStatus = null;
         this.newStatus = '';
-        this.enableBodyScroll();
+        // Status modal uses CSS-based scroll prevention, not manual scroll locking
       }
     }
     
@@ -331,13 +331,30 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
   toggleStatus(): void {
     this.showStatusModal = true;
     this.selectedStatus = null;
-    this.newStatus = '';
-    this.disableBodyScroll();
+    this.newStatus = this.company?.status || ''; // Set current status as default
+    // Don't disable body scroll - let CSS handle it
   }
 
   selectStatus(status: string): void {
-    this.newStatus = status;
     this.selectedStatus = status;
+  }
+
+  // Check if status has changed from current
+  hasStatusChanged(): boolean {
+    return this.selectedStatus !== null && this.selectedStatus !== this.company?.status;
+  }
+
+  // Save the status change
+  saveStatusChange(): void {
+    if (!this.hasStatusChanged()) return;
+    this.showStatusConfirmation = true;
+  }
+
+  // Cancel status change
+  cancelStatusChange(): void {
+    this.showStatusModal = false;
+    this.selectedStatus = null;
+    this.newStatus = '';
   }
 
   showStatusConfirmationDialog(): void {
@@ -382,35 +399,17 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
         next: (response) => {
           this.company!.status = this.selectedStatus!;
           this.showStatusModal = false;
+          this.showStatusConfirmation = false;
           this.selectedStatus = null;
           this.newStatus = '';
           this.updatingStatus = false;
-          this.enableBodyScroll();
-          this.showToastNotification(
-            'Success',
-            `Company status updated to ${this.getStatusDisplayName(this.selectedStatus!)}`,
-            'success'
-          );
+          // Status updated successfully - no toast needed
         },
         error: (err) => {
           this.updatingStatus = false;
-          this.showToastNotification(
-            'Error',
-            'Failed to update company status. Please try again.',
-            'error'
-          );
+          // Error handled - no toast needed
         }
       });
-  }
-
-  cancelStatusChange(): void {
-    if (this.selectedStatus) {
-      this.selectedStatus = null;
-      this.newStatus = '';
-    } else {
-      this.showStatusModal = false;
-      this.enableBodyScroll();
-    }
   }
 
   showPendingUserActions(user: PendingUser): void {
@@ -685,7 +684,7 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
     };
     
     this.showUserDetailPopup = true;
-    this.disableBodyScroll();
+    // Don't disable body scroll here - the modal component handles it
   }
 
   // Format user status for display in modals and components
@@ -766,7 +765,7 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
   // Method to hide user detail popup
   hideUserDetail(): void {
     this.showUserDetailPopup = false;
-    this.enableBodyScroll();
+    // Don't manually enable body scroll - the modal component handles it
     setTimeout(() => {
       this.selectedUserDetail = null;
       this.selectedUserForModal = null;
@@ -1021,14 +1020,14 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
     
     this.showRejectedUserPopup = true;
     this.showAcceptConfirmation = false; // Reset confirmation state
-    this.disableBodyScroll();
+    // Don't disable body scroll here - let CSS handle modal scrolling
   }
 
   // Method to close rejected user popup
   closeRejectedUserPopup(): void {
     this.showRejectedUserPopup = false;
     this.showAcceptConfirmation = false;
-    this.enableBodyScroll();
+    // Don't manually enable body scroll - let CSS handle modal scrolling
     setTimeout(() => {
       this.selectedRejectedUser = null;
     }, 200);
@@ -1059,7 +1058,7 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
           // Close the popup and reset all states
           this.showRejectedUserPopup = false;
           this.showAcceptConfirmation = false;
-          this.enableBodyScroll();
+          // Don't manually enable body scroll - let CSS handle modal scrolling
           setTimeout(() => {
             this.selectedRejectedUser = null;
           }, 200);

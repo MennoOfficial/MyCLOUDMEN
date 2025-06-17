@@ -254,6 +254,25 @@
       visibility: visible;
     }
     
+    /* Non-copyable fields styling */
+    &.non-copyable {
+      cursor: default;
+      border: none;
+      background: transparent;
+      padding: var(--space-sm) 0;
+      
+      &:hover {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        transform: none;
+        
+        &::after {
+          display: none;
+        }
+      }
+    }
+    
     .badge {
       display: inline-flex;
       align-items: center;

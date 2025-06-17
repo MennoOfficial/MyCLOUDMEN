@@ -197,10 +197,7 @@
         </div>
         <div class="detail-item">
           <span class="detail-label">Status</span>
-          <span
-            class="detail-value"
-            (click)="copyToClipboard(getStatusText(selectedLog.successful))"
-          >
+          <span class="detail-value non-copyable">
             <span
               class="badge"
               [ngClass]="getStatusClass(selectedLog.successful)"
@@ -210,16 +207,6 @@
               }}</span>
               {{ getStatusText(selectedLog.successful) }}
             </span>
-            <button
-              class="copy-btn"
-              (click)="
-                copyToClipboard(getStatusText(selectedLog.successful));
-                $event.stopPropagation()
-              "
-              title="Copy to clipboard"
-            >
-              <span class="material-icons">content_copy</span>
-            </button>
           </span>
         </div>
         <div
@@ -252,59 +239,20 @@
       <div class="detail-grid">
         <div class="detail-item">
           <span class="detail-label">Browser</span>
-          <span
-            class="detail-value"
-            (click)="copyToClipboard(getBrowserInfo(selectedLog.userAgent))"
-          >
+          <span class="detail-value non-copyable">
             {{ getBrowserInfo(selectedLog.userAgent) }}
-            <button
-              class="copy-btn"
-              (click)="
-                copyToClipboard(getBrowserInfo(selectedLog.userAgent));
-                $event.stopPropagation()
-              "
-              title="Copy to clipboard"
-            >
-              <span class="material-icons">content_copy</span>
-            </button>
           </span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Operating System</span>
-          <span
-            class="detail-value"
-            (click)="copyToClipboard(getOSInfo(selectedLog.userAgent))"
-          >
+          <span class="detail-value non-copyable">
             {{ getOSInfo(selectedLog.userAgent) }}
-            <button
-              class="copy-btn"
-              (click)="
-                copyToClipboard(getOSInfo(selectedLog.userAgent));
-                $event.stopPropagation()
-              "
-              title="Copy to clipboard"
-            >
-              <span class="material-icons">content_copy</span>
-            </button>
           </span>
         </div>
         <div class="detail-item">
           <span class="detail-label">Device Type</span>
-          <span
-            class="detail-value"
-            (click)="copyToClipboard(getDeviceInfo(selectedLog.userAgent))"
-          >
+          <span class="detail-value non-copyable">
             {{ getDeviceInfo(selectedLog.userAgent) }}
-            <button
-              class="copy-btn"
-              (click)="
-                copyToClipboard(getDeviceInfo(selectedLog.userAgent));
-                $event.stopPropagation()
-              "
-              title="Copy to clipboard"
-            >
-              <span class="material-icons">content_copy</span>
-            </button>
           </span>
         </div>
       </div>

@@ -402,7 +402,7 @@
 </div>
 
 <!-- Status Change Modal -->
-<div *ngIf="showStatusModal" class="modal-overlay">
+<div *ngIf="showStatusModal && !showStatusConfirmation" class="modal-overlay">
   <div class="confirmation-modal">
     <div class="modal-header">
       <div class="header-icon user-icon">
@@ -421,16 +421,29 @@
           <p class="company-domain">
             {{ company.email ? company.email.split("@")[1] : "Unknown Domain" }}
           </p>
+          <div class="current-status-badge">
+            <span
+              class="status-badge"
+              [ngClass]="getStatusClass(company.status || 'ACTIVE')"
+            >
+              <span class="material-icons">{{
+                getStatusIcon(company.status || "ACTIVE")
+              }}</span>
+              {{ getStatusDisplayName(company.status || "ACTIVE") }}
+            </span>
+          </div>
         </div>
       </div>
 
-      <!-- Status Selection or Confirmation -->
-      <div *ngIf="!selectedStatus" class="status-selection-section">
+      <!-- Status Selection -->
+      <div class="status-selection-section">
         <h4>Select new status:</h4>
         <div class="status-options">
           <div
             class="status-option"
-            [class.selected]="newStatus === 'ACTIVE'"
+            [class.selected]="selectedStatus === 'ACTIVE'"
+            [class.current]="company.status === 'ACTIVE'"
+            [class.disabled]="company.status === 'ACTIVE'"
             (click)="selectStatus('ACTIVE')"
           >
             <div class="status-icon active">
@@ -440,25 +453,40 @@
               <h5>Active</h5>
               <p>Company can operate normally with full access</p>
             </div>
+            <div *ngIf="company.status === 'ACTIVE'" class="current-indicator">
+              <span class="material-icons">radio_button_checked</span>
+              <span>Current</span>
+            </div>
           </div>
 
           <div
             class="status-option"
-            [class.selected]="newStatus === 'INACTIVE'"
-            (click)="selectStatus('INACTIVE')"
+            [class.selected]="selectedStatus === 'DEACTIVATED'"
+            [class.current]="company.status === 'DEACTIVATED'"
+            [class.disabled]="company.status === 'DEACTIVATED'"
+            (click)="selectStatus('DEACTIVATED')"
           >
             <div class="status-icon warning">
               <span class="material-icons">pause_circle</span>
             </div>
             <div class="status-info">
-              <h5>Inactive</h5>
+              <h5>Deactivated</h5>
               <p>Temporarily disable company access</p>
+            </div>
+            <div
+              *ngIf="company.status === 'DEACTIVATED'"
+              class="current-indicator"
+            >
+              <span class="material-icons">radio_button_checked</span>
+              <span>Current</span>
             </div>
           </div>
 
           <div
             class="status-option"
-            [class.selected]="newStatus === 'SUSPENDED'"
+            [class.selected]="selectedStatus === 'SUSPENDED'"
+            [class.current]="company.status === 'SUSPENDED'"
+            [class.disabled]="company.status === 'SUSPENDED'"
             (click)="selectStatus('SUSPENDED')"
           >
             <div class="status-icon danger">
@@ -468,12 +496,63 @@
               <h5>Suspended</h5>
               <p>Permanently block company access</p>
             </div>
+            <div
+              *ngIf="company.status === 'SUSPENDED'"
+              class="current-indicator"
+            >
+              <span class="material-icons">radio_button_checked</span>
+              <span>Current</span>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Confirmation Message -->
-      <div *ngIf="selectedStatus" class="confirmation-message">
+      <!-- Change indicator -->
+      <div class="change-indicator" *ngIf="hasStatusChanged()">
+        <span class="material-icons">info</span>
+        <span>Status will be changed - click Save to apply</span>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-outline" (click)="cancelStatusChange()">
+        Cancel
+      </button>
+      <button
+        class="btn btn-primary"
+        (click)="saveStatusChange()"
+        [disabled]="!hasStatusChanged()"
+      >
+        Save Changes
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Status Change Confirmation Modal -->
+<div *ngIf="showStatusConfirmation" class="modal-overlay">
+  <div class="confirmation-modal">
+    <div class="modal-header">
+      <div class="header-icon save-icon">
+        <span class="material-icons">save</span>
+      </div>
+      <h2>Confirm Status Change</h2>
+    </div>
+
+    <div class="modal-body" *ngIf="company">
+      <div class="company-summary">
+        <div class="company-avatar-large">
+          <span>{{ company.name.charAt(0).toUpperCase() }}</span>
+        </div>
+        <div class="company-details">
+          <h3>{{ company.name }}</h3>
+          <p class="company-domain">
+            {{ company.email ? company.email.split("@")[1] : "Unknown Domain" }}
+          </p>
+        </div>
+      </div>
+
+      <div class="confirmation-message">
         <p>
           Change company status from
           <span class="current-status">{{
@@ -486,41 +565,25 @@
             >{{ getStatusDisplayName(selectedStatus!) }}</span
           >?
         </p>
-
-        <div class="status-impact">
-          <div class="impact-icon">
-            <span class="material-icons">info</span>
-          </div>
-          <div class="impact-description">
-            <h5>What happens next?</h5>
-            <p>{{ getStatusDescription(selectedStatus!) }}</p>
-          </div>
-        </div>
+        <p class="confirmation-warning">
+          <strong>This action cannot be undone.</strong>
+        </p>
       </div>
     </div>
 
     <div class="modal-footer">
-      <button class="btn btn-secondary" (click)="cancelStatusChange()">
-        {{ selectedStatus ? "Back" : "Cancel" }}
+      <button class="btn btn-outline" (click)="hideStatusConfirmation()">
+        Cancel
       </button>
       <button
-        *ngIf="selectedStatus"
-        class="btn"
-        [ngClass]="getStatusButtonClass(selectedStatus)"
+        class="btn btn-danger"
         (click)="confirmStatusChange()"
         [disabled]="updatingStatus"
       >
         <div *ngIf="updatingStatus" class="loading-indicator">
           <app-loading-spinner size="small"></app-loading-spinner>
         </div>
-        <span *ngIf="!updatingStatus" class="material-icons">
-          {{ getStatusIcon(selectedStatus) }}
-        </span>
-        {{
-          updatingStatus
-            ? "Updating..."
-            : "Update to " + getStatusDisplayName(selectedStatus!)
-        }}
+        {{ updatingStatus ? "Updating..." : "Yes, Change Status" }}
       </button>
     </div>
   </div>
