@@ -37,6 +37,23 @@ bootstrapApplication(AppComponent, {
       authorizationParams: {
         redirect_uri: window.location.origin + '/auth/callback',
         audience: (window as any).env.auth0.audience
+      },
+      cacheLocation: 'localstorage',
+      useRefreshTokens: true,
+      useRefreshTokensFallback: false,
+      sessionCheckExpiryDays: 1,
+      // Configure token expiration
+      httpInterceptor: {
+        allowedList: [
+          {
+            uri: `${(window as any).env.apiUrl || 'http://localhost:8080/api'}/*`,
+            tokenOptions: {
+              authorizationParams: {
+                audience: (window as any).env.auth0.audience
+              }
+            }
+          }
+        ]
       }
     })
   ]

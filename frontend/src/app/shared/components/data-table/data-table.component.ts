@@ -513,7 +513,7 @@ export class DataTableComponent implements OnInit {
 
   formatCurrency(amount: number): string {
     if (amount === null || amount === undefined) return '-';
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('nl-BE', {
       style: 'currency',
       currency: 'EUR'
     }).format(amount);

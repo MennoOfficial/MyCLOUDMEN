@@ -45,7 +45,7 @@ export class AuthService {
   
   // Cache for company domain status to prevent repeated API calls
   private companyStatusCache: Map<string, CompanyStatusResult> = new Map();
-  private cacheTTL = 30 * 1000; // 30 seconds in milliseconds (reduced from 5 minutes)
+  private cacheTTL = 30 * 1000;
   
   // Track if this is a genuine new authentication (not refresh/restore)
   private isGenuineNewLogin = false;
@@ -67,9 +67,7 @@ export class AuthService {
     this.initializeAuth();
     
     // Expose auth service globally for debugging (development only)
-    if (typeof window !== 'undefined' && !this.environmentService.isProduction) {
-      (window as any).authService = this;
-    }
+
   }
   
   /**
@@ -436,15 +434,11 @@ export class AuthService {
         companyName: user.companyName
       };
       
-      this.http.post(`${this.environmentService.apiUrl}/api/auth0/log-authentication`, authData)
-        .subscribe({
-          next: () => {
-            console.log('Authentication logged successfully');
-          },
-          error: (error) => {
-            console.error('Failed to log authentication:', error);
-          }
-        });
+              this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication`, authData)
+          .subscribe({
+            next: () => {},
+            error: (error) => {}
+          });
     } catch (error) {
     }
   }
@@ -453,50 +447,61 @@ export class AuthService {
    * Handle navigation after successful authentication
    */
   private handlePostAuthNavigation(user: User): void {
-    // **FIRST PRIORITY: Check for pending approval requests - ALWAYS**
-    const pendingApproval = this.getPendingApprovalRequest();
+    console.log('🎯 handlePostAuthNavigation called for user:', user.email);
     
-    if (pendingApproval) {
-      // Navigate to approval page with parameters
-      const approvalUrl = `${pendingApproval.originalPath}?requestId=${pendingApproval.requestId}&email=${pendingApproval.email}`;
-      
-      // DON'T clear the pending request yet - let the approval page handle it
-      // This ensures if there are redirect issues, we still have the data
-      
-      this.router.navigateByUrl(approvalUrl, { replaceUrl: true });
-      return;
-    } else {
-    }
-    
-    // **Don't redirect if we're already on an approval URL**
-    const currentUrl = this.router.url;
-    const approvalUrls = ['/approve-license', '/confirm-purchase', '/purchase/accept', '/accept-purchase'];
-    const isOnApprovalUrl = approvalUrls.some(url => currentUrl.startsWith(url));
-    
-    if (isOnApprovalUrl) {
+    if (this.isRedirectInProgress) {
+      console.log('⚠️ Redirect already in progress, skipping');
       return;
     }
     
-    // Check if there's a stored target URL from the auth guard
-    const targetUrl = sessionStorage.getItem('auth_target_url');
+    this.isRedirectInProgress = true;
     
-    // **Only handle navigation if we're on the loading page OR root page**
-    if (currentUrl !== '/auth/loading' && currentUrl !== '/' && currentUrl !== '') {
-      return;
-    }
-    
-    if (targetUrl) {
-      sessionStorage.removeItem('auth_target_url');
+    try {
+      // Check for stored target URL first
+      const targetUrl = sessionStorage.getItem('auth_target_url');
+      console.log('🎯 Target URL from storage:', targetUrl);
       
-      // Don't redirect to auth-related or status pages
-      if (!this.isExcludedPath(targetUrl)) {
-        this.router.navigateByUrl(targetUrl, { replaceUrl: true });
+      if (targetUrl && !this.isExcludedPath(targetUrl)) {
+        console.log('✅ Navigating to stored target URL:', targetUrl);
+        sessionStorage.removeItem('auth_target_url');
+        this.router.navigate([targetUrl], { replaceUrl: true });
         return;
       }
+      
+      // Check for pending approval request
+      const pendingApproval = this.getPendingApprovalRequest();
+      console.log('📋 Pending approval:', pendingApproval ? 'exists' : 'none');
+      
+      if (pendingApproval) {
+        console.log('✅ Navigating to approval page');
+        this.router.navigate([pendingApproval.originalPath], {
+          queryParams: { 
+            requestId: pendingApproval.requestId, 
+            email: pendingApproval.email 
+          },
+          replaceUrl: true
+        });
+        return;
+      }
+      
+      // Get role-based redirect
+      const roleRedirect = this.getRoleBasedRedirect(user.roles);
+      console.log('🎭 Role-based redirect:', roleRedirect.path);
+      
+      this.router.navigate([roleRedirect.path], {
+        queryParams: roleRedirect.queryParams,
+        replaceUrl: roleRedirect.replaceUrl ?? true
+      });
+    } catch (error) {
+      console.error('❌ Error in handlePostAuthNavigation:', error);
+      // Fallback navigation
+      this.router.navigate(['/dashboard'], { replaceUrl: true });
+    } finally {
+      // Reset redirect flag after a delay
+      setTimeout(() => {
+        this.isRedirectInProgress = false;
+      }, 1000);
     }
-    
-    // Check for critical status issues first
-    this.checkCriticalStatusOnly(user);
   }
   
   /**
@@ -522,15 +527,11 @@ export class AuthService {
         reason: `${reason}: ${error?.message || 'Unknown error'}`
       };
       
-      this.http.post(`${this.environmentService.apiUrl}/api/auth0/log-authentication-failure`, failureData)
-        .subscribe({
-          next: () => {
-            console.log('Authentication failure logged successfully');
-          },
-          error: (logError) => {
-            console.error('Failed to log authentication failure:', logError);
-          }
-        });
+              this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication-failure`, failureData)
+          .subscribe({
+            next: () => {},
+            error: (logError) => {}
+          });
     } catch (error) {
     }
   }
@@ -1142,7 +1143,12 @@ export class AuthService {
    */
   getAccessToken(): Observable<string> {
     if (!this.auth0) return of('');
-    return this.auth0.getAccessTokenSilently();
+    return this.auth0.getAccessTokenSilently().pipe(
+      catchError(error => {
+        this.login();
+        return throwError(() => error);
+      })
+    );
   }
 
   /**
@@ -1152,6 +1158,8 @@ export class AuthService {
     if (!this.auth0) return of(false);
     return this.auth0.isAuthenticated$;
   }
+
+
 
   /**
    * Get user roles
@@ -1191,7 +1199,7 @@ export class AuthService {
   refreshUserProfile(): void {
     sessionStorage.removeItem('user_profile');
     
-    // Use the new authentication flow instead of the old method
+
     this.handleAuthentication();
   }
 

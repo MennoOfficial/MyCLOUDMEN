@@ -141,4 +141,7 @@ export class AuthInterceptor implements HttpInterceptor {
       return throwError(() => new Error('Authentication refresh in progress'));
     }
   }
+
+  // JWT token expiration monitoring is now handled by SessionTimeoutService
+  // The interceptor only handles 401 errors reactively
 }

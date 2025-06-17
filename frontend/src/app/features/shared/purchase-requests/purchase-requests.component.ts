@@ -1078,8 +1078,6 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     this.fetchPendingRequests();
   }
 
-
-
   /**
    * Helper function to extract domain from email
    */
@@ -1237,17 +1235,9 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
   }
   
   getLicensePrice(licenseType: string): string {
-    // Return the price based on license type
-    switch (licenseType) {
-      case 'Business Starter':
-        return '€6';
-      case 'Business Standard':
-        return '€12';
-      case 'Business Plus':
-        return '€18';
-      default:
-        return '€0';
-    }
+    // Return the price based on license type with European formatting
+    const priceValue = this.getLicensePriceValue(licenseType);
+    return this.formatEuropeanCurrency(priceValue);
   }
   
   getLicensePriceValue(licenseType: string): number {
@@ -1339,6 +1329,21 @@ export class PurchaseRequestsComponent implements OnInit, OnDestroy {
     
     // Fallback to hardcoded prices
     return this.getLicensePriceValue(this.selectedLicenseType) * this.purchaseLicenseQuantity;
+  }
+
+  // European number formatting methods
+  formatEuropeanNumber(amount: number): string {
+    return new Intl.NumberFormat('nl-BE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
+  }
+
+  formatEuropeanCurrency(amount: number): string {
+    return new Intl.NumberFormat('nl-BE', {
+      style: 'currency',
+      currency: 'EUR'
+    }).format(amount);
   }
 
   // Purchase functions

@@ -1,12 +1,14 @@
-import { Injectable } from '@angular/core';
+import { Injectable, OnDestroy } from '@angular/core';
 import { AuthService } from '../auth/auth.service';
-import { BehaviorSubject, timer } from 'rxjs';
+import { BehaviorSubject, Subscription } from 'rxjs';
 import { Router } from '@angular/router';
+import { switchMap, catchError, take } from 'rxjs/operators';
+import { of } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
 })
-export class SessionTimeoutService {
+export class SessionTimeoutService implements OnDestroy {
   private showTimeoutModalSubject = new BehaviorSubject<boolean>(false);
   showTimeoutModal$ = this.showTimeoutModalSubject.asObservable();
   
@@ -16,17 +18,44 @@ export class SessionTimeoutService {
   private countdownInterval: any;
   private sessionTimeoutId: any = null;
   private warningTimeoutId: any = null;
+  private jwtCheckInterval: any = null;
+  private authSubscription: Subscription | null = null;
   
   // Session constants
-  private readonly SESSION_DURATION = 2 * 60 * 60 * 1000; // 2 hours
-  private readonly WARNING_BEFORE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+  private readonly INACTIVITY_TIMEOUT = 60 * 60 * 1000; // 1 hour of inactivity
+  private readonly INACTIVITY_WARNING = 1 * 60 * 1000; // 1 minute warning for inactivity
+  private readonly JWT_WARNING = 5 * 60 * 1000; // 5 minutes warning for JWT expiration
+  private readonly JWT_CHECK_INTERVAL = 30 * 1000; // 30 seconds
+  private readonly AUTO_REFRESH_INTERVAL = 50 * 60 * 1000; // Auto-refresh every 50 minutes
+  
+  private lastActivityTime: number = Date.now();
+  private autoRefreshInterval: any = null;
 
   constructor(
     private authService: AuthService,
     private router: Router
   ) {
-    this.startSessionTimer();
     this.setupActivityListeners();
+    
+
+    this.authService.user$.subscribe(user => {
+              if (user) {
+          // Reset activity time when user logs in
+          this.lastActivityTime = Date.now();
+          this.startSessionTimer();
+          this.startJwtMonitoring();
+          this.startAutoRefresh();
+        } else {
+          this.clearSessionTimeout();
+          this.stopJwtMonitoring();
+          this.stopAutoRefresh();
+        }
+    });
+    
+    // Temporary debug method to check JWT expiration
+    if (typeof window !== 'undefined') {
+      (window as any).checkJwtExpiration = () => this.debugJwtExpiration();
+    }
   }
 
   private setupActivityListeners(): void {
@@ -34,11 +63,18 @@ export class SessionTimeoutService {
     
     events.forEach(event => {
       window.addEventListener(event, () => {
-        if (!this.showTimeoutModalSubject.value) {
-          this.resetSessionTimer();
-        }
+        this.updateLastActivity();
       }, { passive: true });
     });
+  }
+  
+  private updateLastActivity(): void {
+    this.lastActivityTime = Date.now();
+    
+    // Only reset the inactivity timer if modal is not showing
+    if (!this.showTimeoutModalSubject.value) {
+      this.resetSessionTimer();
+    }
   }
   
   // Start the session timer
@@ -49,13 +85,13 @@ export class SessionTimeoutService {
     // Set timeout for warning
     this.warningTimeoutId = setTimeout(() => {
       this.showTimeoutModalSubject.next(true);
-      this.startCountdown(this.WARNING_BEFORE_TIMEOUT);
-    }, this.SESSION_DURATION - this.WARNING_BEFORE_TIMEOUT);
+      this.startCountdown(this.INACTIVITY_WARNING);
+    }, this.INACTIVITY_TIMEOUT - this.INACTIVITY_WARNING);
     
     // Set timeout for logout
     this.sessionTimeoutId = setTimeout(() => {
       this.logout();
-    }, this.SESSION_DURATION);
+    }, this.INACTIVITY_TIMEOUT);
   }
 
   // Reset the session timer
@@ -96,10 +132,7 @@ export class SessionTimeoutService {
     }, 1000);
   }
 
-  extendSession(): void {
-    this.closeTimeoutModal();
-    this.resetSessionTimer();
-  }
+
 
   closeTimeoutModal(): void {
     this.showTimeoutModalSubject.next(false);
@@ -110,6 +143,230 @@ export class SessionTimeoutService {
 
   logout(): void {
     this.closeTimeoutModal();
+    this.stopJwtMonitoring();
     this.authService.logout();
+  }
+
+  /**
+   * Start monitoring JWT token expiration
+   */
+  private startJwtMonitoring(): void {
+    setTimeout(() => {
+      this.authSubscription = this.authService.isAuthenticated().subscribe(isAuthenticated => {
+        if (isAuthenticated) {
+          this.startJwtExpirationCheck();
+        } else {
+          this.stopJwtExpirationCheck();
+        }
+      });
+    }, 2000);
+  }
+
+  /**
+   * Stop JWT monitoring
+   */
+  private stopJwtMonitoring(): void {
+    if (this.authSubscription) {
+      this.authSubscription.unsubscribe();
+      this.authSubscription = null;
+    }
+    this.stopJwtExpirationCheck();
+  }
+
+  private startJwtExpirationCheck(): void {
+    this.stopJwtExpirationCheck();
+    
+    this.jwtCheckInterval = setInterval(() => {
+      this.checkJwtExpiration();
+    }, this.JWT_CHECK_INTERVAL);
+    
+    this.checkJwtExpiration();
+  }
+
+  private stopJwtExpirationCheck(): void {
+    if (this.jwtCheckInterval) {
+      clearInterval(this.jwtCheckInterval);
+      this.jwtCheckInterval = null;
+    }
+  }
+
+  private checkJwtExpiration(): void {
+    this.authService.isAuthenticated().pipe(
+      take(1),
+      switchMap(isAuthenticated => {
+        if (!isAuthenticated) {
+          return of(null);
+        }
+        return this.authService.getAccessToken();
+      }),
+      catchError(error => {
+        if (this.authService.getCurrentUser()) {
+          this.handleTokenExpired();
+        }
+        return of(null);
+      })
+    ).subscribe(token => {
+      if (!token) {
+        return;
+      }
+
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const exp = payload.exp;
+        
+        if (!exp) {
+          return;
+        }
+        
+        const now = Math.floor(Date.now() / 1000);
+        const expiresIn = exp - now;
+        
+        if (expiresIn <= 0) {
+          this.handleTokenExpired();
+          return;
+        }
+        
+        // Check if we should show modal based on JWT expiration OR inactivity
+        const timeSinceLastActivity = Date.now() - this.lastActivityTime;
+        const inactivityTimeLeft = this.INACTIVITY_TIMEOUT - timeSinceLastActivity;
+        
+        // Show modal if either JWT expires soon OR user has been inactive for too long
+        const jwtWarningThreshold = this.JWT_WARNING / 1000; // 5 minutes in seconds
+        const inactivityWarningThreshold = this.INACTIVITY_WARNING; // 1 minute in milliseconds
+        
+        if ((expiresIn <= jwtWarningThreshold || inactivityTimeLeft <= inactivityWarningThreshold) && !this.showTimeoutModalSubject.value) {
+          // Determine which timeout is triggering and use appropriate countdown
+          if (expiresIn <= jwtWarningThreshold && inactivityTimeLeft > inactivityWarningThreshold) {
+            // JWT expiring soon, use JWT countdown
+            this.handleTokenNearExpiry(expiresIn);
+          } else if (inactivityTimeLeft <= inactivityWarningThreshold) {
+            // Inactivity timeout, use inactivity countdown
+            this.handleTokenNearExpiry(Math.floor(inactivityTimeLeft / 1000));
+          } else {
+            // Both are close, use the shorter one
+            const timeUntilLogout = Math.min(expiresIn, Math.floor(inactivityTimeLeft / 1000));
+            this.handleTokenNearExpiry(timeUntilLogout);
+          }
+        }
+      } catch (error) {
+        // Silently handle JWT parsing errors
+      }
+    });
+  }
+
+  private handleTokenNearExpiry(expiresInSeconds: number): void {
+    this.clearSessionTimeout();
+    this.showTimeoutModalSubject.next(true);
+    this.startCountdown(expiresInSeconds * 1000);
+  }
+
+  private handleTokenExpired(): void {
+    this.logout();
+  }
+
+  extendSession(): void {
+    this.closeTimeoutModal();
+    
+    // Reset activity time when user actively chooses to continue
+    this.lastActivityTime = Date.now();
+    
+    // Force refresh the JWT token to get a fresh one
+    this.forceTokenRefresh();
+  }
+
+  private forceTokenRefresh(): void {
+    // Force Auth0 to get a fresh token (bypassing cache)
+    this.authService.getAccessToken().pipe(
+      switchMap(() => {
+        // Get a completely fresh token by calling Auth0 directly
+        return this.authService.getAccessToken();
+      }),
+      catchError(error => {
+        // If we can't refresh the token, logout
+        this.logout();
+        return of(null);
+      })
+    ).subscribe(token => {
+      if (token) {
+        // Reset the inactivity timer
+        this.resetSessionTimer();
+      } else {
+        this.logout();
+      }
+    });
+  }
+
+  // Temporary debug method
+  private debugJwtExpiration(): void {
+    this.authService.getAccessToken().subscribe({
+      next: (token) => {
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const exp = payload.exp;
+            const iat = payload.iat;
+            
+            if (exp && iat) {
+              const now = Math.floor(Date.now() / 1000);
+              const expiresIn = exp - now;
+              const tokenDuration = exp - iat;
+              const expiresAt = new Date(exp * 1000);
+              const issuedAt = new Date(iat * 1000);
+              
+              console.log('🔍 JWT Token Information:');
+              console.log('📅 Issued at:', issuedAt.toLocaleString());
+              console.log('⏰ Expires at:', expiresAt.toLocaleString());
+              console.log('⏱️ Token duration:', Math.floor(tokenDuration / 60), 'minutes (', Math.floor(tokenDuration / 3600), 'hours )');
+              console.log('⏳ Time remaining:', Math.floor(expiresIn / 60), 'minutes (', Math.floor(expiresIn / 3600), 'hours )');
+              console.log('🚨 Expires soon?', expiresIn <= (5 * 60) ? 'YES' : 'NO');
+              
+              if (tokenDuration >= 3600) {
+                console.log('💡 Your JWT tokens last', Math.floor(tokenDuration / 3600), 'hours - longer than the 1-hour inactivity timeout');
+              } else {
+                console.log('💡 Your JWT tokens last', Math.floor(tokenDuration / 60), 'minutes - shorter than the 1-hour inactivity timeout');
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error parsing JWT token:', error);
+          }
+        } else {
+          console.log('❌ No JWT token available');
+        }
+      },
+      error: (error) => {
+        console.error('❌ Failed to get JWT token:', error);
+      }
+    });
+  }
+
+  private startAutoRefresh(): void {
+    this.stopAutoRefresh(); // Clear any existing interval
+    
+    // Auto-refresh token every 50 minutes for active users
+    this.autoRefreshInterval = setInterval(() => {
+      const timeSinceLastActivity = Date.now() - this.lastActivityTime;
+      
+      // Only auto-refresh if user has been active in the last 10 minutes
+      if (timeSinceLastActivity < (10 * 60 * 1000)) {
+        console.log('🔄 Auto-refreshing JWT token for active user...');
+        this.forceTokenRefresh();
+      }
+    }, this.AUTO_REFRESH_INTERVAL);
+  }
+
+  private stopAutoRefresh(): void {
+    if (this.autoRefreshInterval) {
+      clearInterval(this.autoRefreshInterval);
+      this.autoRefreshInterval = null;
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.stopJwtMonitoring();
+    this.clearSessionTimeout();
+    this.stopAutoRefresh();
+    if (this.countdownInterval) {
+      clearInterval(this.countdownInterval);
+    }
   }
 } 

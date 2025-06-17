@@ -91,7 +91,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     // Removed Download All button as requested
   ];
 
-  filterConfigs: FilterConfig[] = [
+  private baseFilterConfigs: FilterConfig[] = [
     {
       key: 'status',
       label: 'Status',
@@ -102,6 +102,11 @@ export class InvoicesComponent implements OnInit, OnDestroy {
       ]
     }
   ];
+
+  get filterConfigs(): FilterConfig[] {
+    // Hide status filter on paid invoices tab since all invoices are already paid
+    return this.activeTab === 'paid' ? [] : this.baseFilterConfigs;
+  }
 
   tableColumns: TableColumn[] = [
     {
@@ -890,9 +895,12 @@ export class InvoicesComponent implements OnInit, OnDestroy {
   // Helper to safely format amounts with 2 decimal places
   formatAmount(amount?: number): string {
     if (amount === null || amount === undefined || isNaN(amount)) {
-      return '0.00';
+      return '0,00';
     }
-    return amount.toFixed(2);
+    return new Intl.NumberFormat('nl-BE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(amount);
   }
 
   // Get status class for styling

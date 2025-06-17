@@ -112,7 +112,7 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
 
   // Table configuration for users
   userTableColumns: TableColumn[] = [
-    { key: 'name', label: 'User', sortable: true, width: '40%' },
+    { key: 'name', label: 'User', sortable: true, type: 'avatar', width: '40%' },
     { key: 'role', label: 'Role', type: 'badge', sortable: true, badgeType: 'role', width: '20%' },
     { key: 'status', label: 'Status', type: 'badge', sortable: true, badgeType: 'status', width: '20%' },
     { key: 'lastLogin', label: 'Last Login', type: 'date', sortable: true, hideOnMobile: true, width: '20%' }
@@ -250,7 +250,7 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
                      user.status === 'REJECTED' ? 'Rejected' :
                    user.status,
               lastLogin: user.lastLogin || undefined, // Use undefined instead of null for proper display
-              picture: user.picture || '' // Add picture field for avatars in modals
+              picture: user.picture ? this.getProxyImageUrl(user.picture) : '' // Add picture field for avatars with proxy support
           }));
           this.loadingUsers = false;
         },
@@ -313,7 +313,7 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
       id: user.id,
       name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim(),
       email: user.email,
-      picture: user.picture || '',
+      picture: user.picture ? this.getProxyImageUrl(user.picture) : '',
       requestedAt: user.dateTimeAdded || user.createdAt || new Date().toISOString(),
       primaryDomain: user.primaryDomain || this.company?.email?.split('@')[1] || 'unknown',
       roles: user.roles || []
@@ -679,7 +679,7 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
       email: user.email,
       role: user.role,
       status: this.formatUserStatus(user.status), // Convert user status to display format
-      picture: user.picture,
+      picture: user.picture ? this.getProxyImageUrl(user.picture) : undefined,
       lastLogin: user.lastLogin
     };
     
@@ -856,6 +856,23 @@ export class CompanyDetailComponent implements OnInit, OnDestroy {
     
     const date = new Date(timestamp);
     return date.toLocaleString();
+  }
+  
+  /**
+   * Handles profile image URLs by using a proxy if needed
+   * @param url The original image URL
+   * @returns A proxied URL for external images
+   */
+  getProxyImageUrl(url: string): string {
+    if (!url) return '';
+    
+    // Only proxy external URLs, not data URLs or relative paths
+    if (url.startsWith('http') && !url.includes(window.location.hostname)) {
+      const encodedUrl = encodeURIComponent(url);
+      return `${this.environmentService.apiUrl}/proxy/image?url=${encodedUrl}`;
+    }
+    
+    return url;
   }
   
   /**

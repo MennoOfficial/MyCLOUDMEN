@@ -29,12 +29,12 @@ export class AuthLayoutComponent implements OnInit {
     ).subscribe((event: NavigationStart) => {
       // Only show loading for actual auth routes
       if (event.url.startsWith('/auth/')) {
-        this.loading = true;
-        this.loadingStartTime = Date.now();
         // Use setTimeout to avoid ExpressionChangedAfterItHasBeenCheckedError
         setTimeout(() => {
+          this.loading = true;
+          this.loadingStartTime = Date.now();
           this.cdr.detectChanges();
-        });
+        }, 0);
       }
     });
 
@@ -57,7 +57,7 @@ export class AuthLayoutComponent implements OnInit {
         setTimeout(() => {
           this.loading = false;
           this.cdr.detectChanges();
-        });
+        }, 0);
       }
     });
   }

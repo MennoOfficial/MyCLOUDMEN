@@ -546,7 +546,7 @@
             <div class="credits-info">
               <div class="info-item">
                 <span class="material-icons">info</span>
-                <span>€1.00 per credit</span>
+                <span>{{ formatEuropeanCurrency(1.0) }} per credit</span>
               </div>
             </div>
 
@@ -783,11 +783,15 @@
             </div>
             <div class="breakdown-item total">
               <span class="item-label">Monthly Total</span>
-              <span class="item-value">€{{ calculateLicenseCost() }}</span>
+              <span class="item-value">{{
+                formatEuropeanCurrency(calculateLicenseCost())
+              }}</span>
             </div>
             <div class="breakdown-item yearly">
               <span class="item-label">Annual Total</span>
-              <span class="item-value">€{{ calculateLicenseCost() * 12 }}</span>
+              <span class="item-value">{{
+                formatEuropeanCurrency(calculateLicenseCost() * 12)
+              }}</span>
             </div>
           </div>
         </div>
@@ -868,7 +872,9 @@
           <div class="breakdown-items">
             <div class="breakdown-item">
               <span class="item-label">Unit Price</span>
-              <span class="item-value">€1.00/credit</span>
+              <span class="item-value"
+                >{{ formatEuropeanCurrency(1.0) }}/credit</span
+              >
             </div>
             <div class="breakdown-item">
               <span class="item-label">Quantity</span>
@@ -876,7 +882,9 @@
             </div>
             <div class="breakdown-item total">
               <span class="item-label">Total Cost</span>
-              <span class="item-value">€{{ calculateCreditsCost() }}</span>
+              <span class="item-value">{{
+                formatEuropeanCurrency(calculateCreditsCost())
+              }}</span>
             </div>
           </div>
         </div>
