@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.Date;
 import java.util.stream.Collectors;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -197,7 +198,7 @@ public class UserController {
                     userMap.put("dateTimeChanged", user.getDateTimeChanged());
 
                     // Get last login time - try by user ID first, then by email
-                    LocalDateTime lastLogin = null;
+                    Date lastLogin = null;
                     try {
                         if (user.getId() != null) {
                             lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(user.getId());
@@ -748,13 +749,13 @@ public class UserController {
 
                     try {
                         // Get first login time
-                        LocalDateTime firstLogin = authenticationLogService.getFirstSuccessfulLoginByUserId(userId);
+                        Date firstLogin = authenticationLogService.getFirstSuccessfulLoginByUserId(userId);
                         if (firstLogin == null && user.getEmail() != null) {
                             firstLogin = authenticationLogService.getFirstSuccessfulLoginByEmail(user.getEmail());
                         }
 
                         // Get last login time
-                        LocalDateTime lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
+                        Date lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
                         if (lastLogin == null && user.getEmail() != null) {
                             lastLogin = authenticationLogService.getLastSuccessfulLoginByEmail(user.getEmail());
                         }

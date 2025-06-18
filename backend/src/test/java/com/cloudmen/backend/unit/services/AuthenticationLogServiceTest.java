@@ -4,10 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -53,12 +52,12 @@ public class AuthenticationLogServiceTest {
 
         private User testUser;
         private AuthenticationLog testLog;
-        private LocalDateTime now;
+        private Date now;
 
         @BeforeEach
         void setUp() {
                 // Capture current time for consistent testing
-                now = LocalDateTime.now();
+                now = new Date();
 
                 // Create test user
                 testUser = new User();
@@ -546,9 +545,9 @@ public class AuthenticationLogServiceTest {
                 assertNotNull(capturedLog.getTimestamp());
 
                 // Should be within the last minute
-                LocalDateTime timestamp = capturedLog.getTimestamp();
-                LocalDateTime oneMinuteAgo = LocalDateTime.now().minus(1, ChronoUnit.MINUTES);
-                assertTrue(timestamp.isAfter(oneMinuteAgo), "Timestamp should be recent");
+                Date timestamp = capturedLog.getTimestamp();
+                Date oneMinuteAgo = new Date(System.currentTimeMillis() - (60 * 1000));
+                assertTrue(timestamp.after(oneMinuteAgo), "Timestamp should be recent");
         }
 
         @Test
@@ -571,9 +570,9 @@ public class AuthenticationLogServiceTest {
                 assertNotNull(capturedLog.getTimestamp());
 
                 // Should be within the last minute
-                LocalDateTime timestamp = capturedLog.getTimestamp();
-                LocalDateTime oneMinuteAgo = LocalDateTime.now().minus(1, ChronoUnit.MINUTES);
-                assertTrue(timestamp.isAfter(oneMinuteAgo), "Timestamp should be recent");
+                Date timestamp = capturedLog.getTimestamp();
+                Date oneMinuteAgo = new Date(System.currentTimeMillis() - (60 * 1000));
+                assertTrue(timestamp.after(oneMinuteAgo), "Timestamp should be recent");
         }
 
         @Test
@@ -729,7 +728,7 @@ public class AuthenticationLogServiceTest {
                 secondLog.setEmail("test@example.com");
                 secondLog.setUserId("user123");
                 secondLog.setIpAddress("192.168.1.2"); // Different IP
-                secondLog.setTimestamp(now.plusHours(1)); // Later timestamp
+                secondLog.setTimestamp(new Date(now.getTime() + (60 * 60 * 1000))); // 1 hour later
                 secondLog.setSuccessful(true);
 
                 List<AuthenticationLog> logs = Arrays.asList(testLog, secondLog);
@@ -768,7 +767,7 @@ public class AuthenticationLogServiceTest {
                                 .thenReturn(lastLog);
 
                 // Act
-                LocalDateTime result = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
+                Date result = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
 
                 // Assert
                 assertNotNull(result);
@@ -785,7 +784,7 @@ public class AuthenticationLogServiceTest {
                                 .thenReturn(null);
 
                 // Act
-                LocalDateTime result = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
+                Date result = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
 
                 // Assert
                 assertNull(result);
@@ -805,7 +804,7 @@ public class AuthenticationLogServiceTest {
                                 .thenReturn(lastLog);
 
                 // Act
-                LocalDateTime result = authenticationLogService.getLastSuccessfulLoginByEmail(email);
+                Date result = authenticationLogService.getLastSuccessfulLoginByEmail(email);
 
                 // Assert
                 assertNotNull(result);
@@ -822,7 +821,7 @@ public class AuthenticationLogServiceTest {
                                 .thenReturn(null);
 
                 // Act
-                LocalDateTime result = authenticationLogService.getLastSuccessfulLoginByEmail(email);
+                Date result = authenticationLogService.getLastSuccessfulLoginByEmail(email);
 
                 // Assert
                 assertNull(result);
@@ -864,8 +863,8 @@ public class AuthenticationLogServiceTest {
         @DisplayName("getLogsByTimeRange - Should return logs within time range")
         void getLogsByTimeRange_ShouldReturnLogsWithinTimeRange() {
                 // Arrange
-                LocalDateTime start = now.minusDays(7);
-                LocalDateTime end = now;
+                Date start = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000L)); // 7 days ago
+                Date end = now;
                 List<AuthenticationLog> logs = Arrays.asList(testLog);
 
                 when(authenticationLogRepository.findByTimestampBetween(start, end)).thenReturn(logs);
@@ -883,8 +882,8 @@ public class AuthenticationLogServiceTest {
         @DisplayName("getLogsByTimeRangePaginated - Should return page of logs within time range")
         void getLogsByTimeRangePaginated_ShouldReturnPageOfLogsWithinTimeRange() {
                 // Arrange
-                LocalDateTime start = now.minusDays(7);
-                LocalDateTime end = now;
+                Date start = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000L)); // 7 days ago
+                Date end = now;
                 Pageable pageable = PageRequest.of(0, 10);
                 List<AuthenticationLog> logs = Arrays.asList(testLog);
                 Page<AuthenticationLog> page = new PageImpl<>(logs, pageable, logs.size());
@@ -905,17 +904,17 @@ public class AuthenticationLogServiceTest {
         @DisplayName("deleteLogsOlderThan - Should delete old logs")
         void deleteLogsOlderThan_ShouldDeleteOldLogs() {
                 // Arrange
-                LocalDateTime cutoffDate = now.minusDays(30);
+                Date cutoffDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000L)); // 30 days ago
                 List<AuthenticationLog> oldLogs = Arrays.asList(testLog);
 
-                when(authenticationLogRepository.findByTimestampBetween(eq(LocalDateTime.MIN), eq(cutoffDate)))
+                when(authenticationLogRepository.findByTimestampBetween(eq(new Date(0)), eq(cutoffDate)))
                                 .thenReturn(oldLogs);
 
                 // Act
                 authenticationLogService.deleteLogsOlderThan(cutoffDate);
 
                 // Assert
-                verify(authenticationLogRepository).findByTimestampBetween(eq(LocalDateTime.MIN), eq(cutoffDate));
+                verify(authenticationLogRepository).findByTimestampBetween(eq(new Date(0)), eq(cutoffDate));
                 verify(authenticationLogRepository).deleteAll(oldLogs);
         }
 
@@ -923,9 +922,9 @@ public class AuthenticationLogServiceTest {
         @DisplayName("deleteLogsOlderThan - Should throw when repository fails")
         void deleteLogsOlderThan_ShouldThrow_WhenRepositoryFails() {
                 // Arrange
-                LocalDateTime cutoffDate = now.minusDays(30);
+                Date cutoffDate = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000L)); // 30 days ago
 
-                when(authenticationLogRepository.findByTimestampBetween(eq(LocalDateTime.MIN), eq(cutoffDate)))
+                when(authenticationLogRepository.findByTimestampBetween(eq(new Date(0)), eq(cutoffDate)))
                                 .thenThrow(new RuntimeException("Database error"));
 
                 // Act & Assert
@@ -942,8 +941,8 @@ public class AuthenticationLogServiceTest {
                 String email = "test@example.com";
                 String domain = "example.com";
                 Boolean successful = true;
-                LocalDateTime startDate = now.minusDays(7);
-                LocalDateTime endDate = now;
+                Date startDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000L)); // 7 days ago
+                Date endDate = now;
                 Pageable pageable = PageRequest.of(0, 10);
                 List<AuthenticationLog> logs = Arrays.asList(testLog);
                 Page<AuthenticationLog> page = new PageImpl<>(logs, pageable, logs.size());
@@ -1035,8 +1034,8 @@ public class AuthenticationLogServiceTest {
         @DisplayName("getFilteredLogs - Should return filtered logs with only time range")
         void getFilteredLogs_ShouldReturnFilteredLogs_WithOnlyTimeRange() {
                 // Arrange
-                LocalDateTime startDate = now.minusDays(7);
-                LocalDateTime endDate = now;
+                Date startDate = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000L)); // 7 days ago
+                Date endDate = now;
                 Pageable pageable = PageRequest.of(0, 10);
                 List<AuthenticationLog> logs = Arrays.asList(testLog);
                 Page<AuthenticationLog> page = new PageImpl<>(logs, pageable, logs.size());

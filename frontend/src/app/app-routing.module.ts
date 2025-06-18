@@ -206,6 +206,12 @@ export const routes: Routes = [
         path: 'purchase-requests',
         redirectTo: 'requests',
         pathMatch: 'full'
+      },
+      // Catch any dashboard routes (which don't exist) and redirect to role-based page
+      {
+        path: 'dashboard',
+        redirectTo: '',
+        pathMatch: 'prefix'
       }
     ]
   },

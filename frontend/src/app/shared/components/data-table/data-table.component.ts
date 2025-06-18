@@ -113,7 +113,7 @@ export interface PaginationEvent {
                   
                   <!-- Date -->
                   <span *ngSwitchCase="'date'">
-                    {{ formatDate(getNestedValue(item, column.key)) }}
+                    {{ formatDate(getNestedValue(item, column.key), dateContext) }}
                   </span>
                   
                   <!-- Currency -->
@@ -187,7 +187,7 @@ export interface PaginationEvent {
                 
                 <!-- Date -->
                 <span *ngSwitchCase="'date'">
-                  {{ formatDate(getNestedValue(item, column.key)) }}
+                  {{ formatDate(getNestedValue(item, column.key), dateContext) }}
                 </span>
                 
                 <!-- Currency -->
@@ -288,6 +288,7 @@ export class DataTableComponent implements OnInit {
   @Input() pageSize = 25;
   @Input() sortColumn = '';
   @Input() sortDirection: 'asc' | 'desc' = 'asc';
+  @Input() dateContext?: string; // Context for date formatting
   
   // Empty state
   @Input() emptyIcon?: string;
@@ -478,29 +479,38 @@ export class DataTableComponent implements OnInit {
     }
   }
 
-  formatDate(date: string | Date): string {
+  formatDate(date: string | Date, context?: string): string {
     if (!date) return '-';
     
     try {
       const d = new Date(date);
       if (isNaN(d.getTime())) return 'Invalid date';
       
+      // Special handling for invoices - show only date, no time
+      if (context === 'outstanding-invoice' || context === 'invoice') {
+        return d.toLocaleDateString('nl-BE', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      }
+      
       // For table display, show full date and time if it's recent (within 7 days)
       const now = new Date();
       const diffDays = Math.abs((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
       
       if (diffDays < 7) {
-        // Show full date and time for recent entries using 24-hour format
-        return d.toLocaleString('en-US', {
+        // Show full date and time for recent entries using 24-hour format and European locale
+        return d.toLocaleString('nl-BE', {
           month: 'short',
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit',
-          hour12: false // Changed to 24-hour format
+          hour12: false
         });
       } else {
-        // Show just date for older entries
-        return d.toLocaleDateString('en-US', {
+        // Show just date for older entries using European locale
+        return d.toLocaleDateString('nl-BE', {
           year: 'numeric',
           month: 'short',
           day: 'numeric'

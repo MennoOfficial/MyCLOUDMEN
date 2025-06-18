@@ -434,11 +434,11 @@ export class AuthService {
         companyName: user.companyName
       };
       
-              this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication`, authData)
-          .subscribe({
+      this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication`, authData)
+        .subscribe({
             next: () => {},
             error: (error) => {}
-          });
+        });
     } catch (error) {
     }
   }
@@ -447,10 +447,8 @@ export class AuthService {
    * Handle navigation after successful authentication
    */
   private handlePostAuthNavigation(user: User): void {
-    console.log('🎯 handlePostAuthNavigation called for user:', user.email);
     
     if (this.isRedirectInProgress) {
-      console.log('⚠️ Redirect already in progress, skipping');
       return;
     }
     
@@ -459,21 +457,18 @@ export class AuthService {
     try {
       // Check for stored target URL first
       const targetUrl = sessionStorage.getItem('auth_target_url');
-      console.log('🎯 Target URL from storage:', targetUrl);
       
       if (targetUrl && !this.isExcludedPath(targetUrl)) {
-        console.log('✅ Navigating to stored target URL:', targetUrl);
         sessionStorage.removeItem('auth_target_url');
         this.router.navigate([targetUrl], { replaceUrl: true });
-        return;
-      }
-      
+      return;
+    }
+    
       // Check for pending approval request
       const pendingApproval = this.getPendingApprovalRequest();
-      console.log('📋 Pending approval:', pendingApproval ? 'exists' : 'none');
       
       if (pendingApproval) {
-        console.log('✅ Navigating to approval page');
+
         this.router.navigate([pendingApproval.originalPath], {
           queryParams: { 
             requestId: pendingApproval.requestId, 
@@ -481,21 +476,20 @@ export class AuthService {
           },
           replaceUrl: true
         });
-        return;
-      }
-      
+      return;
+    }
+    
       // Get role-based redirect
       const roleRedirect = this.getRoleBasedRedirect(user.roles);
-      console.log('🎭 Role-based redirect:', roleRedirect.path);
       
       this.router.navigate([roleRedirect.path], {
         queryParams: roleRedirect.queryParams,
         replaceUrl: roleRedirect.replaceUrl ?? true
       });
     } catch (error) {
-      console.error('❌ Error in handlePostAuthNavigation:', error);
-      // Fallback navigation
-      this.router.navigate(['/dashboard'], { replaceUrl: true });
+      // Fallback navigation - use role-based redirect instead of non-existent dashboard
+      const fallbackRedirect = this.getRoleBasedRedirect(user.roles);
+      this.router.navigate([fallbackRedirect.path], { replaceUrl: true });
     } finally {
       // Reset redirect flag after a delay
       setTimeout(() => {
@@ -527,11 +521,11 @@ export class AuthService {
         reason: `${reason}: ${error?.message || 'Unknown error'}`
       };
       
-              this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication-failure`, failureData)
-          .subscribe({
+      this.http.post(`${this.environmentService.apiUrl}/auth0/log-authentication-failure`, failureData)
+        .subscribe({
             next: () => {},
             error: (logError) => {}
-          });
+        });
     } catch (error) {
     }
   }

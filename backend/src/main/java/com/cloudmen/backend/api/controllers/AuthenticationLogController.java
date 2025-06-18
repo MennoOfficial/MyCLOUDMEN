@@ -9,7 +9,7 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
+import java.util.Date;
 
 @RestController
 @RequestMapping("/api/auth-logs")
@@ -35,28 +35,22 @@ public class AuthenticationLogController {
      * @return Paginated list of authentication logs
      */
     @GetMapping
-    public ResponseEntity<Page<AuthenticationLog>> getLogs(
+    public ResponseEntity<Page<AuthenticationLog>> getAuthenticationLogs(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String sort,
             @RequestParam(required = false) String email,
             @RequestParam(required = false) String domain,
             @RequestParam(required = false) Boolean successful,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") Date startDate,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") Date endDate) {
 
-        // Parse sort parameter or use default
-        Sort sortOrder = parseSort(sort);
-        PageRequest pageRequest = PageRequest.of(page, size, sortOrder);
+        PageRequest pageRequest = PageRequest.of(page, size, parseSort(sort));
 
-        // If no filters are provided, return all logs
-        if (email == null && domain == null && successful == null && startDate == null && endDate == null) {
-            return ResponseEntity.ok(authenticationLogService.getLogsPaginated(pageRequest));
-        }
+        Page<AuthenticationLog> logs = authenticationLogService.getFilteredLogs(
+                email, domain, successful, startDate, endDate, pageRequest);
 
-        // Otherwise, use the filtered search
-        return ResponseEntity.ok(authenticationLogService.getFilteredLogs(
-                email, domain, successful, startDate, endDate, pageRequest));
+        return ResponseEntity.ok(logs);
     }
 
     /**
@@ -207,8 +201,8 @@ public class AuthenticationLogController {
      */
     @GetMapping("/timerange")
     public ResponseEntity<Page<AuthenticationLog>> getLogsByTimeRange(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") Date start,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") Date end,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
@@ -224,7 +218,7 @@ public class AuthenticationLogController {
      */
     @DeleteMapping("/cleanup")
     public ResponseEntity<Void> deleteOldLogs(
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime cutoffDate) {
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss") Date cutoffDate) {
         authenticationLogService.deleteLogsOlderThan(cutoffDate);
         return ResponseEntity.noContent().build();
     }
@@ -236,8 +230,8 @@ public class AuthenticationLogController {
      * @return The timestamp of the last successful login
      */
     @GetMapping("/user/{userId}/last-login")
-    public ResponseEntity<LocalDateTime> getLastLoginByUserId(@PathVariable String userId) {
-        LocalDateTime lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
+    public ResponseEntity<Date> getLastLoginByUserId(@PathVariable String userId) {
+        Date lastLogin = authenticationLogService.getLastSuccessfulLoginByUserId(userId);
         if (lastLogin != null) {
             return ResponseEntity.ok(lastLogin);
         } else {
@@ -252,8 +246,8 @@ public class AuthenticationLogController {
      * @return The timestamp of the last successful login
      */
     @GetMapping("/email/{email}/last-login")
-    public ResponseEntity<LocalDateTime> getLastLoginByEmail(@PathVariable String email) {
-        LocalDateTime lastLogin = authenticationLogService.getLastSuccessfulLoginByEmail(email);
+    public ResponseEntity<Date> getLastLoginByEmail(@PathVariable String email) {
+        Date lastLogin = authenticationLogService.getLastSuccessfulLoginByEmail(email);
         if (lastLogin != null) {
             return ResponseEntity.ok(lastLogin);
         } else {

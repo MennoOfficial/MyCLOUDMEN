@@ -356,7 +356,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         // Check if it's a date-only string and parse without timezone conversion
         if (typeof (invoice as any).date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test((invoice as any).date)) {
           invoiceDate = this.parseDateWithoutTimezone((invoice as any).date);
-        } else {
+      } else {
           invoiceDate = this.formatApiDate((invoice as any).date);
         }
       } else if ((invoice as any).createdAt) {
@@ -550,8 +550,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
     
 
     
-          this.isDetailViewVisible = true;
-      
+    this.isDetailViewVisible = true;
+    
       // Try to fetch detailed invoice information to get the actual invoice date
       const companyId = this.getApiCompanyId();
       if (companyId) {
@@ -569,8 +569,8 @@ export class InvoicesComponent implements OnInit, OnDestroy {
             }
           });
       }
-      
-      // Load real credit notes for this invoice
+    
+    // Load real credit notes for this invoice
     this.loadCreditNotesForInvoice(invoice.id);
     
     // Prevent body scroll on mobile when detail panel is open
@@ -676,7 +676,7 @@ export class InvoicesComponent implements OnInit, OnDestroy {
         if (typeof response.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(response.date)) {
           details.invoiceDate = this.parseDateWithoutTimezone(response.date);
         } else {
-          details.invoiceDate = new Date(response.date);
+        details.invoiceDate = new Date(response.date);
         }
       }
       if (response.paid_at) details.paymentDate = new Date(response.paid_at);

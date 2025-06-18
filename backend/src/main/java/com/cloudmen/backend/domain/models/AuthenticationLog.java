@@ -4,7 +4,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
+import java.util.Date;
 
 /**
  * Model class for storing authentication log entries.
@@ -26,7 +26,7 @@ public class AuthenticationLog {
     private String googleUniqueId;
 
     @Indexed
-    private LocalDateTime timestamp;
+    private Date timestamp;
 
     private String ipAddress;
 
@@ -38,7 +38,7 @@ public class AuthenticationLog {
 
     // Default constructor
     public AuthenticationLog() {
-        this.timestamp = LocalDateTime.now();
+        this.timestamp = new Date();
     }
 
     // Constructor for successful login
@@ -50,7 +50,7 @@ public class AuthenticationLog {
         this.googleUniqueId = googleUniqueId;
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;
-        this.timestamp = LocalDateTime.now();
+        this.timestamp = new Date();
         this.successful = true;
     }
 
@@ -60,7 +60,7 @@ public class AuthenticationLog {
         this.ipAddress = ipAddress;
         this.userAgent = userAgent;
         this.failureReason = failureReason;
-        this.timestamp = LocalDateTime.now();
+        this.timestamp = new Date();
         this.successful = false;
     }
 
@@ -105,11 +105,11 @@ public class AuthenticationLog {
         this.googleUniqueId = googleUniqueId;
     }
 
-    public LocalDateTime getTimestamp() {
+    public Date getTimestamp() {
         return timestamp;
     }
 
-    public void setTimestamp(LocalDateTime timestamp) {
+    public void setTimestamp(Date timestamp) {
         this.timestamp = timestamp;
     }
 

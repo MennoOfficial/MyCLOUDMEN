@@ -31,7 +31,6 @@ export class LoadingComponent implements OnInit, OnDestroy {
   ) {}
   
   ngOnInit(): void {
-    console.log('🔄 Loading component initialized');
     
     // Start a timer for UX purposes
     const startTime = Date.now();
@@ -51,7 +50,6 @@ export class LoadingComponent implements OnInit, OnDestroy {
       
       // If loading takes too long, handle the timeout
       if (this.loadingDuration >= this.maxWaitTime) {
-        console.log('⏰ Loading timeout reached');
         this.handleTimeout();
       }
     }, 1000);
@@ -62,7 +60,6 @@ export class LoadingComponent implements OnInit, OnDestroy {
     // Handle auth errors
     const errorSub = this.authService.authError$.subscribe(error => {
       if (error) {
-        console.log('❌ Auth error received:', error);
         this.loadingState = 'error';
         this.errorMessage = error;
         this.handleAuthenticationFailure();
@@ -79,37 +76,26 @@ export class LoadingComponent implements OnInit, OnDestroy {
   }
   
   private checkAuthenticationState(): void {
-    console.log('🔍 Checking authentication state...');
-    
     // First, check if we already have a user
     const currentUser = this.authService.getCurrentUser();
-    console.log('👤 Current user:', currentUser ? 'exists' : 'null');
     
     if (currentUser && currentUser.roles && currentUser.roles.length > 0) {
-      console.log('✅ User already available, proceeding');
       this.handleSuccessfulAuth(currentUser);
       return;
     }
     
     // Check authentication state
     this.authService.isAuthenticated().pipe(take(1)).subscribe(isAuthenticated => {
-      console.log('🔐 Is authenticated:', isAuthenticated);
-      
       if (!isAuthenticated) {
-        console.log('❌ Not authenticated, redirecting to login');
         this.redirectToLogin('Not authenticated');
         return;
       }
       
       // Check if authentication is in progress
       this.authService.authLoading$.pipe(take(1)).subscribe(isLoading => {
-        console.log('⏳ Auth loading in progress:', isLoading);
-        
         if (isLoading) {
-          console.log('⏳ Waiting for authentication to complete...');
           this.waitForAuthCompletion();
         } else {
-          console.log('🔍 Authentication not in progress, checking user profile...');
           this.waitForUserProfile();
         }
       });
@@ -117,19 +103,15 @@ export class LoadingComponent implements OnInit, OnDestroy {
   }
   
   private waitForAuthCompletion(): void {
-    console.log('⏳ Starting to wait for auth completion...');
-    
     const authSub = this.authService.authLoading$.pipe(
       filter(isLoading => !isLoading), // Wait until loading is done
       take(1),
       timeout(this.maxWaitTime),
       catchError(() => {
-        console.log('⏰ Timeout waiting for auth completion');
         this.handleTimeout();
         return of(false);
       })
     ).subscribe(() => {
-      console.log('✅ Auth loading completed, now waiting for user...');
       this.waitForUserProfile();
     });
     
@@ -137,23 +119,18 @@ export class LoadingComponent implements OnInit, OnDestroy {
   }
   
   private waitForUserProfile(): void {
-    console.log('👤 Waiting for user profile...');
-    
     const userSub = this.authService.user$.pipe(
       filter(user => {
-        console.log('👤 User update:', user ? 'received' : 'null');
         return user !== null && user !== undefined && user.roles && user.roles.length > 0;
       }),
       take(1),
       timeout(5000),
       catchError(error => {
-        console.log('⏰ Timeout waiting for user profile');
         this.handleTimeout();
         return of(null);
       })
     ).subscribe(user => {
-      if (user) {
-        console.log('✅ Valid user received, proceeding');
+        if (user) {
         this.handleSuccessfulAuth(user);
       }
     });
@@ -166,7 +143,6 @@ export class LoadingComponent implements OnInit, OnDestroy {
       return;
     }
     
-    console.log('🎉 Authentication successful, navigating...');
     this.loadingState = 'almost-ready';
     
     // Short delay before navigation to let user see the final state
@@ -180,36 +156,26 @@ export class LoadingComponent implements OnInit, OnDestroy {
       return;
     }
     
-    console.log('⏰ Handling timeout...');
-    
     if (this.timer) {
       clearInterval(this.timer);
     }
     
     // Check current state for debugging
     this.authService.isAuthenticated().pipe(take(1)).subscribe(isAuthenticated => {
-      console.log('🔐 Auth state on timeout:', isAuthenticated);
-      
       const currentUser = this.authService.getCurrentUser();
-      console.log('👤 User on timeout:', currentUser ? 'exists' : 'null');
       
       if (!isAuthenticated) {
-        console.log('❌ Not authenticated on timeout, redirecting to login');
         this.redirectToLogin('Authentication timeout - not authenticated');
       } else if (!currentUser) {
-        console.log('🔄 Authenticated but no user, trying refresh...');
         this.authService.refreshUserProfile();
         this.giveOneMoreChance();
       } else {
-        console.log('✅ Have user but something went wrong, proceeding anyway');
         this.handleSuccessfulAuth(currentUser);
       }
     });
   }
   
   private giveOneMoreChance(): void {
-    console.log('🎲 Giving one more chance...');
-    
     // One final attempt to get the user profile
     this.authService.user$.pipe(
       filter(user => user !== null && user !== undefined && user.roles && user.roles.length > 0),
@@ -217,13 +183,11 @@ export class LoadingComponent implements OnInit, OnDestroy {
       timeout(3000)
     ).subscribe({
       next: user => {
-        console.log('✅ Second chance successful');
         if (user) {
           this.handleSuccessfulAuth(user);
         }
       },
       error: () => {
-        console.log('❌ Second chance failed, redirecting to login');
         this.redirectToLogin('Unable to complete authentication after retry');
       }
     });
@@ -233,8 +197,6 @@ export class LoadingComponent implements OnInit, OnDestroy {
     if (this.hasNavigated) {
       return;
     }
-    
-    console.log('❌ Authentication failure');
     
     if (this.timer) {
       clearInterval(this.timer);
@@ -248,7 +210,6 @@ export class LoadingComponent implements OnInit, OnDestroy {
       return;
     }
     
-    console.log('🔄 Redirecting to login:', reason);
     this.hasNavigated = true;
     
     // Clear any stored user data
@@ -258,7 +219,7 @@ export class LoadingComponent implements OnInit, OnDestroy {
     const currentUrl = this.router.url;
     if (currentUrl && currentUrl !== '/auth/loading' && !currentUrl.includes('/auth/')) {
       sessionStorage.setItem('auth_target_url', currentUrl);
-    }
+      }
     
     // Redirect to login
     this.authService.login();
@@ -276,7 +237,6 @@ export class LoadingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    console.log('🎯 Calling handlePostAuthNavigation');
     // Let the auth service handle post-authentication navigation
     this.authService['handlePostAuthNavigation'](user);
   }

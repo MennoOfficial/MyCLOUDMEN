@@ -51,11 +51,6 @@ export class SessionTimeoutService implements OnDestroy {
           this.stopAutoRefresh();
         }
     });
-    
-    // Temporary debug method to check JWT expiration
-    if (typeof window !== 'undefined') {
-      (window as any).checkJwtExpiration = () => this.debugJwtExpiration();
-    }
   }
 
   private setupActivityListeners(): void {
@@ -296,48 +291,7 @@ export class SessionTimeoutService implements OnDestroy {
     });
   }
 
-  // Temporary debug method
-  private debugJwtExpiration(): void {
-    this.authService.getAccessToken().subscribe({
-      next: (token) => {
-        if (token) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            const exp = payload.exp;
-            const iat = payload.iat;
-            
-            if (exp && iat) {
-              const now = Math.floor(Date.now() / 1000);
-              const expiresIn = exp - now;
-              const tokenDuration = exp - iat;
-              const expiresAt = new Date(exp * 1000);
-              const issuedAt = new Date(iat * 1000);
-              
-              console.log('🔍 JWT Token Information:');
-              console.log('📅 Issued at:', issuedAt.toLocaleString());
-              console.log('⏰ Expires at:', expiresAt.toLocaleString());
-              console.log('⏱️ Token duration:', Math.floor(tokenDuration / 60), 'minutes (', Math.floor(tokenDuration / 3600), 'hours )');
-              console.log('⏳ Time remaining:', Math.floor(expiresIn / 60), 'minutes (', Math.floor(expiresIn / 3600), 'hours )');
-              console.log('🚨 Expires soon?', expiresIn <= (5 * 60) ? 'YES' : 'NO');
-              
-              if (tokenDuration >= 3600) {
-                console.log('💡 Your JWT tokens last', Math.floor(tokenDuration / 3600), 'hours - longer than the 1-hour inactivity timeout');
-              } else {
-                console.log('💡 Your JWT tokens last', Math.floor(tokenDuration / 60), 'minutes - shorter than the 1-hour inactivity timeout');
-              }
-            }
-          } catch (error) {
-            console.error('❌ Error parsing JWT token:', error);
-          }
-        } else {
-          console.log('❌ No JWT token available');
-        }
-      },
-      error: (error) => {
-        console.error('❌ Failed to get JWT token:', error);
-      }
-    });
-  }
+  
 
   private startAutoRefresh(): void {
     this.stopAutoRefresh(); // Clear any existing interval
@@ -348,7 +302,6 @@ export class SessionTimeoutService implements OnDestroy {
       
       // Only auto-refresh if user has been active in the last 10 minutes
       if (timeSinceLastActivity < (10 * 60 * 1000)) {
-        console.log('🔄 Auto-refreshing JWT token for active user...');
         this.forceTokenRefresh();
       }
     }, this.AUTO_REFRESH_INTERVAL);

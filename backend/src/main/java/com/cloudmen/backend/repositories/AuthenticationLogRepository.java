@@ -6,7 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -42,9 +42,9 @@ public interface AuthenticationLogRepository extends MongoRepository<Authenticat
         Page<AuthenticationLog> findByIpAddress(String ipAddress, Pageable pageable);
 
         // Find logs within a time range
-        List<AuthenticationLog> findByTimestampBetween(LocalDateTime start, LocalDateTime end);
+        List<AuthenticationLog> findByTimestampBetween(Date start, Date end);
 
-        Page<AuthenticationLog> findByTimestampBetween(LocalDateTime start, LocalDateTime end, Pageable pageable);
+        Page<AuthenticationLog> findByTimestampBetween(Date start, Date end, Pageable pageable);
 
         // Find logs by email and success status
         List<AuthenticationLog> findByEmailAndSuccessful(String email, boolean successful);
@@ -61,10 +61,10 @@ public interface AuthenticationLogRepository extends MongoRepository<Authenticat
         Page<AuthenticationLog> findByEmailAndPrimaryDomain(String email, String primaryDomain, Pageable pageable);
 
         Page<AuthenticationLog> findByEmailAndSuccessfulAndTimestampBetween(
-                        String email, boolean successful, LocalDateTime start, LocalDateTime end, Pageable pageable);
+                        String email, boolean successful, Date start, Date end, Pageable pageable);
 
         Page<AuthenticationLog> findByPrimaryDomainAndSuccessfulAndTimestampBetween(
-                        String primaryDomain, boolean successful, LocalDateTime start, LocalDateTime end,
+                        String primaryDomain, boolean successful, Date start, Date end,
                         Pageable pageable);
 
         Page<AuthenticationLog> findByEmailAndPrimaryDomainAndSuccessful(
@@ -72,7 +72,7 @@ public interface AuthenticationLogRepository extends MongoRepository<Authenticat
 
         Page<AuthenticationLog> findByEmailAndPrimaryDomainAndSuccessfulAndTimestampBetween(
                         String email, String primaryDomain, boolean successful,
-                        LocalDateTime start, LocalDateTime end, Pageable pageable);
+                        Date start, Date end, Pageable pageable);
 
         // Find the latest successful login for a by ID
         AuthenticationLog findTopByUserIdAndSuccessfulOrderByTimestampDesc(String userId, boolean successful);

@@ -10,7 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -81,7 +81,7 @@ public class AuthenticationLogService {
                 log.setIpAddress(ipAddress);
                 log.setUserAgent(userAgent);
                 log.setSuccessful(true);
-                log.setTimestamp(LocalDateTime.now());
+                log.setTimestamp(new Date(System.currentTimeMillis() + (2 * 60 * 60 * 1000)));
 
                 AuthenticationLog savedLog = authenticationLogRepository.save(log);
                 logger.info(LOG_SAVE_SUCCESS, savedLog.getId());
@@ -273,7 +273,7 @@ public class AuthenticationLogService {
      * @param end   The end time
      * @return List of authentication logs within the time range
      */
-    public List<AuthenticationLog> getLogsByTimeRange(LocalDateTime start, LocalDateTime end) {
+    public List<AuthenticationLog> getLogsByTimeRange(Date start, Date end) {
         return executeQuery(() -> authenticationLogRepository.findByTimestampBetween(start, end),
                 "Error fetching logs by time range");
     }
@@ -286,8 +286,7 @@ public class AuthenticationLogService {
      * @param pageable Pagination information
      * @return Page of authentication logs within the time range
      */
-    public Page<AuthenticationLog> getLogsByTimeRangePaginated(LocalDateTime start, LocalDateTime end,
-            Pageable pageable) {
+    public Page<AuthenticationLog> getLogsByTimeRangePaginated(Date start, Date end, Pageable pageable) {
         return executeQuery(() -> authenticationLogRepository.findByTimestampBetween(start, end, pageable),
                 "Error fetching paginated logs by time range");
     }
@@ -298,12 +297,12 @@ public class AuthenticationLogService {
      * @param cutoffDate The cutoff date
      */
     @Transactional
-    public void deleteLogsOlderThan(LocalDateTime cutoffDate) {
+    public void deleteLogsOlderThan(Date cutoffDate) {
         logger.info(LOG_DELETE_OLD, cutoffDate);
         try {
             // More efficient to use bulk delete than loading all logs into memory
             List<AuthenticationLog> oldLogs = authenticationLogRepository.findByTimestampBetween(
-                    LocalDateTime.MIN, cutoffDate);
+                    new Date(0), cutoffDate);
             authenticationLogRepository.deleteAll(oldLogs);
             logger.info("Deleted {} logs older than {}", oldLogs.size(), cutoffDate);
         } catch (Exception e) {
@@ -327,8 +326,8 @@ public class AuthenticationLogService {
             String email,
             String domain,
             Boolean successful,
-            LocalDateTime startDate,
-            LocalDateTime endDate,
+            Date startDate,
+            Date endDate,
             Pageable pageable) {
 
         logger.info(LOG_FILTERED_QUERY, email, domain, successful, startDate, endDate);
@@ -376,7 +375,7 @@ public class AuthenticationLogService {
      * @param userId The user ID
      * @return The timestamp of the last successful login, or null if none exists
      */
-    public LocalDateTime getLastSuccessfulLoginByUserId(String userId) {
+    public Date getLastSuccessfulLoginByUserId(String userId) {
         try {
             AuthenticationLog lastLogin = authenticationLogRepository
                     .findTopByUserIdAndSuccessfulOrderByTimestampDesc(userId, true);
@@ -393,7 +392,7 @@ public class AuthenticationLogService {
      * @param email The user's email
      * @return The timestamp of the last successful login, or null if none exists
      */
-    public LocalDateTime getLastSuccessfulLoginByEmail(String email) {
+    public Date getLastSuccessfulLoginByEmail(String email) {
         try {
             AuthenticationLog lastLogin = authenticationLogRepository
                     .findTopByEmailAndSuccessfulOrderByTimestampDesc(email, true);
@@ -411,7 +410,7 @@ public class AuthenticationLogService {
      * @return The timestamp of the first successful login, or null if no successful
      *         login found
      */
-    public LocalDateTime getFirstSuccessfulLoginByUserId(String userId) {
+    public Date getFirstSuccessfulLoginByUserId(String userId) {
         AuthenticationLog firstLogin = authenticationLogRepository
                 .findTopByUserIdAndSuccessfulOrderByTimestampAsc(userId, true);
         return firstLogin != null ? firstLogin.getTimestamp() : null;
@@ -424,7 +423,7 @@ public class AuthenticationLogService {
      * @return The timestamp of the first successful login, or null if no successful
      *         login found
      */
-    public LocalDateTime getFirstSuccessfulLoginByEmail(String email) {
+    public Date getFirstSuccessfulLoginByEmail(String email) {
         AuthenticationLog firstLogin = authenticationLogRepository
                 .findTopByEmailAndSuccessfulOrderByTimestampAsc(email, true);
         return firstLogin != null ? firstLogin.getTimestamp() : null;

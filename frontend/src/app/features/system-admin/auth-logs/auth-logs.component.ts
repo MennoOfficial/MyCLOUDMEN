@@ -173,14 +173,26 @@ export class AuthLogsComponent implements OnInit, OnDestroy {
     }
     
     if (this.startDate) {
-      // Convert date to LocalDateTime format (add time)
-      const startDateTime = this.startDate.includes('T') ? this.startDate : `${this.startDate}T00:00:00`;
+      // Convert date to backend format (YYYY-MM-DDTHH:MM:SS)
+      let startDateTime = this.startDate;
+      if (!startDateTime.includes('T')) {
+        startDateTime = `${startDateTime}T00:00:00`;
+      } else if (startDateTime.split(':').length === 2) {
+        // Add seconds if only HH:MM provided
+        startDateTime += ':00';
+      }
       params.push(`startDate=${encodeURIComponent(startDateTime)}`);
     }
     
     if (this.endDate) {
-      // Convert date to LocalDateTime format (add end of day time)
-      const endDateTime = this.endDate.includes('T') ? this.endDate : `${this.endDate}T23:59:59`;
+      // Convert date to backend format (YYYY-MM-DDTHH:MM:SS)
+      let endDateTime = this.endDate;
+      if (!endDateTime.includes('T')) {
+        endDateTime = `${endDateTime}T23:59:59`;
+      } else if (endDateTime.split(':').length === 2) {
+        // Add seconds if only HH:MM provided
+        endDateTime += ':59';
+      }
       params.push(`endDate=${encodeURIComponent(endDateTime)}`);
     }
     
